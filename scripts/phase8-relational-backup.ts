@@ -171,6 +171,7 @@ async function main() {
   const tempRoot = await realpath(os.tmpdir());
   const temp = await mkdtemp(path.join(tempRoot, "sw-relational-backup-"));
   const client = new Client({ connectionString: source.url.toString(), connectionTimeoutMillis: 10_000 });
+  let cleanupFailed = false;
   let connected = false;
   let lockHeld = false;
   let lockName: string | null = null;
@@ -262,7 +263,8 @@ async function main() {
         if (r.rowCount !== 1) throw new BackupFailure("BACKUP_CATALOG_COMMIT_FAILED");
       },
       async markFailed(id: string, code: string) {
-        await client.query("update operations.relational_backup_copies set state='failed',failure_code=$2 where copy_id=$1 and state='uploading'", [id,code]);
+        const result = await client.query("update operations.relational_backup_copies set state='failed',failure_code=$2 where copy_id=$1 and state='uploading'", [id,code]);
+        if (result.rowCount !== 1) throw new BackupFailure("BACKUP_CATALOG_COMMIT_FAILED");
       },
       async currentUsable(destinationName: string) {
         const r = await client.query("select * from operations.relational_backup_copies where destination_name=$1 " +
@@ -311,13 +313,14 @@ async function main() {
     try { await removeOwnedTemp(temp, tempRoot); }
     catch {
       if (incidentReporter) await incidentReporter("BACKUP_CLEANUP_FAILED", new Date().toISOString()).catch(() => undefined);
-      if (lockHeld && lockName) await client.query("select pg_advisory_unlock(hashtextextended($1, 0))", [lockName]).catch(() => undefined);
-      if (connected) await client.end().catch(() => undefined);
-      throw new BackupFailure("BACKUP_CLEANUP_FAILED");
+      cleanupFailed = true;
+      process.stderr.write(JSON.stringify({ status: "failed", code: "BACKUP_CLEANUP_FAILED" }) + "\n");
+      process.exitCode = 1;
     }
     if (lockHeld && lockName) await client.query("select pg_advisory_unlock(hashtextextended($1, 0))", [lockName]).catch(() => undefined);
     if (connected) await client.end().catch(() => undefined);
   }
+  if (cleanupFailed) throw new BackupFailure("BACKUP_CLEANUP_FAILED");
 }
 main().catch(error => {
   const code = error instanceof BackupFailure ? error.safeCode : "BACKUP_ATTEMPT_FAILED";

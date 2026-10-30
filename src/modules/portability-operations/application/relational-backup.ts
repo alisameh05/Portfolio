@@ -55,6 +55,7 @@ export interface RelationalBackupDestinationPort {
 export interface RelationalBackupCatalogPort {
   begin(attempt: RelationalBackupAttempt): Promise<void>;
   markUsable(copyId: string, verifiedAt: string, committedAt: string): Promise<void>;
+  // Resolves only after confirming an uploading-to-failed transition; rejects unknown outcomes.
   markFailed(copyId: string, failureCode: string): Promise<void>;
   currentUsable(destinationName: string): Promise<RelationalBackupAttempt | null>;
 }
@@ -304,8 +305,12 @@ export function createRelationalBackupService(deps: {
         const safeCode = /^[A-Z][A-Z0-9_]{0,63}$/u.test(proposedCode) ? proposedCode : "BACKUP_ATTEMPT_FAILED";
         let cleanupFailed = false;
         if (copyId) {
-          try { await deps.catalog.markFailed(copyId, safeCode); } catch { cleanupFailed = true; }
-          if (objectKey) {
+          let failedConfirmed = false;
+          try {
+            await deps.catalog.markFailed(copyId, safeCode);
+            failedConfirmed = true;
+          } catch { cleanupFailed = true; }
+          if (objectKey && failedConfirmed) {
             // Cleanup must remain possible after a cancelled upload/read signal.
             try { await deps.destination.delete(objectKey); } catch { cleanupFailed = true; }
           }

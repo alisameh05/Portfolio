@@ -45,7 +45,7 @@ const catalog: RelationalBackupCatalog = Object.freeze({
   }),
 });
 
-function setup(options: { failPut?: boolean; tamperRead?: boolean; failDelete?: boolean } = {}) {
+function setup(options: { failPut?: boolean; tamperRead?: boolean; failDelete?: boolean; commitThenThrow?: boolean; failMarkFailed?: boolean } = {}) {
   const objects = new Map<string, Uint8Array>();
   const attempts = new Map<string, RelationalBackupAttempt>();
   const incidents: string[] = [];
@@ -82,10 +82,12 @@ function setup(options: { failPut?: boolean; tamperRead?: boolean; failDelete?: 
       async markUsable(copyId, verifiedAt, committedAt) {
         const current = attempts.get(copyId)!;
         attempts.set(copyId, Object.freeze({ ...current, state: "usable", verifiedAt, committedAt }));
+        if (options.commitThenThrow) throw new Error("commit response lost");
       },
       async markFailed(copyId, failureCode) {
         const current = attempts.get(copyId);
-        if (current) attempts.set(copyId, Object.freeze({ ...current, state: "failed", failureCode }));
+        if (options.failMarkFailed || current?.state !== "uploading") throw new Error("transition not confirmed");
+        attempts.set(copyId, Object.freeze({ ...current, state: "failed", failureCode }));
       },
       async currentUsable(destinationName) {
         return [...attempts.values()].filter(item => item.destinationName === destinationName && item.state === "usable")
@@ -143,6 +145,21 @@ describe("relational backup envelope", () => {
 });
 
 describe("relational backup service", () => {
+  it("preserves verified bytes when markUsable commits then loses its response", async () => {
+    const { service, attempts, objects } = setup({ commitThenThrow: true });
+    await expect(service.create()).rejects.toMatchObject({ safeCode: "BACKUP_CLEANUP_FAILED" });
+    const row = [...attempts.values()][0]!;
+    expect(row.state).toBe("usable");
+    expect(objects.has(row.objectKey)).toBe(true);
+    await expect(service.verify(row, key)).resolves.toEqual(catalog);
+  });
+
+  it("preserves the object when the failed transition cannot be confirmed", async () => {
+    const { service, objects } = setup({ tamperRead: true, failMarkFailed: true });
+    await expect(service.create()).rejects.toMatchObject({ safeCode: "BACKUP_CLEANUP_FAILED" });
+    expect(objects.size).toBe(1);
+  });
+
   it("marks a copy usable only after read-back, authenticated decryption, and byte/catalog verification", async () => {
     const { service, attempts, objects } = setup();
     const result = await service.create();

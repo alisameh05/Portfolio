@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { declaredCapabilities } from "../../scripts/phase-contract-registry.mjs";
+import { declaredCapabilities, PHASE_DECLARED_ADDITIVE_MIGRATIONS } from "../../scripts/phase-contract-registry.mjs";
 
 const DATABASE_URL = process.env["PHASE3_DATABASE_URL"];
 if (process.env["PHASE3_REQUIRE_DATABASE"] === "1" && !DATABASE_URL) {
@@ -255,6 +255,7 @@ const OWNER_EXPORT_JOB_POLICIES: ReadonlyArray<readonly [string, string, string,
  */
 let retryRecoverySchema = false;
 let phase7ScheduleSchema = false;
+let relationalBackupSchema = false;
 let portabilityExportSchema = false;
 let feedbackExportSchema = false;
 let configurationExportSchema = false;
@@ -275,6 +276,7 @@ if (DATABASE_URL !== undefined) {
   try {
     const bounded = await era.query(
       `select to_regclass('operations.incidents') is not null as has_incidents,
+              to_regclass('operations.relational_backup_copies') is not null as has_relational_backup,
               to_regclass('operations.job_redrive_audit') is not null as has_redrive,
               to_regclass('operations.phase7_schedule_progress') is not null as has_phase7_schedule_progress,
               exists (
@@ -285,6 +287,10 @@ if (DATABASE_URL !== undefined) {
                ) as has_dead_at`,
     );
     const boundedRow: Record<string, unknown> = bounded.rows[0] ?? {};
+    relationalBackupSchema = declared.includes("operations.relational_backup");
+    if (relationalBackupSchema !== (boundedRow["has_relational_backup"] === true)) {
+      throw new Error("ROLE_MATRIX_RELATIONAL_BACKUP_CAPABILITY_MISMATCH");
+    }
     if (boundedRow["has_incidents"] !== boundedRow["has_redrive"] || (boundedRow["has_incidents"] === false && boundedRow["has_dead_at"] === true)) {
       throw new Error("ROLE_MATRIX_SCHEMA_RECOVERY_INCOMPLETE");
     }
@@ -887,6 +893,11 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
           String(row["roles"]),
         ]),
       ).toEqual([
+        ...(relationalBackupSchema
+          ? PHASE_DECLARED_ADDITIVE_MIGRATIONS.find((item) => item.ticket === 253)!.operationsAdditions
+            .filter((entry) => entry.category === "policies")
+            .map((entry) => [entry.expected.tableName, entry.expected.name, entry.expected.command, entry.expected.roles])
+          : []),
         ["idempotency_records", "idempotency_application_insert_policy", "INSERT", "{shipwithali_application}"],
         ["idempotency_records", "idempotency_application_select_policy", "SELECT", "{shipwithali_application}"],
         ["idempotency_records", "idempotency_application_update_policy", "UPDATE", "{shipwithali_application}"],
@@ -902,7 +913,7 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
         ["outbox_events", "outbox_worker_update_policy", "UPDATE", "{shipwithali_worker}"],
         ...(configurationExportSchema ? CONFIGURATION_EXPORT_OUTBOX_POLICY : []),
         ...(phase7ScheduleSchema ? PHASE7_DUE_WORK_POLICIES : []),
-      ]);
+      ].sort((a, b) => String(a[0]).localeCompare(String(b[0])) || String(a[1]).localeCompare(String(b[1]))));
     } finally {
       await admin.end();
     }
