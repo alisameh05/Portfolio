@@ -105,7 +105,7 @@ export function encryptRelationalBackupEnvelope(
     plaintextSha256: sha256(plaintext),
     plaintextBytes: plaintext.byteLength,
   }), "utf8");
-  const cipher = createCipheriv(RELATIONAL_BACKUP_ALGORITHM, key.bytes, nonce);
+  const cipher = createCipheriv("aes-256-gcm", key.bytes, nonce);
   cipher.setAAD(header);
   const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
   const tag = cipher.getAuthTag();
@@ -134,24 +134,24 @@ export function decryptRelationalBackupEnvelope(envelope: Uint8Array, key: Relat
   let header: Record<string, unknown>;
   try { header = JSON.parse(headerBytes.toString("utf8")) as Record<string, unknown>; }
   catch { throw new TypeError("Backup envelope is malformed or unsupported."); }
-  if (header.version !== RELATIONAL_BACKUP_ENVELOPE_VERSION || header.algorithm !== RELATIONAL_BACKUP_ALGORITHM ||
-      header.keyVersion !== key.keyVersion || key.bytes.byteLength !== 32 || typeof header.nonce !== "string") {
+  if (header['version'] !== RELATIONAL_BACKUP_ENVELOPE_VERSION || header['algorithm'] !== RELATIONAL_BACKUP_ALGORITHM ||
+      header['keyVersion'] !== key.keyVersion || key.bytes.byteLength !== 32 || typeof header['nonce'] !== "string") {
     throw new TypeError("Backup envelope version or key is incompatible.");
   }
-  const nonce = Buffer.from(header.nonce, "base64");
-  if (nonce.byteLength !== 12 || typeof header.catalogSha256 !== "string" ||
-      typeof header.plaintextSha256 !== "string" || typeof header.plaintextBytes !== "number") {
+  const nonce = Buffer.from(header['nonce'], "base64");
+  if (nonce.byteLength !== 12 || typeof header['catalogSha256'] !== "string" ||
+      typeof header['plaintextSha256'] !== "string" || typeof header['plaintextBytes'] !== "number") {
     throw new TypeError("Backup envelope is malformed or unsupported.");
   }
   const tagOffset = bytes.byteLength - 16;
   const ciphertext = bytes.subarray(9 + headerLength, tagOffset);
-  const decipher = createDecipheriv(RELATIONAL_BACKUP_ALGORITHM, key.bytes, nonce);
+  const decipher = createDecipheriv("aes-256-gcm", key.bytes, nonce);
   decipher.setAAD(headerBytes);
   decipher.setAuthTag(bytes.subarray(tagOffset));
   let plaintext: Buffer;
   try { plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]); }
   catch { throw new TypeError("Backup ciphertext authentication failed."); }
-  if (!equalDigest(sha256(plaintext), header.plaintextSha256) || plaintext.byteLength !== header.plaintextBytes ||
+  if (!equalDigest(sha256(plaintext), header['plaintextSha256']) || plaintext.byteLength !== header['plaintextBytes'] ||
       plaintext.byteLength < 4) {
     throw new TypeError("Backup plaintext integrity check failed.");
   }
@@ -160,7 +160,7 @@ export function decryptRelationalBackupEnvelope(envelope: Uint8Array, key: Relat
     throw new TypeError("Backup catalog is malformed.");
   }
   const catalogBytes = plaintext.subarray(4, 4 + catalogLength);
-  if (!equalDigest(sha256(catalogBytes), header.catalogSha256)) throw new TypeError("Backup catalog integrity check failed.");
+  if (!equalDigest(sha256(catalogBytes), header['catalogSha256'])) throw new TypeError("Backup catalog integrity check failed.");
   let catalog: RelationalBackupCatalog;
   try { catalog = JSON.parse(catalogBytes.toString("utf8")) as RelationalBackupCatalog; }
   catch { throw new TypeError("Backup catalog is malformed."); }
@@ -182,14 +182,14 @@ export function decodeRelationalBackupPayload(dump: Uint8Array): RelationalBacku
   let manifest: Record<string, unknown>;
   try { manifest = JSON.parse(bytes.subarray(8, 8 + manifestLength).toString("utf8")) as Record<string, unknown>; }
   catch { throw new TypeError("Backup payload manifest is malformed."); }
-  const rolesLength = manifest.rolesBytes;
-  const databaseLength = manifest.databaseBytes;
-  if (manifest.format !== "SWDB" || manifest.version !== 1 ||
+  const rolesLength = manifest['rolesBytes'];
+  const databaseLength = manifest['databaseBytes'];
+  if (manifest['format'] !== "SWDB" || manifest['version'] !== 1 ||
       !Number.isSafeInteger(rolesLength) || (rolesLength as number) < 0 ||
       !Number.isSafeInteger(databaseLength) || (databaseLength as number) < 1 ||
-      typeof manifest.rolesSha256 !== "string" || !/^[0-9a-f]{64}$/u.test(manifest.rolesSha256) ||
-      typeof manifest.databaseSha256 !== "string" || !/^[0-9a-f]{64}$/u.test(manifest.databaseSha256) ||
-      !Array.isArray(manifest.migrationSources)) {
+      typeof manifest['rolesSha256'] !== "string" || !/^[0-9a-f]{64}$/u.test(manifest['rolesSha256']) ||
+      typeof manifest['databaseSha256'] !== "string" || !/^[0-9a-f]{64}$/u.test(manifest['databaseSha256']) ||
+      !Array.isArray(manifest['migrationSources'])) {
     throw new TypeError("Backup payload manifest is incompatible.");
   }
   const dataStart = 8 + manifestLength;
@@ -200,31 +200,31 @@ export function decodeRelationalBackupPayload(dump: Uint8Array): RelationalBacku
   }
   const roles = bytes.subarray(dataStart, rolesEnd);
   const database = bytes.subarray(rolesEnd, databaseEnd);
-  if (!equalDigest(sha256(roles), manifest.rolesSha256) || !equalDigest(sha256(database), manifest.databaseSha256)) {
+  if (!equalDigest(sha256(roles), manifest['rolesSha256']) || !equalDigest(sha256(database), manifest['databaseSha256'])) {
     throw new TypeError("Backup archive component integrity check failed.");
   }
   const migrations: Array<{ file: string; sha256: string; sql: Uint8Array }> = [];
   const seen = new Set<string>();
-  for (const entry of manifest.migrationSources) {
+  for (const entry of manifest['migrationSources']) {
     if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
       throw new TypeError("Backup migration manifest is malformed.");
     }
     const migration = entry as Record<string, unknown>;
-    if (typeof migration.file !== "string" || !/^[0-9]{14}_[a-z0-9_]+\.sql$/u.test(migration.file) ||
-        seen.has(migration.file) || typeof migration.sha256 !== "string" || !/^[0-9a-f]{64}$/u.test(migration.sha256) ||
-        typeof migration.sql !== "string") {
+    if (typeof migration['file'] !== "string" || !/^[0-9]{14}_[a-z0-9_]+\.sql$/u.test(migration['file']) ||
+        seen.has(migration['file']) || typeof migration['sha256'] !== "string" || !/^[0-9a-f]{64}$/u.test(migration['sha256']) ||
+        typeof migration['sql'] !== "string") {
       throw new TypeError("Backup migration manifest is malformed.");
     }
-    const sql = Buffer.from(migration.sql, "utf8");
-    if (!equalDigest(sha256(sql), migration.sha256)) throw new TypeError("Backup migration integrity check failed.");
-    seen.add(migration.file);
-    migrations.push(Object.freeze({ file: migration.file, sha256: migration.sha256, sql }));
+    const sql = Buffer.from(migration['sql'], "utf8");
+    if (!equalDigest(sha256(sql), migration['sha256'])) throw new TypeError("Backup migration integrity check failed.");
+    seen.add(migration['file']);
+    migrations.push(Object.freeze({ file: migration['file'], sha256: migration['sha256'], sql }));
   }
-  if (databaseEnd !== bytes.byteLength || manifest.migrationHashes === null ||
-      typeof manifest.migrationHashes !== "object" || Array.isArray(manifest.migrationHashes)) {
+  if (databaseEnd !== bytes.byteLength || manifest['migrationHashes'] === null ||
+      typeof manifest['migrationHashes'] !== "object" || Array.isArray(manifest['migrationHashes'])) {
     throw new TypeError("Backup payload has trailing bytes or an invalid migration catalog.");
   }
-  const hashes = manifest.migrationHashes as Record<string, unknown>;
+  const hashes = manifest['migrationHashes'] as Record<string, unknown>;
   if (seen.size !== Object.keys(hashes).length || migrations.some(item => hashes[item.file] !== item.sha256)) {
     throw new TypeError("Backup migration catalog does not match its payload.");
   }

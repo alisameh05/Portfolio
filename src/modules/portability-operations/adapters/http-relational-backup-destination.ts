@@ -47,7 +47,7 @@ export function createHttpRelationalBackupDestination(options: {
           authorization: "Bearer " + options.bearerToken,
           ...(body ? { "content-type": "application/octet-stream" } : {}),
         },
-        body: body ? Buffer.from(body) : undefined,
+        ...(body ? { body: Buffer.from(body) } : {}),
         redirect: "error",
         signal: signal ?? AbortSignal.timeout(timeout),
       });
@@ -55,7 +55,7 @@ export function createHttpRelationalBackupDestination(options: {
       throw new RelationalBackupDestinationError("BACKUP_DESTINATION_UNAVAILABLE");
     }
   };
-  return Object.freeze({
+  return Object.freeze<RelationalBackupDestinationPort>({
     name: options.name,
     async put(key, bytes, signal) {
       const response = await send("PUT", key, bytes, signal);

@@ -262,13 +262,13 @@ test("the #253 relational backup migration binds exact checks, indexes, policies
   const migration = PHASE_DECLARED_ADDITIVE_MIGRATIONS.find(row => row.migration === "20261029150000_register_relational_backup_copies.sql");
   assert.ok(migration);
   assert.equal(migration.migrationSha256, migrationSha256(readFileSync(join(ROOT, "supabase/migrations", migration.migration), "utf8")));
-  assert.equal(migration.operationsAdditions.length, 64);
+  assert.equal(migration.operationsAdditions.length, 76);
   const categories = Object.groupBy(migration.operationsAdditions, row => row.category);
   assert.equal(categories.objects.length, 1);
   assert.equal(categories.columns.length, 22);
   assert.equal(categories.constraints.length, 20);
   assert.equal(categories.policies.length, 6);
-  assert.equal(categories.grants.length, 12);
+  assert.equal(categories.grants.length, 24);
   assert.equal(categories.indexes.length, 3);
   assert.ok(categories.objects.every(row => row.identity === "operations.relational_backup_copies" && row.expected.rlsForced === true));
   assert.ok(categories.constraints.some(row => row.identity === "operations.relational_backup_copies.relational_backup_copies_failure_shape_check"));

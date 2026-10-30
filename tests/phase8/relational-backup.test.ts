@@ -67,7 +67,7 @@ function setup(options: { failPut?: boolean; tamperRead?: boolean; failDelete?: 
         if (!bytes) throw new Error("missing object");
         if (options.tamperRead) {
           const changed = Buffer.from(bytes);
-          changed[changed.length - 20] ^= 1;
+          changed[changed.length - 20] = changed[changed.length - 20]! ^ 1;
           return changed;
         }
         return bytes;
@@ -117,7 +117,7 @@ describe("relational backup envelope", () => {
     expect(() => decryptRelationalBackupEnvelope(envelope, { ...key, keyVersion: "missing-key" })).toThrow();
     expect(() => decryptRelationalBackupEnvelope(envelope, { ...key, bytes: Buffer.alloc(32, 8) })).toThrow();
     const tampered = Buffer.from(envelope);
-    tampered[tampered.length - 20] ^= 1;
+    tampered[tampered.length - 20] = tampered[tampered.length - 20]! ^ 1;
     expect(() => decryptRelationalBackupEnvelope(tampered, key)).toThrow(/authentication/u);
     expect(() => encryptRelationalBackupEnvelope(dump, catalog, { ...key, bytes: Buffer.alloc(8) })).toThrow(/32 bytes/u);
   });
@@ -126,7 +126,7 @@ describe("relational backup envelope", () => {
     const envelope = Buffer.from(encryptRelationalBackupEnvelope(dump, catalog, key));
     const headerLength = envelope.readUInt32BE(5);
     const ciphertextStart = 9 + headerLength;
-    envelope[ciphertextStart + 7] ^= 1;
+    envelope[ciphertextStart + 7] = envelope[ciphertextStart + 7]! ^ 1;
     expect(() => decryptRelationalBackupEnvelope(envelope, key)).toThrow(/authentication/u);
   });
 
@@ -137,7 +137,7 @@ describe("relational backup envelope", () => {
     expect(decoded.migrations).toEqual([{ file: "20261030000000_recovery_fixture.sql", sha256: migrationHash, sql: migrationSql }]);
     expect(() => decodeRelationalBackupPayload(Buffer.concat([dump, Buffer.from("trailing")]))).toThrow(/trailing/u);
     const tampered = Buffer.from(dump);
-    tampered[tampered.length - 1] ^= 1;
+    tampered[tampered.length - 1] = tampered[tampered.length - 1]! ^ 1;
     expect(() => decodeRelationalBackupPayload(tampered)).toThrow();
   });
 });

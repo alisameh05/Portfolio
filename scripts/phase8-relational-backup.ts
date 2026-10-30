@@ -33,7 +33,7 @@ function parseSource() {
   }
   const allowlist = required("BACKUP_SOURCE_ALLOWLIST").split(",").map(x => x.trim().toLowerCase()).filter(Boolean);
   if (!allowlist.includes(host + "/" + database)) throw new BackupFailure("BACKUP_SOURCE_NOT_ALLOWLISTED");
-  if (["localhost", "127.0.0.1", "::1"].includes(host) && process.env.BACKUP_ALLOW_LOOPBACK_SOURCE !== "true") {
+  if (["localhost", "127.0.0.1", "::1"].includes(host) && process.env['BACKUP_ALLOW_LOOPBACK_SOURCE'] !== "true") {
     throw new BackupFailure("BACKUP_SOURCE_NOT_ALLOWLISTED");
   }
   const user = decodeURIComponent(url.username);
@@ -153,20 +153,20 @@ async function capture(source: ReturnType<typeof parseSource>, pgDump: string, p
 }
 function mapRow(row: Record<string, unknown>): RelationalBackupAttempt {
   return Object.freeze({
-    copyId: String(row.copy_id), destinationName: String(row.destination_name), objectKey: String(row.object_key),
-    keyVersion: String(row.key_version), dumpTool: String(row.dump_tool), sourceWatermarkAt: new Date(String(row.source_watermark_at)).toISOString(),
-    dumpBytes: Number(row.dump_bytes), ciphertextBytes: Number(row.ciphertext_bytes), catalogSha256: String(row.catalog_sha256).trim(),
-    ciphertextSha256: String(row.ciphertext_sha256).trim(), attemptedAt: new Date(String(row.attempted_at)).toISOString(),
-    verifiedAt: row.verified_at ? new Date(String(row.verified_at)).toISOString() : null,
-    committedAt: row.committed_at ? new Date(String(row.committed_at)).toISOString() : null,
-    retentionLifetimeHours: row.retention_lifetime_hours == null ? null : Number(row.retention_lifetime_hours),
-    expiresAt: row.expires_at ? new Date(String(row.expires_at)).toISOString() : null,
-    state: String(row.state) as RelationalBackupAttempt["state"], failureCode: row.failure_code == null ? null : String(row.failure_code),
+    copyId: String(row['copy_id']), destinationName: String(row['destination_name']), objectKey: String(row['object_key']),
+    keyVersion: String(row['key_version']), dumpTool: String(row['dump_tool']), sourceWatermarkAt: new Date(String(row['source_watermark_at'])).toISOString(),
+    dumpBytes: Number(row['dump_bytes']), ciphertextBytes: Number(row['ciphertext_bytes']), catalogSha256: String(row['catalog_sha256']).trim(),
+    ciphertextSha256: String(row['ciphertext_sha256']).trim(), attemptedAt: new Date(String(row['attempted_at'])).toISOString(),
+    verifiedAt: row['verified_at'] ? new Date(String(row['verified_at'])).toISOString() : null,
+    committedAt: row['committed_at'] ? new Date(String(row['committed_at'])).toISOString() : null,
+    retentionLifetimeHours: row['retention_lifetime_hours'] == null ? null : Number(row['retention_lifetime_hours']),
+    expiresAt: row['expires_at'] ? new Date(String(row['expires_at'])).toISOString() : null,
+    state: String(row['state']) as RelationalBackupAttempt["state"], failureCode: row['failure_code'] == null ? null : String(row['failure_code']),
   });
 }
 async function main() {
   const source = parseSource();
-  const rawEnvironment = process.env.BACKUP_ENVIRONMENT?.trim() || "unknown";
+  const rawEnvironment = process.env['BACKUP_ENVIRONMENT']?.trim() || "unknown";
   const incidentEnvironment = ["local", "test", "staging", "production", "unknown"].includes(rawEnvironment) ? rawEnvironment : "unknown";
   const tempRoot = await realpath(os.tmpdir());
   const temp = await mkdtemp(path.join(tempRoot, "sw-relational-backup-"));
@@ -232,7 +232,7 @@ async function main() {
         name,
         baseUrl: destinationUrl,
         bearerToken: required("BACKUP_DESTINATION_TOKEN"),
-        allowLoopbackHttp: process.env.BACKUP_ALLOW_LOOPBACK_DESTINATION === "true",
+        allowLoopbackHttp: process.env['BACKUP_ALLOW_LOOPBACK_DESTINATION'] === "true",
       });
     } catch (error) {
       const code = error instanceof BackupFailure ? error.safeCode : "BACKUP_CONFIG_INVALID";
