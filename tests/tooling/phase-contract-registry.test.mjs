@@ -44,7 +44,7 @@ test("the Phase 7 schedule migration stays between its true predecessor prefix a
   const boundary = partitionMigrationsAt(files, "20261026164603_phase7_durable_policy_schedule_keys.sql");
   assert.equal(boundary.predecessorMigrations.at(-1), "20261026100000_reconcile_all_owner_export_artifacts.sql");
   assert.equal(boundary.forwardMigration, "20261026164603_phase7_durable_policy_schedule_keys.sql");
-  assert.deepEqual(boundary.laterMigrations, ["20261027014402_operations_observability_summary_indexes.sql", "20261029120000_actionable_incident_delivery.sql"]);
+  assert.deepEqual(boundary.laterMigrations, ["20261027014402_operations_observability_summary_indexes.sql", "20261029120000_actionable_incident_delivery.sql", "20261029150000_register_relational_backup_copies.sql"]);
   assert.throws(() => partitionMigrationsAt([...files, boundary.forwardMigration], boundary.forwardMigration),
     /PHASE7_MIGRATION_BOUNDARY_INVALID/u);
 });
@@ -258,6 +258,34 @@ test("the #252 incident migration binds added columns, checks, index, restricted
   assert.ok(categories.grants.every(row => row.expected.grantee === "shipwithali_worker" && row.expected.privilege === "UPDATE"));
 });
 
+test("the #253 relational backup migration binds exact checks, indexes, policies, restricted grants, PG18 NOT NULL variants, and source checksum", () => {
+  const migration = PHASE_DECLARED_ADDITIVE_MIGRATIONS.find(row => row.migration === "20261029150000_register_relational_backup_copies.sql");
+  assert.ok(migration);
+  assert.equal(migration.migrationSha256, migrationSha256(readFileSync(join(ROOT, "supabase/migrations", migration.migration), "utf8")));
+  assert.equal(migration.operationsAdditions.length, 64);
+  const categories = Object.groupBy(migration.operationsAdditions, row => row.category);
+  assert.equal(categories.objects.length, 1);
+  assert.equal(categories.columns.length, 22);
+  assert.equal(categories.constraints.length, 20);
+  assert.equal(categories.policies.length, 6);
+  assert.equal(categories.grants.length, 12);
+  assert.equal(categories.indexes.length, 3);
+  assert.ok(categories.objects.every(row => row.identity === "operations.relational_backup_copies" && row.expected.rlsForced === true));
+  assert.ok(categories.constraints.some(row => row.identity === "operations.relational_backup_copies.relational_backup_copies_failure_shape_check"));
+  assert.ok(categories.policies.every(row => ["{shipwithali_backup}", "{shipwithali_worker}"].includes(row.expected.roles)));
+  assert.ok(categories.grants.filter(row => row.expected.grantee === "shipwithali_backup").every(row => ["SELECT", "INSERT", "UPDATE"].includes(row.expected.privilege)));
+  assert.ok(categories.grants.every(row => row.expected.grantee !== "shipwithali_application" && row.expected.grantor === "shipwithali_migration"));
+  assert.ok(categories.indexes.every(row => row.expected.definition.startsWith("CREATE ") && row.expected.definition.includes(" ON operations.relational_backup_copies ")));
+  const pg18 = migration.operationsAdditionsByEngine["18"];
+  assert.equal(pg18.length, 15);
+  assert.ok(pg18.every(row => row.category === "constraints" && row.expected.type === "n"));
+  assert.deepEqual(migration.operationsAdditionsByEngine["17"], []);
+  const sql = readFileSync(join(ROOT, "supabase/migrations", migration.migration), "utf8");
+  assert.match(sql, /grant update \(state, failure_code, verified_at, committed_at, deletion_acknowledged_at\)\s+on operations\.relational_backup_copies to shipwithali_backup;/u);
+  assert.match(sql, /grant update \(safe_error_code, last_observed_at, occurrences, resolved_at,\s+recovery_recorded_at, delivery_state, next_delivery_at\)\s+on operations\.incidents to shipwithali_backup;/u);
+  assert.doesNotMatch(sql, /grant (?:all|update)\s+on operations\.relational_backup_copies to shipwithali_backup;/u);
+});
+
 test("canonical operations expectations bind complete row operations to reviewed migrations", () => {
   const boundary = composeOperationsBoundary(undefined, 18);
   assert.equal(boundary.operations.length, 100);
@@ -271,7 +299,7 @@ test("canonical operations expectations bind complete row operations to reviewed
 });
 
 test("capabilities are declared per checkpoint, never learned from a database", () => {
-  assert.deepEqual(declaredCapabilities().toSorted(), ["measurement.events", "operations.bounded_retries", "operations.incident_delivery", "operations.observability", "operations.phase7_durable_schedules", "portability.analytics_export", "portability.configuration_export", "portability.content_export", "portability.cv_export", "portability.feedback_export", "portability.media_export", "portability.owner_export_requests", "portability.taxonomy_export"]);
+  assert.deepEqual(declaredCapabilities().toSorted(), ["measurement.events", "operations.bounded_retries", "operations.incident_delivery", "operations.observability", "operations.phase7_durable_schedules", "operations.relational_backup", "portability.analytics_export", "portability.configuration_export", "portability.content_export", "portability.cv_export", "portability.feedback_export", "portability.media_export", "portability.owner_export_requests", "portability.taxonomy_export"]);
   assert.deepEqual(capabilitiesForMigrations(
     ["20261023100000_build_configuration_owner_exports.sql"],
     [],
