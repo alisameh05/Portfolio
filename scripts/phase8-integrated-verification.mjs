@@ -94,6 +94,7 @@ function execute(run) {
     for (const artifact of run.artifacts) artifacts.push(evidenceArtifact(artifact));
   } catch (error) {
     return { id: run.id, command: `npm run ${run.command}`, success: false, exitCode: result.status,
+      testResults: [], cleanupVerified: false,
       outputSha256: createHash("sha256").update(output).digest("hex"), testNames, artifacts, error: String(error.message ?? error) };
   }
   const testReportPath = run.testReport ? join(ROOT, run.testReport) : null;
