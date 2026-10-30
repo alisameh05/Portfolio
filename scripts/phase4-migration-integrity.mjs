@@ -159,12 +159,10 @@ export function assertPhase4ApplicationRls(snapshot) {
   const phase7DurableScheduleApplied = snapshot.migrationLedger?.some((migration) =>
     migration.name === "phase7_durable_policy_schedule_keys",
   ) === true;
-  const relationalBackupApplied = snapshot.migrationLedger?.some((migration) =>
-    migration.name === "register_relational_backup_copies",
-  ) === true;
-  const reviewedBackupGrants = relationalBackupApplied
-    ? PHASE_DECLARED_ADDITIVE_MIGRATIONS.find((item) => item.ticket === 253).operationsAdditions
-    : [];
+  const appliedMigrationNames = new Set((snapshot.migrationLedger ?? []).map((migration) => migration.name));
+  const reviewedBackupGrants = PHASE_DECLARED_ADDITIVE_MIGRATIONS
+    .filter((item) => item.ticket >= 253 && appliedMigrationNames.has(item.migration.slice(15, -4)))
+    .flatMap((item) => item.operationsAdditions ?? []);
   const tables = new Map(
     snapshot.objects.filter((object) => object.kind === "r")
       .map((object) => [`${object.schema}.${object.name}`, object]),

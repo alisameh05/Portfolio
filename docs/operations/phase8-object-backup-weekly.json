@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "name": "phase8-object-backup-weekly",
+  "phase": 8,
+  "installed": false,
+  "frequency": "weekly",
+  "timezone": "UTC",
+  "command": "npm run phase8:focus:object-backup",
+  "timeoutSeconds": 7200,
+  "maximumConcurrentRuns": 1,
+  "retry": {
+    "maximumAttempts": 3,
+    "idempotency": "immutable attempt IDs; an uploading or failed copy cannot become usable and partial bytes are deleted when the failure is observed"
+  },
+  "secrets": [
+    "WORKER_DATABASE_DIRECT_URL",
+    "DATABASE_DIRECT_URL",
+    "BACKUP_SOURCE_ALLOWLIST",
+    "BACKUP_OWNER_SCOPES",
+    "BACKUP_ENCRYPTION_KEY",
+    "BACKUP_KEY_VERSION",
+    "BACKUP_DESTINATION_NAME",
+    "BACKUP_DESTINATION_URL",
+    "BACKUP_DESTINATION_TOKEN",
+    "BACKUP_RETENTION_HOURS",
+    "BACKUP_ENVIRONMENT",
+    "SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY"
+  ],
+  "operatorGuide": "docs/operations/phase8-object-backup.md"
+}

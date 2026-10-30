@@ -92,9 +92,35 @@ export {
   type RelationalBackupSourcePort,
 } from "./application/relational-backup.js";
 export {
+  OBJECT_BACKUP_ENVELOPE_VERSION,
+  OBJECT_BACKUP_MAX_ATTEMPTS,
+  OBJECT_BACKUP_MEDIA_LOSS_WINDOW_DAYS,
+  ObjectBackupError,
+  createObjectBackupService,
+  selectCompatibleRecoverySet,
+  type ObjectBackupAttempt,
+  type ObjectBackupCatalog,
+  type ObjectBackupCatalogPort,
+  type ObjectBackupDescriptor,
+  type ObjectBackupDestinationPort,
+  type ObjectBackupIncidentPort,
+  type ObjectBackupItem,
+  type ObjectBackupKey,
+  type ObjectBackupSourcePort,
+} from "./application/object-backup.js";
+export {
+  createOwnerObjectBackupSource,
+  type MediaObjectBackupCandidate,
+  type MediaObjectBackupInventoryPort,
+  type OwnerExportObjectBackupCandidate,
+  type OwnerExportObjectBackupInventoryPort,
+} from "./application/owner-object-backup-source.js";
+export {
   createHttpRelationalBackupDestination,
   RelationalBackupDestinationError,
 } from "./adapters/http-relational-backup-destination.js";
+export { createPostgresObjectBackupCatalog, type ObjectBackupSqlExecutor } from "./adapters/postgres-object-backup-catalog.js";
+export { createPostgresMediaObjectBackupInventory, createPostgresOwnerExportObjectBackupInventory } from "./adapters/postgres-object-backup-inventory.js";
 export {
   applyGuardedOwnerExportTransition,
   canonicalizeOwnerExportScopes,
@@ -168,6 +194,7 @@ export {
   type IncidentLifecycleStore,
 } from "./application/index.js";
 export { createPostgresIncidentLifecycleStore } from "./adapters/postgres-incident-lifecycle.js";
+export { createHttpObjectBackupDestination, ObjectBackupDestinationError } from "./adapters/http-object-backup-destination.js";
 
 export {
   parseSafeErrorCode,

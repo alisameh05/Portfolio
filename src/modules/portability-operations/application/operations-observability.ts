@@ -65,6 +65,13 @@ export interface OperationsSummarySnapshot {
     /** True when any one per-state sample reaches its 1,000-row limit. */
     readonly capped: boolean;
   };
+  readonly backup: {
+    readonly relationalSourceWatermarkAgeHours: number | null;
+    readonly objectSourceWatermarkAgeHours: number | null;
+    readonly objectCount: BoundedCount | null;
+    readonly objectBytes: number | null;
+    readonly state: "complete" | "incomplete" | "failed" | null;
+  };
   readonly policyProgress: null | {
     readonly firstPolicyPeriod: string;
     readonly requiredThroughPeriod: string;
@@ -191,7 +198,7 @@ export interface OperationsSummary {
     readonly relationalSourceWatermarkAgeHours: OperationsValue<number>;
     readonly objectSourceWatermarkAgeHours: OperationsValue<number>;
     readonly count: OperationsValue<BoundedCount>;
-    readonly bytes: OperationsValue<BoundedCount>;
+    readonly bytes: OperationsValue<number>;
     readonly state: OperationsValue<"complete" | "incomplete" | "failed">;
   };
   readonly recovery: {
@@ -419,11 +426,16 @@ function toOperationsSummary(snapshot: OperationsSummarySnapshot, integrityFailu
     },
     storage: { failures: unknown("not-collected"), readiness: unknown("not-collected") },
     backup: {
-      relationalSourceWatermarkAgeHours: unknown("producer-not-installed"),
-      objectSourceWatermarkAgeHours: unknown("producer-not-installed"),
-      count: unknown("producer-not-installed"),
-      bytes: unknown("producer-not-installed"),
-      state: unknown("producer-not-installed"),
+      relationalSourceWatermarkAgeHours: snapshot.backup.relationalSourceWatermarkAgeHours === null
+        ? unknown("no-durable-watermark") : measured(snapshot.backup.relationalSourceWatermarkAgeHours, "operations-database", 0),
+      objectSourceWatermarkAgeHours: snapshot.backup.objectSourceWatermarkAgeHours === null
+        ? unknown("no-durable-watermark") : measured(snapshot.backup.objectSourceWatermarkAgeHours, "operations-database", 0),
+      count: snapshot.backup.objectCount === null ? unknown("no-durable-watermark")
+        : measured(snapshot.backup.objectCount, "operations-database", 0),
+      bytes: snapshot.backup.objectBytes === null ? unknown("no-durable-watermark")
+        : measured(snapshot.backup.objectBytes, "operations-database", 0),
+      state: snapshot.backup.state === null ? unknown("no-durable-watermark")
+        : measured(snapshot.backup.state, "operations-database", 0),
     },
     recovery: { stage: unknown("producer-not-installed"), durationMs: unknown("producer-not-installed") },
   };
