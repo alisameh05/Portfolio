@@ -147,6 +147,8 @@ try {
     "--no-file-parallelism", "--reporter=default", "--reporter=json", `--outputFile=${runOutputPath}`], env, true);
   const vitest = JSON.parse(readFileSync(runOutputPath, "utf8"));
   const testEvidence = collectTests(vitest);
+  writeFileSync(reportPath, `${JSON.stringify({ success: vitest.success === true, totals: testEvidence.totals,
+    suites: testEvidence.suites }, null, 2)}\n`);
   if (vitestRun.status !== 0 || vitest.success !== true || vitest.numFailedTests !== 0 || vitest.numPendingTests !== 0 || vitest.numTodoTests !== 0) {
     console.error(JSON.stringify({ stage: "acceptance-summary", status: vitestRun.status, totals: testEvidence.totals,
       failedSuites: testEvidence.suites.filter((suite) => suite.failed > 0 || suite.status !== "passed")

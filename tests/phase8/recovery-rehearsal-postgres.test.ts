@@ -534,7 +534,8 @@ describe("#255 real isolated PostgreSQL recovery", () => {
         },
         recordSafeIncident: async code => { incidents.push(code); },
       };
-      const referenceAt = new Date().toISOString();
+      const referenceEpoch = Date.now();
+      const referenceAt = new Date(referenceEpoch).toISOString();
       const discoveryStartedAt = performance.now();
       const discoveredRelationalCopy = await catalog.currentUsable();
       const discoveredObjectCopy = objectAttempt?.catalog;
@@ -543,7 +544,7 @@ describe("#255 real isolated PostgreSQL recovery", () => {
       if (encryptedObjectCatalog.byteLength === 0) throw new Error("RECOVERY_OBJECT_CATALOG_UNAVAILABLE");
       encryptedObjectCatalog.fill(0);
       const discoveryAccessMilliseconds = Math.max(1, Math.ceil(performance.now() - discoveryStartedAt));
-      const startedAt = new Date().toISOString();
+      const startedAt = new Date(referenceEpoch + discoveryAccessMilliseconds).toISOString();
       const report = await runRecoveryRehearsal({ target: { environment: "test", targetIdentity: targetUrl, sourceIdentity: sourceUrl,
         protectedIdentities: ["postgres://127.0.0.1:5432/production", `postgres://127.0.0.1:${targetPort}/recovery_source`],
         allowlistedTargetIdentities: [`postgres://127.0.0.1:${targetPort}/recovery_target`],
