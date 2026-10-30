@@ -32,7 +32,12 @@ jobs:
       - name: Pull isolated recovery services
         run: |
           docker pull postgres:17-alpine
-          docker pull public.ecr.aws/localstack/localstack:4.5.0
+          if ! docker pull public.ecr.aws/localstack/localstack:4.5.0; then
+            # ECR Public can exhaust its anonymous data quota on hosted runners.
+            # Use the same vendor/version from Docker Hub for the test image.
+            docker pull localstack/localstack:4.5.0
+            docker tag localstack/localstack:4.5.0 public.ecr.aws/localstack/localstack:4.5.0
+          fi
       - name: Require isolated recovery and privacy reconciliation with zero skips
         run: npm run phase8:focus:recovery
 
