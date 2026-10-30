@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "name": "phase8-relational-backup-nightly",
+  "phase": 8,
+  "installed": false,
+  "frequency": "nightly",
+  "timezone": "UTC",
+  "command": "npm run phase8:focus:relational-backup",
+  "timeoutSeconds": 3600,
+  "maximumConcurrentRuns": 1,
+  "retry": {
+    "maximumAttempts": 3,
+    "idempotency": "new immutable attempt ID; partial objects are deleted and never become usable"
+  },
+  "secrets": [
+    "DATABASE_DIRECT_URL",
+    "BACKUP_ENCRYPTION_KEY",
+    "BACKUP_KEY_VERSION",
+    "BACKUP_DESTINATION_NAME",
+    "BACKUP_DESTINATION_URL",
+    "BACKUP_DESTINATION_TOKEN",
+    "BACKUP_RETENTION_HOURS",
+    "BACKUP_SOURCE_ALLOWLIST",
+    "BACKUP_ENVIRONMENT",
+    "PG_DUMP_BIN",
+    "PG_DUMPALL_BIN"
+  ],
+  "operatorGuide": "docs/operations/phase8-relational-backup.md"
+}

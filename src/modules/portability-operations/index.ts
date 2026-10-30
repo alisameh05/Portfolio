@@ -74,6 +74,28 @@ export { createOperationalIncidentPass, summaryMeasurements } from "./applicatio
 export { createOperationsReadiness } from "./application/index.js";
 export type { OptionalOperationsCapabilityProbe } from "./application/operations-readiness.js";
 export {
+  RELATIONAL_BACKUP_ALGORITHM,
+  RELATIONAL_BACKUP_ENVELOPE_VERSION,
+  RELATIONAL_BACKUP_MAX_ATTEMPTS,
+  RelationalBackupError,
+  createRelationalBackupService,
+  decodeRelationalBackupPayload,
+  decryptRelationalBackupEnvelope,
+  encryptRelationalBackupEnvelope,
+  type RelationalBackupAttempt,
+  type RelationalBackupCatalog,
+  type RelationalBackupCatalogPort,
+  type RelationalBackupDestinationPort,
+  type RelationalBackupIncidentPort,
+  type RelationalBackupKey,
+  type RelationalBackupPayload,
+  type RelationalBackupSourcePort,
+} from "./application/relational-backup.js";
+export {
+  createHttpRelationalBackupDestination,
+  RelationalBackupDestinationError,
+} from "./adapters/http-relational-backup-destination.js";
+export {
   applyGuardedOwnerExportTransition,
   canonicalizeOwnerExportScopes,
   createOwnerExportService,

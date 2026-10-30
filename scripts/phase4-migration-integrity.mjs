@@ -159,6 +159,12 @@ export function assertPhase4ApplicationRls(snapshot) {
   const phase7DurableScheduleApplied = snapshot.migrationLedger?.some((migration) =>
     migration.name === "phase7_durable_policy_schedule_keys",
   ) === true;
+  const relationalBackupApplied = snapshot.migrationLedger?.some((migration) =>
+    migration.name === "register_relational_backup_copies",
+  ) === true;
+  const reviewedBackupGrants = relationalBackupApplied
+    ? PHASE_DECLARED_ADDITIVE_MIGRATIONS.find((item) => item.ticket === 253).operationsAdditions
+    : [];
   const tables = new Map(
     snapshot.objects.filter((object) => object.kind === "r")
       .map((object) => [`${object.schema}.${object.name}`, object]),
@@ -208,6 +214,9 @@ export function assertPhase4ApplicationRls(snapshot) {
   if (publicGrants.length > 0) throw new Error("PHASE4_APPLICATION_GRANT_EXPOSURE");
   const unauthorizedBackupGrants = snapshot.grants.filter((grant) =>
     grant.grantee === "shipwithali_backup" &&
+    !reviewedBackupGrants.some((entry) => entry.category === "grants" &&
+      entry.expected.grantee === "shipwithali_backup" &&
+      Object.entries(entry.expected).every(([key, value]) => grant[key] === value)) &&
     !(grant.objectType === "n" && grant.schema === "identity_access" && grant.privilege === "USAGE") &&
     !(grant.schema === "identity_access" && grant.object === "owner_links" && grant.privilege === "SELECT") &&
     !(grant.objectType === "n" && grant.schema === "operations" && grant.privilege === "USAGE") &&

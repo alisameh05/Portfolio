@@ -730,6 +730,31 @@ export interface OperationsPhase7ScheduleProgress {
   updated_at: Generated<Timestamp>;
 }
 
+export interface OperationsRelationalBackupCopies {
+  algorithm: string;
+  attempted_at: Timestamp;
+  catalog_sha256: string;
+  ciphertext_bytes: Int8;
+  ciphertext_sha256: string;
+  committed_at: Timestamp | null;
+  copy_id: string;
+  deletion_acknowledged_at: Timestamp | null;
+  destination_name: string;
+  dump_bytes: Int8;
+  dump_tool: string;
+  envelope_version: number;
+  expires_at: Timestamp | null;
+  failure_code: string | null;
+  incident_environment: Generated<string>;
+  incident_job_id: string | null;
+  key_version: string;
+  object_key: string;
+  retention_lifetime_hours: number | null;
+  source_watermark_at: Timestamp;
+  state: string;
+  verified_at: Timestamp | null;
+}
+
 export interface PortfolioConfigContactChannels {
   available_locales: Json;
   channel: string;
@@ -874,6 +899,7 @@ export interface DB {
   "operations.jobs": OperationsJobs;
   "operations.outbox_events": OperationsOutboxEvents;
   "operations.phase7_schedule_progress": OperationsPhase7ScheduleProgress;
+  "operations.relational_backup_copies": OperationsRelationalBackupCopies;
   "portfolio_config.contact_channels": PortfolioConfigContactChannels;
   "portfolio_config.settings": PortfolioConfigSettings;
   "taxonomy.project_discovery_locales": TaxonomyProjectDiscoveryLocales;

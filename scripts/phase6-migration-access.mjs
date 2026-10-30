@@ -9,7 +9,7 @@ import { Client, Pool } from "pg";
 import { isolatedPhase6Config, phase6StorageIntegrationProof, phase6PdfFixture, scrubPhase6Environment } from "./phase6-verification-support.mjs";
 import { getPhase6SourceIdentity } from "./phase6-verification-support.mjs";
 import { migrationSha256 } from "./migration-checksum.mjs";
-import { capabilitiesForMigrations } from "./phase-contract-registry.mjs";
+import { PHASE_DECLARED_ADDITIVE_MIGRATIONS, capabilitiesForMigrations } from "./phase-contract-registry.mjs";
 import { initializeLocalMigrationProject, removeOwnedMigrationNetwork, withLocalMigrationExecutor } from "./local-migration-bootstrap.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
@@ -192,6 +192,19 @@ export function phase6StorageDefaultDenyProof(tables, policies) {
     Array.isArray(policies) && policies.length === 0;
 }
 
+export function phase6BackupGrantProof(grants, installedMigrations = []) {
+  const expected = PHASE_DECLARED_ADDITIVE_MIGRATIONS
+    .filter((migration) => installedMigrations.includes(migration.migration))
+    .flatMap((migration) => migration.operationsAdditions ?? [])
+    .filter((entry) => entry.category === "grants" && entry.expected.objectType === "r" &&
+      entry.expected.grantee === "shipwithali_backup" && entry.expected.privilege !== "SELECT")
+    .map(({ expected: row }) => [row.schema, row.object, row.grantee, row.privilege, row.grantable ? "YES" : "NO"]);
+  const actual = grants.filter((row) => row.grantee === "shipwithali_backup" && row.privilege_type !== "SELECT")
+    .map((row) => [row.schema, row.table_name, row.grantee, row.privilege_type, row.is_grantable]);
+  const normalize = (rows) => rows.map((row) => JSON.stringify(row)).sort();
+  return JSON.stringify(normalize(actual)) === JSON.stringify(normalize(expected));
+}
+
 export async function catalogSnapshot(connectionString) {
   const client = new Client({ connectionString });
   await client.connect();
@@ -226,8 +239,8 @@ export async function catalogSnapshot(connectionString) {
     if (grants.rows.some((row) => ["anon", "authenticated"].includes(row.grantee))) throw new Error("PHASE6_AUTHENTICATED_TABLE_GRANT_FOUND");
     if (privileges.rows.some((row) => row.role_name === "service_role" && (row.usage || row.create)) ||
         grants.rows.some((row) => row.grantee === "service_role")) throw new Error("PHASE6_SERVICE_ROLE_DATABASE_SHORTCUT_FOUND");
-    if (grants.rows.some((row) => row.grantee === "shipwithali_backup" && row.privilege_type !== "SELECT")) throw new Error("PHASE6_BACKUP_WRITE_GRANT_FOUND");
     const installedMigrations = installedMigrationFiles(versions.rows);
+    if (!phase6BackupGrantProof(grants.rows, installedMigrations)) throw new Error("PHASE6_BACKUP_WRITE_GRANT_FOUND");
     if (!phase6WorkerSchemaProof(privileges.rows, installedMigrations)) throw new Error("PHASE6_WORKER_SCHEMA_GRANT_TOO_BROAD");
     if (privileges.rows.some((row) => row.role_name === "shipwithali_application" && row.create)) throw new Error("PHASE6_APPLICATION_SCHEMA_CREATE_GRANT_FOUND");
     if (grants.rows.some((row) => row.grantee === "shipwithali_application" && ["TRUNCATE", "REFERENCES", "TRIGGER"].includes(row.privilege_type))) throw new Error("PHASE6_APPLICATION_TABLE_GRANT_TOO_BROAD");

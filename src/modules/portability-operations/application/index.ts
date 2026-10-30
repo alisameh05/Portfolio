@@ -67,6 +67,24 @@ export { createOperationsReadiness, type OperationsReadinessProbe, type Optional
   type OperationsReadinessState } from "./operations-readiness.js";
 export { redriveDeadJob, type RedriveDeadJobCommand, type RedriveDeadJobDependencies } from "./redrive-service.js";
 export { JOB_REDRIVE_POLICY_VERSION, parsePhase7WorkPayload, type Phase7WorkPayload } from "./redrive-policy.js";
+export {
+  RELATIONAL_BACKUP_ALGORITHM,
+  RELATIONAL_BACKUP_ENVELOPE_VERSION,
+  RELATIONAL_BACKUP_MAX_ATTEMPTS,
+  RelationalBackupError,
+  createRelationalBackupService,
+  decodeRelationalBackupPayload,
+  decryptRelationalBackupEnvelope,
+  encryptRelationalBackupEnvelope,
+  type RelationalBackupAttempt,
+  type RelationalBackupCatalog,
+  type RelationalBackupCatalogPort,
+  type RelationalBackupDestinationPort,
+  type RelationalBackupIncidentPort,
+  type RelationalBackupKey,
+  type RelationalBackupPayload,
+  type RelationalBackupSourcePort,
+} from "./relational-backup.js";
 
 export {
   createLoggerOperationsObservationPort,

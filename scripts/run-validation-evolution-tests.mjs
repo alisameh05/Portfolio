@@ -54,6 +54,7 @@ export const REQUIRED_REGRESSION_TESTS = Object.freeze([
   "the Phase 7 schedule migration binds exact checks, indexes, defaults, and PostgreSQL engine variants",
   "the Phase 8 operations observability migration binds exact columns, all eleven index definitions, and its source checksum",
   "the \\#252 incident migration binds added columns, checks, index, restricted column grants, and source checksum",
+  "the \\#253 relational backup migration binds exact checks, indexes, policies, restricted grants, PG18 NOT NULL variants, and source checksum",
   "structured failures sanitize metadata, paths, causes, and serialized output",
   "combined cleanup failures retain the primary cause and every cleanup cause safely",
   "the real CLI with no Docker exits before changing evidence",

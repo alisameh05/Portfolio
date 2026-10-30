@@ -1,3 +1,4 @@
+import { PHASE_DECLARED_ADDITIVE_MIGRATIONS } from "../../scripts/phase-contract-registry.mjs";
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
@@ -207,6 +208,19 @@ describe("Phase 4 migration integrity", () => {
       defaultPrivileges: [],
     };
     expect(() => assertPhase4ApplicationRls(snapshot)).not.toThrow();
+    const backupGrants = PHASE_DECLARED_ADDITIVE_MIGRATIONS.find((item) => item.ticket === 253)!
+      .operationsAdditions.filter((entry) => entry.category === "grants" && entry.expected.grantee === "shipwithali_backup")
+      .map((entry) => entry.expected);
+    const backupSnapshot = { ...snapshot, grants: backupGrants,
+      migrationLedger: [{ name: "register_relational_backup_copies" }] };
+    expect(() => assertPhase4ApplicationRls(backupSnapshot)).not.toThrow();
+    expect(() => assertPhase4ApplicationRls({ ...backupSnapshot, migrationLedger: [] }))
+      .toThrow("PHASE4_BACKUP_CONFIGURATION_GRANT");
+    expect(() => assertPhase4ApplicationRls({ ...backupSnapshot, grants: [...backupGrants,
+      { schema: "operations", object: "relational_backup_copies", objectType: "r",
+        grantee: "shipwithali_backup", grantor: "shipwithali_migration", privilege: "UPDATE", grantable: false }] }))
+      .toThrow("PHASE4_BACKUP_CONFIGURATION_GRANT");
+
 
     expect(() => assertPhase4ApplicationRls({
       ...snapshot,

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync, rmSync } from "node:fs";
 import test from "node:test";
 import { join } from "node:path";
-import { phase6StorageDefaultDenyProof, stopProject, PHASE6_APPLICATION_COLUMN_UPDATES, phase6ColumnUpdateProof, phase6DefinerFunctionProof, phase6WorkerSchemaProof, makeProject, phase6MediaFactPlanProof, phase6MigrationFailureCode } from "../../scripts/phase6-migration-access.mjs";
+import { phase6BackupGrantProof, phase6StorageDefaultDenyProof, stopProject, PHASE6_APPLICATION_COLUMN_UPDATES, phase6ColumnUpdateProof, phase6DefinerFunctionProof, phase6WorkerSchemaProof, makeProject, phase6MediaFactPlanProof, phase6MigrationFailureCode } from "../../scripts/phase6-migration-access.mjs";
 import { phase6PdfFixture } from "../../scripts/phase6-verification-support.mjs";
 import { migrationSha256 } from "../../scripts/migration-checksum.mjs";
 import { loopbackPublishedPorts, removeOwnedMigrationNetwork, withLocalMigrationExecutor } from "../../scripts/local-migration-bootstrap.mjs";
@@ -228,4 +228,27 @@ test("private Storage catalogs require RLS and the reviewed default-deny policy 
   assert.equal(phase6StorageDefaultDenyProof(tables.slice(1), []), false);
   assert.equal(phase6StorageDefaultDenyProof(tables.map(row => ({ ...row, rls: false })), []), false);
   assert.equal(phase6StorageDefaultDenyProof(tables, [{ policyname: "unreviewed_allow" }]), false);
+});
+
+
+test("backup write grants require the installed reviewed migration and exact non-grantable privileges", () => {
+  const migration = "20261029150000_register_relational_backup_copies.sql";
+  const grants = ["incidents", "relational_backup_copies"].map(table_name => ({
+    schema: "operations", table_name, grantee: "shipwithali_backup", privilege_type: "INSERT", is_grantable: "NO",
+  }));
+  assert.equal(phase6BackupGrantProof([], []), true);
+  assert.equal(phase6BackupGrantProof(grants, []), false);
+  assert.equal(phase6BackupGrantProof(grants, [migration]), true);
+  assert.equal(phase6BackupGrantProof(grants.slice(1), [migration]), false);
+  for (const replacement of [
+    { ...grants[0], privilege_type: "UPDATE" },
+    { ...grants[0], privilege_type: "DELETE" },
+    { ...grants[0], schema: "media" },
+    { ...grants[0], table_name: "jobs" },
+    { ...grants[0], is_grantable: "YES" },
+  ]) {
+    assert.equal(phase6BackupGrantProof([replacement, grants[1]], [migration]), false);
+    assert.equal(phase6BackupGrantProof([...grants, replacement], [migration]), false);
+  }
+  assert.equal(phase6BackupGrantProof([...grants, { ...grants[0], privilege_type: "SELECT" }], [migration]), true);
 });
