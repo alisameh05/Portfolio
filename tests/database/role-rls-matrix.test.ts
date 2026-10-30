@@ -1,3 +1,4 @@
+import { assertCurrentOperationsPolicies } from "../../scripts/phase3-policy-inventory.mjs";
 import { randomBytes } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -877,6 +878,14 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
     const admin = adminClient();
     await admin.connect();
     try {
+      if (relationalBackupSchema) {
+        const currentPolicies = (await admin.query("select tablename, policyname, roles, cmd from pg_policies where schemaname = 'operations'")).rows;
+        expect(() => assertCurrentOperationsPolicies(currentPolicies)).not.toThrow();
+        expect(() => assertCurrentOperationsPolicies(currentPolicies.filter((row) => row["policyname"] !== "relational_backup_copies_backup_update")))
+          .toThrow("RLS_POLICIES_INCOMPLETE");
+        expect(() => assertCurrentOperationsPolicies(currentPolicies.map((row) => row["policyname"] === "relational_backup_copies_backup_update"
+          ? { ...row, roles: ["shipwithali_application"] } : row))).toThrow("RLS_POLICIES_INCOMPLETE");
+      }
       const policies = await admin.query(
         `select tablename, policyname, roles, cmd
            from pg_policies

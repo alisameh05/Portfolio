@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { cleanupProbeRole } from "./database-baseline-support.mjs";
 import { migrationSha256 } from "./migration-checksum.mjs";
+import { assertCurrentOperationsPolicies } from "./phase3-policy-inventory.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const EVIDENCE = join(ROOT, "evidence", "phase-3-database-verification.json");
@@ -199,46 +200,7 @@ async function localVerification(connectionString) {
         where schemaname = 'operations'
         order by tablename, policyname`,
     );
-    const expectedPolicies = [
-      ["idempotency_records", "idempotency_application_insert_policy", "INSERT", "shipwithali_application"],
-      ["idempotency_records", "idempotency_application_select_policy", "SELECT", "shipwithali_application"],
-      ["idempotency_records", "idempotency_application_update_policy", "UPDATE", "shipwithali_application"],
-      ["idempotency_records", "operations_backup_policy_idempotency", "SELECT", "shipwithali_backup"],
-      ["jobs", "jobs_worker_insert_policy", "INSERT", "shipwithali_worker"],
-      ["jobs", "jobs_worker_select_policy", "SELECT", "shipwithali_worker"],
-      ["jobs", "jobs_worker_update_policy", "UPDATE", "shipwithali_worker"],
-      ["jobs", "measurement_event_jobs_application_insert", "INSERT", "shipwithali_application"],
-      ["jobs", "owner_export_jobs_application_insert", "INSERT", "shipwithali_application"],
-      ["jobs", "operations_backup_policy_jobs", "SELECT", "shipwithali_backup"],
-      ["incidents", "incidents_worker_insert_policy", "INSERT", "shipwithali_worker"],
-      ["incidents", "incidents_worker_select_policy", "SELECT", "shipwithali_worker"],
-      ["incidents", "incidents_worker_update_policy", "UPDATE", "shipwithali_worker"],
-      ["incidents", "operations_backup_policy_incidents", "SELECT", "shipwithali_backup"],
-      ["job_redrive_audit", "job_redrive_audit_worker_insert_policy", "INSERT", "shipwithali_worker"],
-      ["job_redrive_audit", "job_redrive_audit_worker_select_policy", "SELECT", "shipwithali_worker"],
-      ["job_redrive_audit", "operations_backup_policy_job_redrive_audit", "SELECT", "shipwithali_backup"],
-      ["outbox_events", "operations_backup_policy_outbox", "SELECT", "shipwithali_backup"],
-      ["outbox_events", "outbox_application_insert_policy", "INSERT", "shipwithali_application"],
-      ["outbox_events", "outbox_worker_select_policy", "SELECT", "shipwithali_worker"],
-      ["outbox_events", "outbox_worker_update_policy", "UPDATE", "shipwithali_worker"],
-      ["outbox_events", "owner_export_produced_outbox_worker_insert", "INSERT", "shipwithali_worker"],
-      ["phase7_schedule_progress", "operations_backup_policy_phase7_schedule_progress", "SELECT", "shipwithali_backup"],
-      ["phase7_schedule_progress", "phase7_schedule_progress_worker_insert", "INSERT", "shipwithali_worker"],
-      ["phase7_schedule_progress", "phase7_schedule_progress_worker_select", "SELECT", "shipwithali_worker"],
-      ["phase7_schedule_progress", "phase7_schedule_progress_worker_update", "UPDATE", "shipwithali_worker"],
-    ];
-    const policyMatches = expectedPolicies.every(([table, policy, command, role]) =>
-      policies.rows.some(
-        (row) =>
-          row.tablename === table &&
-          row.policyname === policy &&
-          row.cmd === command &&
-          String(row.roles) === `{${role}}`,
-      ),
-    );
-    if (policies.rows.length !== expectedPolicies.length || !policyMatches) {
-      throw new Error("RLS_POLICIES_INCOMPLETE");
-    }
+    assertCurrentOperationsPolicies(policies.rows);
 
     const elevated = await client.query(
       `select n.nspname, p.proname
