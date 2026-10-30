@@ -1,3 +1,5 @@
+import { types } from "pg";
+import { mapRelationalBackupRow } from "../../src/modules/portability-operations/adapters/relational-backup-row.js";
 import { createServer } from "node:http";
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
@@ -29,7 +31,7 @@ const dump = Buffer.concat([payloadPrefix, manifest, roles, database]);
 const catalog: RelationalBackupCatalog = Object.freeze({
   version: 1,
   scope: Object.freeze(["application", "operations", "auth", "storage-metadata"]),
-  sourceWatermarkAt: "2026-10-30T00:00:00.000Z",
+  sourceWatermarkAt: "2026-10-30T00:00:00.789Z",
   startedAt: "2026-10-30T00:00:00.000Z",
   completedAt: "2026-10-30T00:00:02.000Z",
   dumpTool: "pg_dump",
@@ -145,6 +147,30 @@ describe("relational backup envelope", () => {
 });
 
 describe("relational backup service", () => {
+  it.each(["date", "string"])("reloads %s ledger timestamps without losing authenticated precision", async (representation) => {
+    const { service, attempts } = setup();
+    const copy = await service.create();
+    const timestamp = (value: string | null) => value === null ? null :
+      representation === "date" ? types.getTypeParser(1184)(value.replace("T", " ").replace("Z", "+00")) : value;
+    const row = {
+      copy_id: copy.copyId, destination_name: copy.destinationName, object_key: copy.objectKey,
+      key_version: copy.keyVersion, dump_tool: copy.dumpTool,
+      source_watermark_at: timestamp(copy.sourceWatermarkAt), attempted_at: timestamp(copy.attemptedAt),
+      verified_at: timestamp(copy.verifiedAt), committed_at: timestamp(copy.committedAt), expires_at: timestamp(copy.expiresAt),
+      dump_bytes: String(copy.dumpBytes), ciphertext_bytes: String(copy.ciphertextBytes),
+      catalog_sha256: copy.catalogSha256, ciphertext_sha256: copy.ciphertextSha256,
+      retention_lifetime_hours: copy.retentionLifetimeHours, state: copy.state, failure_code: copy.failureCode,
+    };
+    const reloaded = mapRelationalBackupRow(row);
+    expect(reloaded).toEqual(attempts.get(copy.copyId));
+    await expect(service.verify(reloaded, key)).resolves.toEqual(catalog);
+    const recovered = await service.recover(reloaded, key);
+    expect(Buffer.from(recovered.payload.database)).toEqual(database);
+    expect(recovered.catalog.sourceWatermarkAt).toBe("2026-10-30T00:00:00.789Z");
+    expect(mapRelationalBackupRow({ ...row, verified_at: null, committed_at: null, expires_at: null }))
+      .toMatchObject({ verifiedAt: null, committedAt: null, expiresAt: null });
+  });
+
   it("preserves verified bytes when markUsable commits then loses its response", async () => {
     const { service, attempts, objects } = setup({ commitThenThrow: true });
     await expect(service.create()).rejects.toMatchObject({ safeCode: "BACKUP_CLEANUP_FAILED" });

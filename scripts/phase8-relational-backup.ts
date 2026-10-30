@@ -1,3 +1,4 @@
+import { mapRelationalBackupRow } from "../src/modules/portability-operations/adapters/relational-backup-row.js";
 import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { lstat, mkdtemp, readFile, readdir, realpath, rm } from "node:fs/promises";
@@ -151,19 +152,7 @@ async function capture(source: ReturnType<typeof parseSource>, pgDump: string, p
     await client.end();
   }
 }
-function mapRow(row: Record<string, unknown>): RelationalBackupAttempt {
-  return Object.freeze({
-    copyId: String(row['copy_id']), destinationName: String(row['destination_name']), objectKey: String(row['object_key']),
-    keyVersion: String(row['key_version']), dumpTool: String(row['dump_tool']), sourceWatermarkAt: new Date(String(row['source_watermark_at'])).toISOString(),
-    dumpBytes: Number(row['dump_bytes']), ciphertextBytes: Number(row['ciphertext_bytes']), catalogSha256: String(row['catalog_sha256']).trim(),
-    ciphertextSha256: String(row['ciphertext_sha256']).trim(), attemptedAt: new Date(String(row['attempted_at'])).toISOString(),
-    verifiedAt: row['verified_at'] ? new Date(String(row['verified_at'])).toISOString() : null,
-    committedAt: row['committed_at'] ? new Date(String(row['committed_at'])).toISOString() : null,
-    retentionLifetimeHours: row['retention_lifetime_hours'] == null ? null : Number(row['retention_lifetime_hours']),
-    expiresAt: row['expires_at'] ? new Date(String(row['expires_at'])).toISOString() : null,
-    state: String(row['state']) as RelationalBackupAttempt["state"], failureCode: row['failure_code'] == null ? null : String(row['failure_code']),
-  });
-}
+
 async function main() {
   const source = parseSource();
   const rawEnvironment = process.env['BACKUP_ENVIRONMENT']?.trim() || "unknown";
@@ -270,7 +259,7 @@ async function main() {
         const r = await client.query("select * from operations.relational_backup_copies where destination_name=$1 " +
           "and state='usable' and deletion_acknowledged_at is null and (expires_at is null or expires_at > clock_timestamp()) " +
           "order by committed_at desc,copy_id desc limit 1", [destinationName]);
-        return r.rows[0] ? mapRow(r.rows[0]) : null;
+        return r.rows[0] ? mapRelationalBackupRow(r.rows[0]) : null;
       },
     };
     const service = createRelationalBackupService({
