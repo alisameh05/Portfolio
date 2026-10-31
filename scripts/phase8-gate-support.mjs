@@ -35,7 +35,7 @@ const componentDefinitions = [
 export const PHASE8_GATE_COMPONENTS = Object.freeze(componentDefinitions.map(([id, path]) => ({ id, path })));
 export const PHASE8_GATE_REQUIRED_CHECKS = Object.freeze(["validation-ready", "phase8-prerequisites", "integrated", "contract-verification", "architecture", "runtime-boundary", "lint", "typecheck", "production-build", "gate-negative-tests"]);
 export function countReportedSkips(output) {
-  const matches = [...String(output).matchAll(/(?:\bskipped\b\s*[:=]\s*(\d+)|(\d+)\s+skipped\b|\bskipped\s+(\d+)\b)/giu)];
+  const matches = [...String(output).matchAll(/(?:\bskipped\b["']?\s*[:=]\s*["']?(\d+)|(\d+)\s+skipped\b|\bskipped\s+(\d+)\b)/giu)];
   return matches.length ? Math.max(...matches.map((m) => Number(m[1] ?? m[2] ?? m[3]))) : null;
 }
 export const PHASE8_GATE_CRITERION_MATRIX = Object.freeze(Array.from({ length: 70 }, (_, i) => {
@@ -53,12 +53,14 @@ function executionOk(value) {
   const executed = Number(req.executed ?? req.passed ?? value.executed ?? value.passed ?? (value.mergeEligible === true ? 1 : 0));
   const failed = Number(req.failed ?? value.failed ?? 0);
   const skipped = Number(req.skipped ?? value.skipped ?? 0);
+  const todo = Number(req.todo ?? value.todo ?? 0);
+  const failedSuites = Number(req.failedSuites ?? value.failedSuites ?? 0);
   return (req.success === true || value.success === true || value.verdict === "pass" || value.result === "passed") &&
-    executed > 0 && failed === 0 && skipped === 0;
+    executed > 0 && failed === 0 && skipped === 0 && todo === 0 && failedSuites === 0 && req.partial !== true && value.partial !== true;
 }
 
 export function evaluatePhase8Gate({ runId, startedAt, sourceRevision, sourceTreeSha256, runtime, expectedRuntime, checks,
-  artifacts, scenarios = PHASE8_GATE_SCENARIOS.map(({ id }) => id), integratedEvidence, prerequisiteEvidence, now = Date.now() }) {
+  artifacts, criterionMatrix = PHASE8_GATE_CRITERION_MATRIX, scenarios = PHASE8_GATE_SCENARIOS.map(({ id }) => id), integratedEvidence, prerequisiteEvidence, now = Date.now() }) {
   const failures = [];
   const revision = String(sourceRevision ?? "");
   if (!/^[0-9a-f]{40}$/iu.test(revision) || !/^[0-9a-f]{64}$/iu.test(String(sourceTreeSha256 ?? ""))) failures.push("source-binding-invalid");
@@ -77,7 +79,9 @@ export function evaluatePhase8Gate({ runId, startedAt, sourceRevision, sourceTre
       failures.push(`required-evidence-invalid:${item.id}`);
     }
   }
-  const criterionEvidence = PHASE8_GATE_CRITERION_MATRIX.map((c) => ({ id: c.id, artifacts: c.components,
+  const expectedCriterionIds = PHASE8_GATE_CRITERION_MATRIX.map(({ id }) => id);
+  if (criterionMatrix.length !== expectedCriterionIds.length || expectedCriterionIds.some((id, index) => criterionMatrix[index]?.id !== id)) failures.push("criterion-inventory-incomplete");
+  const criterionEvidence = criterionMatrix.map((c) => ({ id: c.id, artifacts: c.components,
     tests: [...new Set(c.components.flatMap((id) => byId.get(id)?.tests ?? []))].sort() }));
   for (const item of criterionEvidence) if (item.tests.length === 0 || item.artifacts.some((id) => !byId.has(id) || byId.get(id).positiveExecution !== true)) failures.push(`criterion-coverage-incomplete:${item.id}`);
   const scenarioSet = new Set(scenarios);

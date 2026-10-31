@@ -28,6 +28,7 @@ test("Phase 8 gate enumerates every criterion and scenario and accepts complete 
 
 test("gate reads skip counts from real runner summaries and rejects missing aggregate counts", () => {
   assert.equal(countReportedSkips("ℹ skipped 0"), 0);
+  assert.equal(countReportedSkips('{"required":{"skipped":0}}'), 0);
   assert.equal(countReportedSkips("Tests 4 passed | 2 skipped"), 2);
   assert.equal(countReportedSkips("no test summary"), null);
 });
@@ -49,6 +50,10 @@ test("gate rejects runtime/install, missing or stale artifact, run/coverage, agg
   assert.ok(evaluatePhase8Gate(noNamedTests).failures.includes("required-evidence-invalid:interfaces"));
   const noScenario = fixture(); noScenario.artifacts.forEach((x) => { x.scenarios = x.scenarios.filter((id) => id !== "S16"); });
   assert.ok(evaluatePhase8Gate(noScenario).failures.includes("scenario-coverage-incomplete:S16"));
+  const noOptionalOutage = fixture(); noOptionalOutage.artifacts.forEach((x) => { x.scenarios = x.scenarios.filter((id) => id !== "S15"); });
+  assert.ok(evaluatePhase8Gate(noOptionalOutage).failures.includes("scenario-coverage-incomplete:S15"));
+  const absentCriterion = fixture();
+  assert.ok(evaluatePhase8Gate({ ...absentCriterion, criterionMatrix: PHASE8_GATE_CRITERION_MATRIX.slice(1) }).failures.includes("criterion-inventory-incomplete"));
   const skipped = fixture(); skipped.checks[0].skipped = 1; skipped.checks[0].passed = false;
   assert.ok(evaluatePhase8Gate(skipped).failures.includes("required-check-failed:validation-ready"));
   const aggregate = fixture(); aggregate.integratedEvidence.required.success = false;
@@ -57,6 +62,8 @@ test("gate rejects runtime/install, missing or stale artifact, run/coverage, agg
   assert.ok(evaluatePhase8Gate(missingService).failures.includes("integrated-real-service-evidence-invalid"));
   const zeroExecution = fixture(); zeroExecution.artifacts[0].positiveExecution = false;
   assert.ok(evaluatePhase8Gate(zeroExecution).failures.includes("required-evidence-invalid:interfaces"));
+  const partial = fixture(); partial.integratedEvidence.required.partial = true;
+  assert.ok(evaluatePhase8Gate(partial).failures.includes("integrated-real-service-evidence-invalid"));
   const cleanup = fixture(); cleanup.artifacts[0].cleanup = false;
   assert.ok(evaluatePhase8Gate(cleanup).failures.includes("required-evidence-invalid:interfaces"));
   const prerequisite = fixture(); prerequisite.prerequisiteEvidence.acceptedPhases = [3, 4];
