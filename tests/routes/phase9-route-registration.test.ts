@@ -7,6 +7,9 @@ import {
   createPhase9RouteManifest,
   discoverPhase9Registrations,
 } from "../../scripts/phase9-route-registration.mjs";
+import { buildInventory } from "../../scripts/check-route-inventory.mjs";
+import { evaluateRuntimeRouteBoundary } from "../../scripts/check-runtime-boundary.mjs";
+import { inspectRuntimeArchitecture } from "../../scripts/check-runtime-architecture.mjs";
 import { PHASE8_PROTECTED_DUE_WORK_HANDOFF } from "../../src/runtime/protected-due-work-trigger.js";
 import { PHASE_ROUTE_REGISTRATION_POLICY } from "../../scripts/phase-contract-registry.mjs";
 import { createPhase9EvidenceDescriptor, evaluatePhase9EvidenceDescriptor, validatePhase9EvidenceDescriptor } from "../../scripts/phase9-route-evidence.mjs";
@@ -35,6 +38,10 @@ function fixtureRoot() {
   writeFileSync(join(root, "src", "app", "api", "v1", "projects", "[projectId]", "reaction", "route.ts"),
     'import { registerProductRoute } from "@/runtime/http/product-route-registration.js";\n' +
     'export const PUT = registerProductRoute("putProjectReaction", async (request: Request) => Response.json({ ok: true }));\n');
+  mkdirSync(join(root, "src", "app", "internal", "operations", "phase7-due-work"), { recursive: true });
+  writeFileSync(join(root, "src", "app", "internal", "operations", "phase7-due-work", "route.ts"),
+    'import { registerProtectedDueWorkRoute } from "@/runtime/http/product-route-registration.js";\n' +
+    'export const GET = registerProtectedDueWorkRoute(async () => Response.json({ ok: true }));\n');
   return root;
 }
 
@@ -68,9 +75,29 @@ describe("Phase 9 guarded route registration (#293)", () => {
     expect(report.declared).toHaveLength(53);
     expect(report.registered.map((entry) => entry.operationId)).toEqual(["putProjectReaction"]);
     expect(report.pending).toHaveLength(52);
+    expect(report.protectedJobs[0]).toMatchObject({ registered: true, operationId: null, installationPhase: 10 });
     expect(report.developmentPassed).toBe(true);
     expect(report.phase9Complete).toBe(false);
     expect(report.invalidRegistrations).toEqual([]);
+
+    const inventory = buildInventory({ root, mode: "development" });
+    expect(inventory.checks.every((check) => check.passed)).toBe(true);
+    expect(inventory.productRoutes.map((entry) => entry.operationId)).toEqual(["putProjectReaction"]);
+    expect(inventory.productRoutes).toHaveLength(1);
+    expect(inventory.phase9Complete).toBe(false);
+
+    const routeBoundary = evaluateRuntimeRouteBoundary(root, { mode: "development" });
+    expect(routeBoundary.routeRegistrationValid).toBe(true);
+    expect(routeBoundary.unexpectedRouteFiles).toEqual([]);
+    expect(routeBoundary.phase9RouteManifest.phase9Complete).toBe(false);
+
+    const architecture = inspectRuntimeArchitecture(root);
+    expect(architecture.verdict).toBe("pass");
+    expect(architecture.phase9RouteManifest.registered.map((entry) => entry.operationId)).toEqual(["putProjectReaction"]);
+
+    expect(buildInventory({ root, mode: "foundation" }).checks.some((check) => !check.passed)).toBe(true);
+    expect(evaluateRuntimeRouteBoundary(root, { mode: "foundation" }).routeRegistrationValid).toBe(false);
+    expect(inspectRuntimeArchitecture(root, { mode: "foundation" }).verdict).toBe("fail");
   });
 
   it("rejects missing final registrations, unknown routes, duplicate method/path, and duplicate operation IDs", () => {
@@ -133,6 +160,17 @@ describe("Phase 9 guarded route registration (#293)", () => {
     expect(findings).toContain("lab-entry-surface");
     expect(findings).toContain("jsx-tsx-surface");
     expect(findings).toContain("react-presentation-import");
+  });
+
+  it("keeps provider clients out of registered HTTP handlers", () => {
+    const root = fixtureRoot();
+    const route = join(root, "src", "app", "api", "v1", "projects", "[projectId]", "reaction", "route.ts");
+    writeFileSync(route, `${readFileSync(route, "utf8")}import { createClient } from "@supabase/supabase-js";\n`);
+    const manifest = buildPhase9RouteManifest(root, { mode: "development" });
+    expect(manifest.developmentPassed).toBe(false);
+    expect(manifest.invalidRegistrations.map((entry) => entry.code)).toContain("provider-import-in-http-handler");
+    expect(buildInventory({ root, mode: "development" }).checks.every((check) => check.passed)).toBe(false);
+    expect(inspectRuntimeArchitecture(root).verdict).toBe("fail");
   });
 
   it("counts probes and protected due work outside the 53 product contracts", () => {

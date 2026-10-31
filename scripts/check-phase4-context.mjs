@@ -242,7 +242,7 @@ export function runPhase4Context(root = ROOT) {
     failures.push(`Phase context must be phase4 for current checks, found ${phase}`);
   }
 
-  const inventory = buildInventory();
+  const inventory = buildInventory({ mode: "foundation" });
   if (inventory.publicOperations.length !== EXPECTED_PUBLIC_OPERATIONS) {
     failures.push(`Expected ${EXPECTED_PUBLIC_OPERATIONS} public operations, found ${inventory.publicOperations.length}`);
   }
@@ -253,12 +253,12 @@ export function runPhase4Context(root = ROOT) {
     failures.push(`${inventory.forbiddenFindings.length} forbidden source finding(s)`);
   }
 
-  const boundary = buildRuntimeBoundary(root);
+  const boundary = buildRuntimeBoundary(root, { mode: "foundation" });
   if (boundary.verdict !== "pass") {
     failures.push("Runtime boundary verdict is not pass");
   }
 
-  const runtimeArch = inspectRuntimeArchitecture(root);
+  const runtimeArch = inspectRuntimeArchitecture(root, { mode: "foundation" });
   if (runtimeArch.verdict !== "pass") {
     failures.push("Runtime architecture verdict is not pass");
   }

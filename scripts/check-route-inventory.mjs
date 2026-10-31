@@ -21,6 +21,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { PHASE_ROUTE_REGISTRATION_POLICY } from "./phase-contract-registry.mjs";
+import { buildPhase9RouteManifest } from "./phase9-route-registration.mjs";
 import { forbiddenSourceReasons } from "./runtime-source-policy.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
@@ -102,8 +104,8 @@ function toPosix(path) {
   return path.split("\\").join("/");
 }
 
-function repoRelative(path) {
-  return toPosix(relative(ROOT, path));
+function repoRelative(root, path) {
+  return toPosix(relative(root, path));
 }
 
 function listFilesRecursive(dir) {
@@ -143,8 +145,8 @@ function listOperations(bundle) {
     .sort();
 }
 
-function scanSourceFiles() {
-  const roots = [join(ROOT, "src"), join(ROOT, "app"), join(ROOT, "pages")];
+function scanSourceFiles(root) {
+  const roots = [join(root, "src"), join(root, "app"), join(root, "pages")];
   const files = [];
   for (const root of roots) {
     if (existsSync(root)) files.push(...listFilesRecursive(root));
@@ -169,13 +171,18 @@ function isAllowedContractPath(literal, allowedContractPaths) {
   return false;
 }
 
-export function buildInventory() {
-  const publicBundle = JSON.parse(readFileSync(PUBLIC_BUNDLE, "utf8"));
-  const ownerBundle = JSON.parse(readFileSync(OWNER_BUNDLE, "utf8"));
+export function buildInventory({ root = ROOT, mode = "development" } = {}) {
+  if (mode !== "development" && mode !== "foundation") throw new Error(`ROUTE_INVENTORY_MODE_INVALID:${mode}`);
+  const publicBundle = JSON.parse(readFileSync(join(root, "openapi", "generated", "public-v1.json"), "utf8"));
+  const ownerBundle = JSON.parse(readFileSync(join(root, "openapi", "generated", "owner-v1.json"), "utf8"));
   const publicOperations = listOperations(publicBundle);
   const ownerOperations = listOperations(ownerBundle);
 
-  const sourceFiles = scanSourceFiles();
+  const sourceFiles = scanSourceFiles(root);
+  const phase9Manifest = buildPhase9RouteManifest(root, { mode: "development" });
+  const registeredProductFiles = new Set(phase9Manifest.registered.map((registration) => registration.file));
+  const protectedDueWorkFile = `src/app${PHASE_ROUTE_REGISTRATION_POLICY.protectedJobs[0].path}/route.ts`;
+  const protectedDueWorkRegistered = phase9Manifest.protectedJobs[0]?.registered === true;
   const runtimeRoutes = [];
   const operationalRoutes = [];
   const declaredContractReferences = [];
@@ -186,10 +193,7 @@ export function buildInventory() {
   // /livez and /readyz are the only allowed Route Handlers in Phase 2.
   // Product operations remain handwritten transport adapters under
   // src/runtime/http until later phases connect real application behavior.
-  const ALLOWED_OPERATIONAL_ROUTE_FILES = new Set([
-    "src/app/livez/route.ts",
-    "src/app/readyz/route.ts",
-  ]);
+  const ALLOWED_OPERATIONAL_ROUTE_FILES = new Set(PHASE_ROUTE_REGISTRATION_POLICY.operationalRouteFiles);
 
   const allowedContractPaths = new Set([
     ...Object.keys(publicBundle.paths ?? {}),
@@ -197,23 +201,25 @@ export function buildInventory() {
   ]);
 
   for (const file of sourceFiles) {
-    const relativePath = repoRelative(file);
+    const relativePath = repoRelative(root, file);
     const base = file.split(/[\\/]/).at(-1) ?? "";
 
     // ── Allowlisted operational probes (Phase 2): not product surface ──
     const isOperationalRoute = ALLOWED_OPERATIONAL_ROUTE_FILES.has(relativePath);
+    const isRegisteredProductRoute = mode === "development" && phase9Manifest.developmentPassed &&
+      (registeredProductFiles.has(relativePath) || (protectedDueWorkRegistered && relativePath === protectedDueWorkFile));
     if (isOperationalRoute) {
       operationalRoutes.push({ file: relativePath, reason: "operational-probe" });
     }
 
     // ── Runtime route files (Next.js App Router / pages) are otherwise forbidden ──
-    if (!isOperationalRoute && /^route\.(?:ts|tsx|js|jsx|mjs)$/.test(base)) {
+    if (!isOperationalRoute && !isRegisteredProductRoute && /^route\.(?:ts|tsx|js|jsx|mjs)$/.test(base)) {
       runtimeRoutes.push({ file: relativePath, reason: "route-handler-file" });
       forbiddenFindings.push({ file: relativePath, reason: "working-route-handler-file" });
       continue;
     }
     if (
-      !isOperationalRoute &&
+      !isOperationalRoute && !isRegisteredProductRoute &&
       /(?:^|\/)(?:app|pages)\//.test(`/${relativePath}`) &&
       /\.(?:ts|js|mjs)$/.test(base)
     ) {
@@ -236,7 +242,7 @@ export function buildInventory() {
     }
 
     // Working Route Handler implementations.
-    if (!isOperationalRoute && ((ROUTE_HANDLER_EXPORT.test(content) && NEXT_HANDLER_IMPORT.test(content)) || (ROUTE_HANDLER_EXPORT.test(content) && /NextResponse|NextRequest/.test(content)))) {
+    if (!isOperationalRoute && !isRegisteredProductRoute && ((ROUTE_HANDLER_EXPORT.test(content) && NEXT_HANDLER_IMPORT.test(content)) || (ROUTE_HANDLER_EXPORT.test(content) && /NextResponse|NextRequest/.test(content)))) {
       runtimeRoutes.push({ file: relativePath, reason: "exported-http-method-handler" });
       forbiddenFindings.push({ file: relativePath, reason: "working-route-handler" });
     }
@@ -258,6 +264,12 @@ export function buildInventory() {
 
     for (const reason of forbiddenSourceReasons(relativePath, content)) {
       forbiddenFindings.push({ file: relativePath, reason });
+    }
+  }
+
+  if (mode === "development") {
+    for (const finding of phase9Manifest.invalidRegistrations) {
+      forbiddenFindings.push({ file: finding.file ?? "openapi/generated", reason: `phase9-${finding.code}` });
     }
   }
 
@@ -315,7 +327,7 @@ export function buildInventory() {
   checks.push({
     name: "no-undeclared-runtime-http-surface",
     passed: runtimeOk,
-    detail: runtimeOk ? `allowed OpenAPI paths only; ${operationalRoutes.length} operational probe(s), 0 product runtime routes` : `${runtimeRoutes.length} runtime route(s) detected`,
+    detail: runtimeOk ? `approved routes only; ${operationalRoutes.length} operational probe(s), ${phase9Manifest.registered.length} registered product route(s), ${phase9Manifest.pending.length} pending` : `${runtimeRoutes.length} unapproved runtime route(s) detected`,
   });
 
   const operationalOk =
@@ -337,11 +349,16 @@ export function buildInventory() {
   return {
     ticket: 11,
     parent: 1,
-    scope: "phase-1-route-and-source-boundary",
+    mode,
+    scope: mode === "development" ? "phase-9-guarded-route-development" : "phase-1-foundation-route-and-source-boundary",
     publicOperations,
     ownerOperations,
     allowedContractPaths: [...allowedContractPaths].sort(),
     operationalRoutes,
+    productRoutes: phase9Manifest.registered,
+    pendingProductOperations: phase9Manifest.pending,
+    phase9Complete: phase9Manifest.phase9Complete,
+    phase9RouteManifest: phase9Manifest,
     runtimeRoutes,
     declaredContractReferences,
     undeclaredHttpSurface,
@@ -357,10 +374,13 @@ export function writeReport(report, reportPath = DEFAULT_REPORT) {
 }
 
 function parseArgs(argv) {
-  const options = { report: DEFAULT_REPORT, write: true };
+  const options = { report: DEFAULT_REPORT, write: true, mode: "development" };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === "--report" && argv[i + 1]) {
       options.report = argv[i + 1];
+      i += 1;
+    } else if (argv[i] === "--mode" && argv[i + 1]) {
+      options.mode = argv[i + 1];
       i += 1;
     } else if (argv[i] === "--no-write") {
       options.write = false;
@@ -373,7 +393,7 @@ export function main(argv = process.argv.slice(2)) {
   const options = parseArgs(argv);
   let report;
   try {
-    report = buildInventory();
+    report = buildInventory({ mode: options.mode });
   } catch (error) {
     console.error(`✗ route inventory failed: ${error instanceof Error ? error.message : String(error)}`);
     return 1;
@@ -400,7 +420,7 @@ export function main(argv = process.argv.slice(2)) {
     console.error(`✗ route inventory: ${failed.length} of ${report.checks.length} checks FAILED`);
     return 1;
   }
-  console.log(`✓ route inventory: all ${report.checks.length} checks passed (${report.publicOperations.length} public, ${report.ownerOperations.length} owner, ${report.operationalRoutes?.length ?? 0} operational, 0 product runtime routes)`);
+  console.log(`✓ route inventory: all ${report.checks.length} checks passed (${report.publicOperations.length} public, ${report.ownerOperations.length} owner, ${report.operationalRoutes?.length ?? 0} operational, ${report.productRoutes?.length ?? 0} registered, ${report.pendingProductOperations?.length ?? 0} pending product routes)`);
   return 0;
 }
 
