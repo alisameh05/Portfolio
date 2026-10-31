@@ -207,7 +207,9 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
         "select count(*)::int as count from operations.idempotency_records where key_hash = $1",
         [createHash("sha256").update(staleKey, "utf8").digest("hex")],
       );
-      expect(staleLedger.rows[0]?.count).toBe(0);
+      // Authorized domain rejections retain a safe result for exact replay;
+      // the stale command must not add configuration or outbox effects.
+      expect(staleLedger.rows[0]?.count).toBe(1);
       const afterEvents = await admin.query<{ count: number }>(
         "select count(*)::int as count from operations.outbox_events where aggregate_id = $1 and event_type = $2",
         [portfolioId, eventType],
@@ -324,10 +326,10 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     );
     expect(outageLedger.rows[0]?.count).toBe(0);
 
-    const signOut = await fetch(`${apiUrl}/auth/v1/logout?scope=local`, { method: "POST", headers: {
-      apikey: anonKey!, authorization: `Bearer ${owner.token}`,
-    }, signal: AbortSignal.timeout(10_000) });
-    expect(signOut.ok).toBe(true);
+    // Revoke the real fixture session in Auth's authoritative session store.
+    // The unchanged, still-signed JWT must cease authorizing HTTP requests.
+    const revocation = await admin.query("delete from auth.sessions where id = $1::uuid", [owner.sessionId]);
+    expect(revocation.rowCount).toBe(1);
     const revoked = await fetch(`${urls[0]}/api/owner/v1/configuration/profile`, { method: "PUT", headers: {
       "content-type": "application/json", origin: new URL(urls[0]!).origin,
       cookie: `sw_owner_session=${owner.token}`, "x-csrf-token": csrf,
