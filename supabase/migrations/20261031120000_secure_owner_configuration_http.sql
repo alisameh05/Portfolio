@@ -15,6 +15,11 @@ set role shipwithali_migration;
 reset role;
 do $$
 begin
+  -- The restricted function creator also resolves absent Auth relations in
+  -- native PostgreSQL fixtures that provide only auth.users.
+  if exists (select 1 from pg_namespace where nspname = 'auth') then
+    execute 'grant usage on schema auth to shipwithali_migration';
+  end if;
   if to_regclass('auth.sessions') is null and to_regclass('auth.identities') is null then
     -- Native PostgreSQL phase gates do not install Supabase Auth. Keep those
     -- migration inventories usable with fail-closed session lookups; the

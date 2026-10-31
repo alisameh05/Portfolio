@@ -16,7 +16,11 @@ existing module-owned PostgreSQL services.
   GitHub provider identity, configured immutable-subject allowlist, and the
   stable Owner mapping on every request.
 - Exact configured origin and a separate 8–256 character CSRF proof are
-  required. Forwarded host values are rejected. The configuration commands do
+  required. Next.js's normalized `x-forwarded-host` is accepted only when it
+  and `Host` exactly match the configured public authority. The ingress must
+  preserve that canonical Host across replicas; internal listener URLs may
+  differ. Conflicting forwarded hosts and `Forwarded: host=` are rejected.
+  The configuration commands do
   not accept session values as CSRF proof or add a deployment bypass.
 - The three Owner Configuration operations share a PostgreSQL fixed-window
   policy of **30 accepted requests per verified Owner and operation per 60

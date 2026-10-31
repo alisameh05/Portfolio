@@ -135,15 +135,14 @@ function hasForwardedHost(request: Request, appOrigin: string): boolean {
   const explicit = request.headers.get("x-forwarded-host");
   if (explicit !== null && explicit.trim() !== "") {
     // Next.js adds x-forwarded-host from Host when the ingress did not supply
-    // it. Accept that normalized value only when all three authorities agree:
-    // the configured application origin, the request URL, and Host. A client
-    // supplied conflicting value remains rejected.
+    // it. Require both headers to match the configured public authority.
+    // Next.js builds request.url from the internal listener address, which
+    // can differ between replicas behind the same ingress.
     try {
       const expectedHost = new URL(appOrigin).host.toLowerCase();
       const forwardedHost = explicit.trim().toLowerCase();
-      const requestHost = new URL(request.url).host.toLowerCase();
       const hostHeader = request.headers.get("host")?.trim().toLowerCase();
-      if (forwardedHost !== expectedHost || requestHost !== expectedHost || hostHeader !== expectedHost) return true;
+      if (forwardedHost !== expectedHost || hostHeader !== expectedHost) return true;
     } catch {
       return true;
     }

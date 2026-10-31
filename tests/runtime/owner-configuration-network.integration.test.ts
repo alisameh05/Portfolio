@@ -28,6 +28,15 @@ const sentinel = "SHOULD_NEVER_APPEAR_PHASE9_SECRET_7d0b0a";
 const urls = JSON.parse(process.env["PHASE9_OWNER_HTTP_URLS"] ?? "[]") as string[];
 const unavailableUrl = process.env["PHASE9_OWNER_HTTP_UNREADY_URL"];
 
+// Both listeners model replicas behind one ingress and receive its canonical Host.
+function fetch(input: string, init?: RequestInit): Promise<Response> {
+  const headers = new Headers(init?.headers);
+  if (urls.some((url) => input.startsWith(`${url}/`)) && !headers.has("host")) {
+    headers.set("host", new URL(urls[0]!).host);
+  }
+  return globalThis.fetch(input, { ...init, headers });
+}
+
 async function expectPrivateProblem(response: Response, status: number): Promise<void> {
   expect(response.status).toBe(status);
   expect(response.headers.get("cache-control")).toBe("private, no-store");

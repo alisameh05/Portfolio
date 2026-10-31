@@ -282,6 +282,21 @@ describe("Owner request security boundary (#81)", () => {
     expect(guard.ok).toBe(true);
   });
 
+  it("accepts a canonical ingress authority on an internal replica URL and rejects a conflicting Host", async () => {
+    const security = createOwnerSecurityTestStub({ type: "allow", actor: OWNER });
+    for (const host of ["example.com", "forged.example"]) {
+      const request = new Request("http://127.0.0.1:43210/api/owner/v1/configuration/profile",
+        mutationRequest({ forwardedHost: "example.com" }));
+      request.headers.set("host", host);
+      const guard = await guardOwnerRequest(request, {
+        operation: "updateOwnerProfileConfiguration", mode: "mutation",
+        security: { ...security, appOrigin: APP_ORIGIN },
+        traceId: "trace-replica-host", instance: "/api/owner/v1/configuration/profile",
+      });
+      expect(guard.ok).toBe(host === "example.com");
+    }
+  });
+
   it("authenticates reads without requiring origin or CSRF proof", async () => {
     const security = createOwnerSecurityTestStub({ type: "allow", actor: OWNER });
     const guard = await guardOwnerRequest(readRequest(), {

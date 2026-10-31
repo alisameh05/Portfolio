@@ -88,6 +88,10 @@ describeDatabase("Phase 5 restricted-principal and migration security against Po
     await initializeDatabaseRuntime({
       NODE_ENV: "test",
       APP_BASE_URL: "https://example.com",
+      SUPABASE_URL: "https://auth.example.test",
+      SUPABASE_JWT_ISSUER: "https://auth.example.test/auth/v1",
+      SUPABASE_JWT_AUDIENCE: "authenticated",
+      OWNER_GITHUB_SUBJECTS: "910294",
       DATABASE_URL: applicationConnectionString,
       PORTFOLIO_ID: scope.portfolioId,
       OWNER_ID: scope.ownerId,

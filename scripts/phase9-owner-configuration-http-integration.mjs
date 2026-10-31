@@ -10,6 +10,7 @@ import { Client } from "pg";
 import { initializeLocalMigrationProject } from "./local-migration-bootstrap.mjs";
 import { isolatedConfig, localEnvironment, requireDocker } from "./local-auth-integration.mjs";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
+import { safeAssertionDiagnostic } from "./validation-errors.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const CLI = join(ROOT, "node_modules/supabase/dist/supabase.js");
@@ -85,6 +86,7 @@ async function main() {
   let attemptedStart = false;
   let cleanupFailed = false;
   let failure;
+  let stage = "setup";
   let executedTests = [];
   let passedTestCount = 0;
   const logs = [];
@@ -102,10 +104,12 @@ async function main() {
     networkCreated = true;
     attemptedStart = true;
     console.log("Starting an isolated loopback Supabase Auth and PostgreSQL project for #294.");
+    stage = "migrations";
     initializeLocalMigrationProject(project, {
       initialize: (_network, dockerEnv) => runSupabase(workdir, { ...env, ...dockerEnv }, ["start", "--network-id", network]),
       migrate: () => runSupabase(workdir, env, ["migration", "up", "--local"]),
     });
+    stage = "status";
     const status = JSON.parse(runSupabase(workdir, env, ["status", "-o", "json"], 30_000));
     const api = new URL(status.API_URL);
     const db = new URL(status.DB_URL);
@@ -115,6 +119,7 @@ async function main() {
     }
     if (typeof status.ANON_KEY !== "string" || typeof status.SERVICE_ROLE_KEY !== "string") throw new Error("PHASE9_OWNER_HTTP_STATUS_KEYS_MISSING");
 
+    stage = "database";
     admin = new Client({ connectionString: status.DB_URL });
     await admin.connect();
     role = `phase9_owner_http_${process.pid}_${randomUUID().replaceAll("-", "").slice(0, 8)}`;
@@ -134,6 +139,7 @@ async function main() {
       SUPABASE_JWT_ISSUER: `${status.API_URL}/auth/v1`, SUPABASE_JWT_AUDIENCE: "authenticated",
       OWNER_GITHUB_SUBJECTS: "910294,910296", HOSTNAME: "127.0.0.1",
     };
+    stage = "server";
     for (const port of appPorts) {
       if (port === appPorts[2]) break;
       const server = spawn(process.execPath, [NEXT, "start", "--hostname", "127.0.0.1", "--port", String(port)], {
@@ -162,6 +168,7 @@ async function main() {
       PHASE9_OWNER_HTTP_UNREADY_URL: `http://127.0.0.1:${appPorts[2]}`,
       OWNER_ID: ownerId, PORTFOLIO_ID: portfolioId,
     };
+    stage = "tests";
     const test = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), "run",
       "tests/runtime/owner-configuration-network.integration.test.ts",
       "tests/runtime/owner-configuration-http-bootstrap.test.ts",
@@ -178,8 +185,9 @@ async function main() {
         report.testResults?.length !== 6 || report.testResults.some((suite) => suite.status !== "passed")) {
       const failedAssertions = report.testResults?.flatMap((suite) => suite.assertionResults ?? [])
         .filter((assertion) => assertion.status !== "passed")
-        .map((assertion) => [...(assertion.ancestorTitles ?? []), assertion.title].join(" / ")) ?? [];
-      throw new Error(`PHASE9_OWNER_HTTP_ACCEPTANCE_TESTS_FAILED${failedAssertions.length ? `:${failedAssertions.join("|")}` : ""}`);
+        .map((assertion) => safeAssertionDiagnostic(assertion)) ?? [];
+      console.error(JSON.stringify({ code: "PHASE9_OWNER_HTTP_ACCEPTANCE_TESTS_FAILED", assertions: failedAssertions }));
+      throw new Error("PHASE9_OWNER_HTTP_ACCEPTANCE_TESTS_FAILED");
     }
     executedTests = report.testResults.flatMap((suite) => (suite.assertionResults ?? []).map((assertion) => ({
       file: suite.name.replaceAll("\\", "/").split("/").slice(-3).join("/"),
@@ -189,8 +197,10 @@ async function main() {
     postgresVersion = (await admin.query("select current_setting('server_version') as version")).rows[0]?.version ?? "unavailable";
     console.log(`Phase 9 Owner configuration acceptance passed: ${report.numPassedTests} passed, 0 skipped.`);
     process.exitCode = 0;
-  } catch {
-    failure = new Error("PHASE9_OWNER_HTTP_RUN_FAILED: isolated acceptance did not complete; diagnostics suppressed.");
+  } catch (error) {
+    // Only expose our fixed diagnostic codes; dependency messages may contain credentials.
+    const code = error instanceof Error ? error.message.match(/^((?:PHASE9_OWNER_HTTP|PHASE6_MIGRATION_BOOTSTRAP|LOCAL_MIGRATION)_[A-Z_]+)(?::(start|status|migration))?$/u)?.[0] : undefined;
+    failure = new Error(code ?? `PHASE9_OWNER_HTTP_RUN_FAILED:${stage}: isolated acceptance did not complete; diagnostics suppressed.`);
   } finally {
     for (const server of [...servers].reverse()) await stopServer(server);
     if (admin) {
