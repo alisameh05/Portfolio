@@ -35,14 +35,14 @@ export function runPhase5Context(root = ROOT, env = process.env) {
   try { phase = getPhaseContext(env); } catch (error) { failures.push(error instanceof Error ? error.message : "invalid phase context"); }
   if (phase !== PHASES.PHASE5) failures.push(`Phase context must be phase5 for current checks, found ${phase}`);
 
-  const inventory = buildInventory();
+  const inventory = buildInventory({ mode: "foundation" });
   if (inventory.publicOperations.length !== EXPECTED_PUBLIC_OPERATIONS) failures.push(`Expected ${EXPECTED_PUBLIC_OPERATIONS} public operations, found ${inventory.publicOperations.length}`);
   if (inventory.ownerOperations.length !== EXPECTED_OWNER_OPERATIONS) failures.push(`Expected ${EXPECTED_OWNER_OPERATIONS} Owner operations, found ${inventory.ownerOperations.length}`);
   if (inventory.forbiddenFindings.length !== 0) failures.push(`${inventory.forbiddenFindings.length} forbidden route/source findings`);
 
-  const boundary = buildRuntimeBoundary(root);
+  const boundary = buildRuntimeBoundary(root, { mode: "foundation" });
   if (boundary.verdict !== "pass") failures.push("Runtime boundary verdict is not pass");
-  const architecture = inspectRuntimeArchitecture(root);
+  const architecture = inspectRuntimeArchitecture(root, { mode: "foundation" });
   if (architecture.verdict !== "pass") failures.push("Runtime architecture verdict is not pass");
 
   const currentActivation = allowedActivationsFor(PHASES.PHASE5);

@@ -1,6 +1,7 @@
 const PROVIDER_SPEC = "(?:next\\/|@supabase\\/|kysely(?:\\/|\"|')|@vercel\\/|vercel(?:\\/|\"|'))";
 const GENERATED_SPEC = "(?:src\\/contracts\\/http\\/|@hey-api\\/openapi-ts|@redocly\\/|openapi-typescript|(?:\\.\\.?\\/)+contracts\\/http\\/)";
 const PROVIDER_IMPORT = new RegExp(`(?:from\\s+|require\\s*\\(\\s*|import\\s*\\(\\s*)["']${PROVIDER_SPEC}`, "i");
+const HTTP_HANDLER_PROVIDER_IMPORT = /(?:from\s+|require\s*\(\s*|import\s*\(\s*)["'](?:@supabase\/|kysely(?:\/|["'])|@vercel\/|vercel(?:\/|["']))/i;
 const PROVIDER_EXPORT_FROM = new RegExp(`export\\s+[^;]*?\\bfrom\\s+["']${PROVIDER_SPEC}`, "i");
 const GENERATED_IMPORT = new RegExp(`(?:from\\s+|require\\s*\\(\\s*|import\\s*\\(\\s*)["']${GENERATED_SPEC}`);
 const GENERATED_EXPORT_FROM = new RegExp(`export\\s+[^;]*?\\bfrom\\s+["']${GENERATED_SPEC}`);
@@ -29,6 +30,11 @@ function isSharedDomainFile(relativePath) {
   return /^src\/shared\/domain\//.test(relativePath);
 }
 
+function isHttpHandlerFile(relativePath) {
+  return /^src\/runtime\/http\//.test(relativePath) ||
+    /^src\/app\/.*\/route\.(?:ts|tsx|js|jsx|mjs)$/.test(relativePath);
+}
+
 export function forbiddenSourceReasons(relativePath, content) {
   const reasons = [];
   const base = relativePath.split("/").at(-1) ?? "";
@@ -53,6 +59,9 @@ export function forbiddenSourceReasons(relativePath, content) {
     if (GENERATED_IMPORT.test(content) || GENERATED_EXPORT_FROM.test(content)) {
       reasons.push("generated-transport-import-in-domain-or-application");
     }
+  }
+  if (isHttpHandlerFile(relativePath) && HTTP_HANDLER_PROVIDER_IMPORT.test(content)) {
+    reasons.push("provider-import-in-http-handler");
   }
   if (isSharedDomainFile(relativePath) && SHARED_VALIDATOR_IMPORT.test(content)) {
     reasons.push("provider-or-validator-import-in-shared-domain");

@@ -1,0 +1,53 @@
+
+> shipwithali-portfolio@0.0.0 phase9:routes
+> node scripts/phase9-route-registration.mjs --mode development
+
+{
+  "mode": "development",
+  "verdict": "development-pass-incomplete",
+  "declared": 53,
+  "public": 5,
+  "owner": 48,
+  "registered": 0,
+  "pending": 53,
+  "invalidRegistrations": [],
+  "operationalRoutes": [
+    {
+      "file": "src/app/livez/route.ts",
+      "path": "/livez"
+    },
+    {
+      "file": "src/app/readyz/route.ts",
+      "path": "/readyz"
+    }
+  ],
+  "protectedJobs": [
+    {
+      "method": "GET",
+      "path": "/internal/operations/phase7-due-work",
+      "operationId": null,
+      "registrationPhase": 9,
+      "installationPhase": 10,
+      "registered": false
+    }
+  ],
+  "evidenceGate": null,
+  "checks": [
+    {
+      "name": "canonical-phase9-contract",
+      "passed": true
+    },
+    {
+      "name": "registered-routes-approved-and-unique",
+      "passed": true
+    },
+    {
+      "name": "all-53-product-routes-registered",
+      "passed": false,
+      "declared": 53,
+      "registered": 0,
+      "pending": 53
+    }
+  ],
+  "evidence": "evidence/phase9-route-inventory-293.json"
+}

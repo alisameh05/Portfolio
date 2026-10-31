@@ -1,0 +1,16 @@
+
+> shipwithali-portfolio@0.0.0 test:phase9:routes
+> vitest run tests/routes/phase9-route-registration.test.ts
+
+
+ RUN  v3.2.4 D:/Personal/Personal_Projects/Portfolio/.worktrees/issue-293-phase9-route-guards
+
+ ✓ tests/routes/phase9-route-registration.test.ts (12 tests) 5411ms
+   ✓ Phase 9 guarded route registration (#293) > counts probes and protected due work outside the 53 product contracts  371ms
+   ✓ Phase 9 guarded route registration (#293) > re-hashes named execution artifacts and fails if their bytes change  4429ms
+
+ Test Files  1 passed (1)
+      Tests  12 passed (12)
+   Start at  17:24:58
+   Duration  7.07s (transform 444ms, setup 0ms, collect 1.33s, tests 5.41s, environment 0ms, prepare 120ms)
+

@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildPhase9RouteManifest } from "./phase9-route-registration.mjs";
 
 const DEFAULT_ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const ROUTE_IMPORT_ALLOWLIST = new Map([
@@ -79,8 +80,13 @@ function isProviderAdapterOrComposition(file) {
   );
 }
 
-export function inspectSourceRecords(records) {
+export function inspectSourceRecords(records, { mode = "development", phase9Manifest = null } = {}) {
   const findings = [];
+  const registeredProductFiles = new Set(phase9Manifest?.registered?.map((entry) => entry.file) ?? []);
+  const protectedDueWork = phase9Manifest?.protectedJobs?.[0];
+  const protectedDueWorkFile = protectedDueWork
+    ? `src/app${protectedDueWork.path}/route.ts`
+    : null;
   for (const record of records) {
     const file = toPosix(record.file);
     const content = record.content;
@@ -88,8 +94,20 @@ export function inspectSourceRecords(records) {
     const isRouteHandler = /(?:^|\/)route\.(?:ts|tsx|js|jsx|mjs)$/.test(file);
 
     if (isRouteHandler) {
+      const hasHistoricalAllowlist = ROUTE_IMPORT_ALLOWLIST.has(file);
       const allowedImports = ROUTE_IMPORT_ALLOWLIST.get(file) ?? new Set();
-      if (imports.some((specifier) => !allowedImports.has(specifier))) {
+      const isRegisteredProductRoute = mode !== "foundation" && phase9Manifest?.developmentPassed === true &&
+        (mode !== "complete" || phase9Manifest.phase9Complete === true) &&
+        (registeredProductFiles.has(file) ||
+          (protectedDueWork?.registered === true && file === protectedDueWorkFile));
+      if (hasHistoricalAllowlist) {
+        if (imports.some((specifier) => !allowedImports.has(specifier))) {
+          findings.push({ file, reason: "route-handler-import-outside-allowlist" });
+        }
+      } else if (!isRegisteredProductRoute || imports.some((specifier) =>
+        !isFramework(specifier) && specifier !== "@/runtime/http/product-route-registration.js" &&
+        !/^@\/runtime\/http\/[A-Za-z0-9._-]+$/.test(specifier) &&
+        !/(?:^|\/)runtime\/http\/[A-Za-z0-9._-]+$/.test(specifier))) {
         findings.push({ file, reason: "route-handler-import-outside-allowlist" });
       }
     }
@@ -183,19 +201,30 @@ export function inspectSourceRecords(records) {
   return { verdict: findings.length === 0 ? "pass" : "fail", findings };
 }
 
-export function inspectRuntimeArchitecture(root = DEFAULT_ROOT) {
+export function inspectRuntimeArchitecture(root = DEFAULT_ROOT, { mode = "development" } = {}) {
+  const phase9RouteManifest = buildPhase9RouteManifest(root, { mode: mode === "complete" ? "complete" : "development" });
   const records = listFiles(join(root, "src"))
     .filter((file) => /\.(?:ts|tsx|js|jsx|mjs|cjs)$/.test(file))
     .map((file) => ({
       file: toPosix(relative(root, file)),
       content: readFileSync(file, "utf8"),
     }));
-  const inspection = inspectSourceRecords(records);
+  const inspection = inspectSourceRecords(records, { mode, phase9Manifest: phase9RouteManifest });
+  if (mode === "complete" && !phase9RouteManifest.phase9Complete) {
+    inspection.findings.push({ file: "src/app", reason: "phase9-route-completeness-incomplete" });
+  }
+  for (const finding of phase9RouteManifest.invalidRegistrations) {
+    inspection.findings.push({ file: finding.file ?? "openapi/generated", reason: `phase9-${finding.code}` });
+  }
+  inspection.findings.sort((left, right) => left.file.localeCompare(right.file) || left.reason.localeCompare(right.reason));
+  inspection.verdict = inspection.findings.length === 0 ? "pass" : "fail";
   return {
     ticket: 33,
     parent: 24,
     scope: "phase-2-runtime-architecture",
     filesInspected: records.length,
+    phase9RouteManifest,
+    mode,
     ...inspection,
   };
 }
@@ -207,8 +236,8 @@ export function writeRuntimeArchitectureReport(report, root = DEFAULT_ROOT) {
   return reportPath;
 }
 
-export function main(root = DEFAULT_ROOT) {
-  const report = inspectRuntimeArchitecture(root);
+export function main(root = DEFAULT_ROOT, mode = "development") {
+  const report = inspectRuntimeArchitecture(root, { mode });
   writeRuntimeArchitectureReport(report, root);
   if (report.verdict === "fail") {
     for (const finding of report.findings) {
@@ -225,4 +254,8 @@ export function main(root = DEFAULT_ROOT) {
 const invokedDirectly =
   process.argv[1] !== undefined &&
   toPosix(process.argv[1]).endsWith("scripts/check-runtime-architecture.mjs");
-if (invokedDirectly) process.exitCode = main();
+if (invokedDirectly) {
+  const modeIndex = process.argv.indexOf("--mode");
+  const mode = modeIndex >= 0 ? process.argv[modeIndex + 1] : "development";
+  process.exitCode = main(DEFAULT_ROOT, mode);
+}

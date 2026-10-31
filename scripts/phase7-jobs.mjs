@@ -220,7 +220,7 @@ try {
   if (mode.routeInventory) {
     stage = "route-inventory";
     const output = run(process.execPath, ["scripts/check-route-inventory.mjs", "--no-write"], env);
-    const summary = output.match(/route inventory: all \d+ checks passed \(5 public, \d+ owner, 2 operational, 0 product runtime routes\)/u)?.[0];
+    const summary = output.match(/route inventory: all \d+ checks passed \(5 public, \d+ owner, 2 operational, 0 registered, 53 pending product routes\)/u)?.[0];
     if (summary === undefined) throw new Error("PHASE8_PROTECTED_TRIGGER_ROUTE_INVENTORY_FAILED");
     routeInventory = { success: true, summary };
   }
