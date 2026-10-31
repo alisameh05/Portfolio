@@ -1,0 +1,78 @@
+{
+  "runId": "phase9-route-293-20261031T152230Z",
+  "startedAt": "2026-10-31T15:22:30.000Z",
+  "completedAt": "2026-10-31T15:25:52.000Z",
+  "cleanupVerified": true,
+  "executions": [
+    {
+      "name": "Phase 9 route registration focused tests",
+      "artifact": "evidence/phase9-route-tests-293.log",
+      "status": "passed",
+      "executed": true,
+      "exitCode": 0,
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "Phase 9 guarded development route registration",
+      "artifact": "evidence/phase9-route-development-293.log",
+      "status": "passed",
+      "executed": true,
+      "exitCode": 0,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "Phase 9 route inventory development guards",
+      "artifact": "evidence/phase9-route-inventory-check-293.log",
+      "status": "passed",
+      "executed": true,
+      "exitCode": 0,
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "Phase 9 runtime boundary development guards",
+      "artifact": "evidence/phase9-runtime-boundary-293.log",
+      "status": "passed",
+      "executed": true,
+      "exitCode": 0,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "Phase 9 runtime architecture development guards",
+      "artifact": "evidence/phase9-runtime-architecture-293.log",
+      "status": "passed",
+      "executed": true,
+      "exitCode": 0,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "Phase 3 through 7 predecessor prerequisite evaluation",
+      "artifact": "evidence/phase8-prerequisite-qualification.json",
+      "status": "blocked",
+      "executed": true,
+      "exitCode": 1,
+      "passed": 0,
+      "failed": 5,
+      "skipped": 0
+    },
+    {
+      "name": "Phase 9 complete gate fail-closed evaluation",
+      "artifact": "evidence/phase9-route-complete-293.json",
+      "status": "blocked",
+      "executed": true,
+      "exitCode": 1,
+      "passed": 2,
+      "failed": 2,
+      "skipped": 0
+    }
+  ]
+}

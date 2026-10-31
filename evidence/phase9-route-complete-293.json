@@ -1,0 +1,691 @@
+{
+  "schemaVersion": 1,
+  "mode": "complete",
+  "declared": [
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/cv/versions/{versionId}/commands/accept",
+      "operationId": "acceptOwnerCvVersion"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/media/{mediaId}/commands/accept",
+      "operationId": "acceptOwnerMediaAsset"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/analytics-goals/{goalId}/commands/activate-version",
+      "operationId": "activateOwnerAnalyticsGoalVersion"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/cv/versions/{versionId}/commands/activate",
+      "operationId": "activateOwnerCvVersion"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/feedback/{feedbackId}/commands/approve",
+      "operationId": "approveOwnerFeedback"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/content/{contentId}/commands/archive",
+      "operationId": "archiveOwnerContent"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/projects/{projectId}/commands/assign-taxonomy-value",
+      "operationId": "assignOwnerProjectTaxonomyValue"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/projects/{projectId}/commands/change-slug",
+      "operationId": "changeOwnerProjectPublicSlug"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/projects/{projectId}/commands/change-status",
+      "operationId": "changeOwnerProjectStatus"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/projects/{projectId}/commands/correct-candidate-slug",
+      "operationId": "correctOwnerProjectCandidateSlug"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/analytics-goals/{goalId}/versions",
+      "operationId": "createOwnerAnalyticsGoalVersion"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/content",
+      "operationId": "createOwnerContent"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/media/upload-intents",
+      "operationId": "createOwnerMediaUploadIntent"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/project-status-values",
+      "operationId": "createOwnerProjectStatusValue"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/taxonomies/{taxonomyId}/values",
+      "operationId": "createOwnerTaxonomyValue"
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/exports/{exportId}/download",
+      "operationId": "downloadOwnerExport"
+    },
+    {
+      "surface": "public",
+      "method": "GET",
+      "path": "/api/v1/cv/current",
+      "operationId": "getCurrentCv"
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/analytics-goals/{goalId}",
+      "operationId": "getOwnerAnalyticsGoal"
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/content/{contentId}",
+      "operationId": "getOwnerContentAggregate"
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/content/{contentId}/history",
+      "operationId": "getOwnerContentHistory"
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/cv",
+      "operationId": "getOwnerCvPortfolio"
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/exports/{exportId}",
+      "operationId": "getOwnerExport"
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/feedback/{feedbackId}",
+      "operationId": "getOwnerFeedbackModeration"
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/media/{mediaId}",
+      "operationId": "getOwnerMediaAggregate"
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/projects/{projectId}",
+      "operationId": "getOwnerProjectAggregate"
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/taxonomies/{taxonomyId}",
+      "operationId": "getOwnerTaxonomyAggregate"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/content/{contentId}/commands/hide",
+      "operationId": "hideOwnerContent"
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/project-status-values",
+      "operationId": "listOwnerProjectStatusValues"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/taxonomy-values/{valueId}/commands/merge",
+      "operationId": "mergeOwnerTaxonomyValue"
+    },
+    {
+      "surface": "public",
+      "method": "POST",
+      "path": "/api/v1/projects/{projectId}/feedback",
+      "operationId": "postProjectFeedback"
+    },
+    {
+      "surface": "public",
+      "method": "POST",
+      "path": "/api/v1/events",
+      "operationId": "postPublicEvent"
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/content/{contentId}/revisions/{revisionId}/preview",
+      "operationId": "previewOwnerContentRevision"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/content/{contentId}/commands/publish-language",
+      "operationId": "publishOwnerContentLanguage"
+    },
+    {
+      "surface": "public",
+      "method": "PUT",
+      "path": "/api/v1/projects/{projectId}/rating",
+      "operationId": "putProjectRating"
+    },
+    {
+      "surface": "public",
+      "method": "PUT",
+      "path": "/api/v1/projects/{projectId}/reaction",
+      "operationId": "putProjectReaction"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/media/{mediaId}/commands/record-processing",
+      "operationId": "recordOwnerMediaProcessing"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/cv/versions",
+      "operationId": "registerOwnerCvVersion"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/feedback/{feedbackId}/commands/reject",
+      "operationId": "rejectOwnerFeedback"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/media/{mediaId}/commands/reject",
+      "operationId": "rejectOwnerMediaAsset"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/projects/{projectId}/commands/relate-project",
+      "operationId": "relateOwnerProjects"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/project-status-values/{valueId}/commands/rename",
+      "operationId": "renameOwnerProjectStatusValue"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/taxonomy-values/{valueId}/commands/rename",
+      "operationId": "renameOwnerTaxonomyValue"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/exports",
+      "operationId": "requestOwnerExport"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/content/{contentId}/commands/restore",
+      "operationId": "restoreOwnerContent"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/project-status-values/{valueId}/commands/retire",
+      "operationId": "retireOwnerProjectStatusValue"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/taxonomy-values/{valueId}/commands/retire",
+      "operationId": "retireOwnerTaxonomyValue"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/content/{contentId}/revisions/{revisionId}/review",
+      "operationId": "reviewOwnerContentRevision"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/content/{contentId}/revisions",
+      "operationId": "saveOwnerContentRevision"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/projects/{projectId}/commands/set-featured",
+      "operationId": "setOwnerProjectFeatured"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/feedback/{feedbackId}/commands/suppress",
+      "operationId": "suppressOwnerFeedback"
+    },
+    {
+      "surface": "owner",
+      "method": "PUT",
+      "path": "/api/owner/v1/configuration/contact-channels",
+      "operationId": "updateOwnerContactChannels"
+    },
+    {
+      "surface": "owner",
+      "method": "PUT",
+      "path": "/api/owner/v1/configuration/project-cta",
+      "operationId": "updateOwnerGlobalProjectCta"
+    },
+    {
+      "surface": "owner",
+      "method": "PUT",
+      "path": "/api/owner/v1/configuration/profile",
+      "operationId": "updateOwnerProfileConfiguration"
+    }
+  ],
+  "registered": [],
+  "pending": [
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/cv/versions/{versionId}/commands/accept",
+      "operationId": "acceptOwnerCvVersion"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/media/{mediaId}/commands/accept",
+      "operationId": "acceptOwnerMediaAsset"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/analytics-goals/{goalId}/commands/activate-version",
+      "operationId": "activateOwnerAnalyticsGoalVersion"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/cv/versions/{versionId}/commands/activate",
+      "operationId": "activateOwnerCvVersion"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/feedback/{feedbackId}/commands/approve",
+      "operationId": "approveOwnerFeedback"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/content/{contentId}/commands/archive",
+      "operationId": "archiveOwnerContent"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/projects/{projectId}/commands/assign-taxonomy-value",
+      "operationId": "assignOwnerProjectTaxonomyValue"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/projects/{projectId}/commands/change-slug",
+      "operationId": "changeOwnerProjectPublicSlug"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/projects/{projectId}/commands/change-status",
+      "operationId": "changeOwnerProjectStatus"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/projects/{projectId}/commands/correct-candidate-slug",
+      "operationId": "correctOwnerProjectCandidateSlug"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/analytics-goals/{goalId}/versions",
+      "operationId": "createOwnerAnalyticsGoalVersion"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/content",
+      "operationId": "createOwnerContent"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/media/upload-intents",
+      "operationId": "createOwnerMediaUploadIntent"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/project-status-values",
+      "operationId": "createOwnerProjectStatusValue"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/taxonomies/{taxonomyId}/values",
+      "operationId": "createOwnerTaxonomyValue"
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/exports/{exportId}/download",
+      "operationId": "downloadOwnerExport"
+    },
+    {
+      "surface": "public",
+      "method": "GET",
+      "path": "/api/v1/cv/current",
+      "operationId": "getCurrentCv"
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/analytics-goals/{goalId}",
+      "operationId": "getOwnerAnalyticsGoal"
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/content/{contentId}",
+      "operationId": "getOwnerContentAggregate"
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/content/{contentId}/history",
+      "operationId": "getOwnerContentHistory"
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/cv",
+      "operationId": "getOwnerCvPortfolio"
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/exports/{exportId}",
+      "operationId": "getOwnerExport"
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/feedback/{feedbackId}",
+      "operationId": "getOwnerFeedbackModeration"
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/media/{mediaId}",
+      "operationId": "getOwnerMediaAggregate"
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/projects/{projectId}",
+      "operationId": "getOwnerProjectAggregate"
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/taxonomies/{taxonomyId}",
+      "operationId": "getOwnerTaxonomyAggregate"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/content/{contentId}/commands/hide",
+      "operationId": "hideOwnerContent"
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/project-status-values",
+      "operationId": "listOwnerProjectStatusValues"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/taxonomy-values/{valueId}/commands/merge",
+      "operationId": "mergeOwnerTaxonomyValue"
+    },
+    {
+      "surface": "public",
+      "method": "POST",
+      "path": "/api/v1/projects/{projectId}/feedback",
+      "operationId": "postProjectFeedback"
+    },
+    {
+      "surface": "public",
+      "method": "POST",
+      "path": "/api/v1/events",
+      "operationId": "postPublicEvent"
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/content/{contentId}/revisions/{revisionId}/preview",
+      "operationId": "previewOwnerContentRevision"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/content/{contentId}/commands/publish-language",
+      "operationId": "publishOwnerContentLanguage"
+    },
+    {
+      "surface": "public",
+      "method": "PUT",
+      "path": "/api/v1/projects/{projectId}/rating",
+      "operationId": "putProjectRating"
+    },
+    {
+      "surface": "public",
+      "method": "PUT",
+      "path": "/api/v1/projects/{projectId}/reaction",
+      "operationId": "putProjectReaction"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/media/{mediaId}/commands/record-processing",
+      "operationId": "recordOwnerMediaProcessing"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/cv/versions",
+      "operationId": "registerOwnerCvVersion"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/feedback/{feedbackId}/commands/reject",
+      "operationId": "rejectOwnerFeedback"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/media/{mediaId}/commands/reject",
+      "operationId": "rejectOwnerMediaAsset"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/projects/{projectId}/commands/relate-project",
+      "operationId": "relateOwnerProjects"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/project-status-values/{valueId}/commands/rename",
+      "operationId": "renameOwnerProjectStatusValue"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/taxonomy-values/{valueId}/commands/rename",
+      "operationId": "renameOwnerTaxonomyValue"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/exports",
+      "operationId": "requestOwnerExport"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/content/{contentId}/commands/restore",
+      "operationId": "restoreOwnerContent"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/project-status-values/{valueId}/commands/retire",
+      "operationId": "retireOwnerProjectStatusValue"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/taxonomy-values/{valueId}/commands/retire",
+      "operationId": "retireOwnerTaxonomyValue"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/content/{contentId}/revisions/{revisionId}/review",
+      "operationId": "reviewOwnerContentRevision"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/content/{contentId}/revisions",
+      "operationId": "saveOwnerContentRevision"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/projects/{projectId}/commands/set-featured",
+      "operationId": "setOwnerProjectFeatured"
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/feedback/{feedbackId}/commands/suppress",
+      "operationId": "suppressOwnerFeedback"
+    },
+    {
+      "surface": "owner",
+      "method": "PUT",
+      "path": "/api/owner/v1/configuration/contact-channels",
+      "operationId": "updateOwnerContactChannels"
+    },
+    {
+      "surface": "owner",
+      "method": "PUT",
+      "path": "/api/owner/v1/configuration/project-cta",
+      "operationId": "updateOwnerGlobalProjectCta"
+    },
+    {
+      "surface": "owner",
+      "method": "PUT",
+      "path": "/api/owner/v1/configuration/profile",
+      "operationId": "updateOwnerProfileConfiguration"
+    }
+  ],
+  "invalidRegistrations": [],
+  "operationalRoutes": [
+    {
+      "file": "src/app/livez/route.ts",
+      "path": "/livez"
+    },
+    {
+      "file": "src/app/readyz/route.ts",
+      "path": "/readyz"
+    }
+  ],
+  "protectedJobs": [
+    {
+      "method": "GET",
+      "path": "/internal/operations/phase7-due-work",
+      "operationId": null,
+      "registrationPhase": 9,
+      "installationPhase": 10,
+      "registered": false
+    }
+  ],
+  "developmentPassed": true,
+  "phase9Complete": false,
+  "verdict": "incomplete",
+  "checks": [
+    {
+      "name": "canonical-phase9-contract",
+      "passed": true
+    },
+    {
+      "name": "registered-routes-approved-and-unique",
+      "passed": true
+    },
+    {
+      "name": "all-53-product-routes-registered",
+      "passed": false,
+      "declared": 53,
+      "registered": 0,
+      "pending": 53
+    },
+    {
+      "name": "source-bound-phase9-evidence",
+      "passed": false,
+      "detail": "predecessors-not-accepted,required-execution-not-passing"
+    }
+  ]
+}

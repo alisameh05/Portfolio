@@ -1,25 +1,65 @@
 {
   "schemaVersion": 1,
   "ticket": 234,
-  "evaluatedAt": "2026-10-18T17:01:33.518Z",
+  "evaluatedAt": "2026-10-31T15:23:12.080Z",
   "evaluator": {
-    "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-    "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
+    "sourceRevision": "aa4daa5fd50da5336ebfbb6b59b6d5862a095587",
+    "sourceTreeSha256": "28fe71161e7ec5b2a775554a03c36edbf9aa4be3d2ca7d13166efbe047ec564a",
     "runtime": {
       "node": "24.21.0",
       "npm": "11.19.0"
     }
   },
-  "verdict": "pass",
-  "mergeEligible": true,
-  "acceptedPhases": [
-    3,
-    4,
-    5,
-    6,
-    7
+  "verdict": "blocked",
+  "mergeEligible": false,
+  "acceptedPhases": [],
+  "blockers": [
+    {
+      "phase": 3,
+      "ticket": 55,
+      "reasons": [
+        "source-tree-mismatch"
+      ],
+      "failedChecks": [],
+      "nextAction": "Phase 3 (#55) evidence needs refreshing. Commit the final source, then run npm run phase8:qualify to regenerate Phases 3–7 evidence and evaluate the same source tree."
+    },
+    {
+      "phase": 4,
+      "ticket": 90,
+      "reasons": [
+        "source-tree-mismatch"
+      ],
+      "failedChecks": [],
+      "nextAction": "Phase 4 (#90) evidence needs refreshing. Commit the final source, then run npm run phase8:qualify to regenerate Phases 3–7 evidence and evaluate the same source tree."
+    },
+    {
+      "phase": 5,
+      "ticket": 125,
+      "reasons": [
+        "source-tree-mismatch"
+      ],
+      "failedChecks": [],
+      "nextAction": "Phase 5 (#125) evidence needs refreshing. Commit the final source, then run npm run phase8:qualify to regenerate Phases 3–7 evidence and evaluate the same source tree."
+    },
+    {
+      "phase": 6,
+      "ticket": 164,
+      "reasons": [
+        "source-tree-mismatch"
+      ],
+      "failedChecks": [],
+      "nextAction": "Phase 6 (#164) evidence needs refreshing. Commit the final source, then run npm run phase8:qualify to regenerate Phases 3–7 evidence and evaluate the same source tree."
+    },
+    {
+      "phase": 7,
+      "ticket": 209,
+      "reasons": [
+        "source-tree-mismatch"
+      ],
+      "failedChecks": [],
+      "nextAction": "Phase 7 (#209) evidence needs refreshing. Commit the final source, then run npm run phase8:qualify to regenerate Phases 3–7 evidence and evaluate the same source tree."
+    }
   ],
-  "blockers": [],
   "phases": [
     {
       "phase": 3,
@@ -40,7 +80,7 @@
         "skipped": 0
       },
       "failedChecks": [],
-      "nextAction": null,
+      "nextAction": "Phase 3 (#55) evidence needs refreshing. Commit the final source, then run npm run phase8:qualify to regenerate Phases 3–7 evidence and evaluate the same source tree.",
       "migrations": [
         {
           "name": "20260922170000_prepare_migration_capability.sql",
@@ -261,8 +301,10 @@
       },
       "sourceBinding": "verified",
       "cleanup": true,
-      "reasons": [],
-      "accepted": true
+      "reasons": [
+        "source-tree-mismatch"
+      ],
+      "accepted": false
     },
     {
       "phase": 4,
@@ -283,7 +325,7 @@
         "skipped": 0
       },
       "failedChecks": [],
-      "nextAction": null,
+      "nextAction": "Phase 4 (#90) evidence needs refreshing. Commit the final source, then run npm run phase8:qualify to regenerate Phases 3–7 evidence and evaluate the same source tree.",
       "migrations": [
         {
           "name": "20260922170000_prepare_migration_capability.sql",
@@ -507,21 +549,23 @@
       },
       "sourceBinding": "verified",
       "cleanup": true,
-      "reasons": [],
-      "accepted": true
+      "reasons": [
+        "source-tree-mismatch"
+      ],
+      "accepted": false
     },
     {
       "phase": 5,
       "ticket": 125,
       "path": "evidence/phase-5-gate-report.json",
-      "sha256": "fdc4744b90c9fb0b74ae0b523f4b9550f36a61d53945b7fcb4988e3eeb9598ba",
+      "sha256": "529a399a6b6c8b7911c015e4acc7c0fca7c4d1f9d578f32108f675adecf375da",
       "evidencePresent": true,
       "sourceTreeVerified": true,
       "aggregateSuccess": true,
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "runId": "69fcd894-40a3-486e-addc-6173bc947902",
-      "generatedAt": "2026-10-18T16:01:52.543Z",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "runId": "27cc5083-8098-4386-8e54-6babd5cc399a",
+      "generatedAt": "2026-10-21T22:16:02.506Z",
       "required": {
         "success": true,
         "executed": 147,
@@ -529,7 +573,7 @@
         "skipped": 0
       },
       "failedChecks": [],
-      "nextAction": null,
+      "nextAction": "Phase 5 (#125) evidence needs refreshing. Commit the final source, then run npm run phase8:qualify to regenerate Phases 3–7 evidence and evaluate the same source tree.",
       "migrations": [
         {
           "name": "20260922170000_prepare_migration_capability.sql",
@@ -730,6 +774,10 @@
         {
           "name": "20261017142000_revoke_public_aggregate_guard_execution.sql",
           "sha256": "7b385899021083dca28b10d34d175b14c6daa443e98a846953f3ff16212d1a91"
+        },
+        {
+          "name": "20261018172500_bound_job_retries_and_incidents.sql",
+          "sha256": "c63d813d82f4fab902fcfbfde78c667b95618b450e438f58d88aad103fe78b1e"
         }
       ],
       "toolVersions": {
@@ -745,13 +793,15 @@
           "auth": true,
           "storage": true
         },
-        "runId": "1b0e0e88-dcfe-4b5d-aba4-c1fea8fcbae3",
+        "runId": "5b261dcc-dccd-4be1-a9dc-f54b00142ba6",
         "serviceChecksRecorded": true
       },
       "sourceBinding": "verified",
       "cleanup": true,
-      "reasons": [],
-      "accepted": true
+      "reasons": [
+        "source-tree-mismatch"
+      ],
+      "accepted": false
     },
     {
       "phase": 6,
@@ -772,7 +822,7 @@
         "skipped": 0
       },
       "failedChecks": [],
-      "nextAction": null,
+      "nextAction": "Phase 6 (#164) evidence needs refreshing. Commit the final source, then run npm run phase8:qualify to regenerate Phases 3–7 evidence and evaluate the same source tree.",
       "migrations": [
         {
           "name": "20260922170000_prepare_migration_capability.sql",
@@ -993,8 +1043,10 @@
       },
       "sourceBinding": "verified",
       "cleanup": true,
-      "reasons": [],
-      "accepted": true
+      "reasons": [
+        "source-tree-mismatch"
+      ],
+      "accepted": false
     },
     {
       "phase": 7,
@@ -1015,7 +1067,7 @@
         "skipped": 0
       },
       "failedChecks": [],
-      "nextAction": null,
+      "nextAction": "Phase 7 (#209) evidence needs refreshing. Commit the final source, then run npm run phase8:qualify to regenerate Phases 3–7 evidence and evaluate the same source tree.",
       "migrations": [
         {
           "name": "20260922170000_prepare_migration_capability.sql",
@@ -1236,12 +1288,14 @@
       },
       "sourceBinding": "verified",
       "cleanup": true,
-      "reasons": [],
-      "accepted": true
+      "reasons": [
+        "source-tree-mismatch"
+      ],
+      "accepted": false
     }
   ],
   "statusLayers": {
-    "localAcceptance": "passed",
+    "localAcceptance": "blocked",
     "hostedChecks": "not-recorded-by-this-evaluator",
     "codexReview": "not-recorded-by-this-evaluator",
     "humanApproval": "not-recorded-by-this-evaluator",
@@ -1250,8 +1304,8 @@
   },
   "guarantees": {
     "allPrerequisitesSourceBound": true,
-    "zeroRequiredFailures": true,
-    "zeroRequiredSkips": true,
+    "zeroRequiredFailures": false,
+    "zeroRequiredSkips": false,
     "successfulCleanup": true
   }
 }
