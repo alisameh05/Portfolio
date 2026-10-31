@@ -13,7 +13,7 @@ const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, ""
 const EVIDENCE = join(ROOT, "evidence");
 const REPORT = join(EVIDENCE, "phase8-gate-report.json");
 const LOGS = join(EVIDENCE, "phase8-gate-checks");
-const COMMANDS = [
+export const PHASE8_GATE_COMMANDS = Object.freeze([
   ["phase8-prerequisites", "phase8:qualify"], ["integrated", "phase8:focus:integrated"],
   ["retry-recovery", "phase8:focus:retry-recovery"], ["retention-passes", "phase8:focus:retention-passes"],
   ["protected-trigger", "phase8:focus:protected-trigger"], ["owner-exports", "phase8:focus:exports"],
@@ -24,7 +24,7 @@ const COMMANDS = [
   ["contract-verification", "contract:verify"], ["architecture", "test:arch"], ["runtime-boundary", "runtime:boundary"],
   ["lint", "lint"], ["typecheck", "typecheck"], ["production-build", "build"],
   ["gate-negative-tests", "test:phase8:gate"],
-];
+].map((command) => Object.freeze(command)));
 const REPORTING_COMMANDS = new Set(["phase8-prerequisites", "integrated", "retry-recovery", "retention-passes", "protected-trigger", "owner-exports",
   "taxonomy", "analytics-export", "reference-import", "operations-observability", "incidents", "relational-backup", "object-backup", "recovery", "gate-negative-tests"]);
 const REPORTING_ARTIFACTS = Object.freeze({
@@ -71,6 +71,9 @@ function run(name, script) {
 }
 
 async function main() {
+  if (PHASE8_GATE_COMMANDS.some(([name]) => !PHASE8_GATE_REQUIRED_CHECKS.includes(name))) {
+    throw new Error("PHASE8_REQUIRED_CHECK_INVENTORY_INCOMPLETE");
+  }
   mkdirSync(LOGS, { recursive: true }); rmSync(REPORT, { force: true });
   const runId = randomUUID(), startedAt = new Date().toISOString(), sourceRevision = git(["rev-parse", "HEAD"]), sourceTreeSha256 = workingTreeSourceSha256();
   const initialArtifactDigests = new Map(PHASE8_GATE_COMPONENTS.map((component) => {
@@ -83,7 +86,7 @@ async function main() {
   const installEvidence = { expectedFingerprint: fingerprint(ROOT),
     actualFingerprint: readJson("node_modules/.shipwithali-validation.json")?.fingerprint ?? null };
   const checks = [{ name: "validation-ready", executed: true, passed: readinessErrors.length === 0, exitCode: readinessErrors.length ? 1 : 0, skipped: 0 }];
-  if (readinessErrors.length === 0) for (const [name, script] of COMMANDS) checks.push(run(name, script));
+  if (readinessErrors.length === 0) for (const [name, script] of PHASE8_GATE_COMMANDS) checks.push(run(name, script));
   const stable = git(["rev-parse", "HEAD"]) === sourceRevision && workingTreeSourceSha256() === sourceTreeSha256;
   if (!stable) for (const check of checks) { check.passed = false; check.exitCode = 1; }
   const artifacts = [];

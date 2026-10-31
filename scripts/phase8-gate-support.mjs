@@ -22,7 +22,7 @@ const componentDefinitions = [
   ["prerequisites", ["evidence/phase8-prerequisite-qualification.json"], false],
 ];
 export const PHASE8_GATE_COMPONENTS = Object.freeze(componentDefinitions.map(([id, paths, cleanupRequired = true]) => ({ id, paths, cleanupRequired })));
-export const PHASE8_GATE_REQUIRED_CHECKS = Object.freeze(["validation-ready", "phase8-prerequisites", "integrated", "contract-verification", "architecture", "runtime-boundary", "lint", "typecheck", "production-build", "gate-negative-tests"]);
+export const PHASE8_GATE_REQUIRED_CHECKS = Object.freeze(["validation-ready", "phase8-prerequisites", "integrated", "retry-recovery", "retention-passes", "protected-trigger", "owner-exports", "taxonomy", "analytics-export", "reference-import", "operations-observability", "incidents", "relational-backup", "object-backup", "recovery", "contract-verification", "architecture", "runtime-boundary", "lint", "typecheck", "production-build", "gate-negative-tests"]);
 export function countReportedSkips(output) {
   const text = String(output);
   const matches = [...text.matchAll(/(?:\bskipped\b["']?\s*[:=]\s*["']?(\d+)|(\d+)\s+skipped\b|\bskipped\s+(\d+)\b)/giu)];
@@ -48,7 +48,7 @@ const criterionComponents = [
   ["integrated"], ["integrated"], ["integrated", "prerequisites"], ["integrated", "prerequisites"], ["integrated", "prerequisites"],
 ];
 const criterionEvidenceTerms = [
-  /phase[ -]?(?:3|4|5|6|7)|prerequisite/u, /interface|request|download|snapshot/u, /scope|normaliz|duplicate|idempotency/u, /owner|portfolio|csrf|origin|forbidden|unauthor/u, /rollback|atomic|receipt|reservation/u,
+  /phase[ -]?(?:3|4|5|6|7)|prerequisite/u, /interface|request|download|snapshot/u, /scope|normaliz|duplicate|idempotency/u, /owner|portfolio|csrf|\borigin\b|forbidden|unauthor/u, /rollback|atomic|receipt|reservation/u,
   /replay|concurrent|idempotency|meaning change/u, /state|status|transition|failure code/u, /ready|partial|manifest|artifact|fenc/u, /expiry|expired|cleanup|deadline/u, /download|zip|stream|private|no.store/u,
   /missing|corrupt|unauthor|storage|protected existence/u, /contract|problem detail|operation|compatib/u, /content|revision|lifecycle|featured|relationship/u, /locale|translation|publication|revision/u, /route|redirect|canonical|slug/u,
   /taxonomy|rename|retir|merge/u, /media|accessibility|acceptance|variant/u, /object|bytes|digest|asset|missing required/u, /current cv|activation|accepted pdf/u, /feedback|retention|deadline|erasure/u,

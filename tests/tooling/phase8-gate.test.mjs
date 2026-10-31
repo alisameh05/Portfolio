@@ -4,9 +4,10 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { countReportedSkips, evaluatePhase8Gate, PHASE8_GATE_COMPONENTS, PHASE8_GATE_CRITERION_MATRIX, PHASE8_GATE_REQUIRED_CHECKS, PHASE8_GATE_SCENARIOS, PHASE8_GATE_SCENARIO_EVIDENCE, readBoundArtifact } from "../../scripts/phase8-gate-support.mjs";
+import { PHASE8_GATE_COMMANDS } from "../../scripts/phase8-gate.mjs";
 
 function matchingTitle(pattern, prefix) {
-  const alternatives = pattern.source.split("|").map((value) => value.replace(/[\\()[\]{}?*+.^$]/gu, " ").trim()).filter(Boolean);
+  const alternatives = pattern.source.replaceAll("\\b", "").split("|").map((value) => value.replace(/[\\()[\]{}?*+.^$]/gu, " ").trim()).filter(Boolean);
   for (const term of alternatives.reverse()) {
     const candidate = `${prefix} ${term}`;
     if (pattern.test(candidate)) return candidate;
@@ -37,6 +38,7 @@ test("Phase 8 gate enumerates every criterion and scenario and accepts complete 
   assert.equal(PHASE8_GATE_CRITERION_MATRIX.length, 70);
   assert.deepEqual(PHASE8_GATE_CRITERION_MATRIX.map((x) => x.id), Array.from({ length: 70 }, (_, i) => `P8-${String(i + 1).padStart(2, "0")}`));
   assert.equal(PHASE8_GATE_SCENARIOS.length, 16);
+  assert.ok(PHASE8_GATE_COMMANDS.every(([name]) => PHASE8_GATE_REQUIRED_CHECKS.includes(name)));
   const result = evaluatePhase8Gate(fixture());
   assert.equal(result.verdict, "pass", result.failures.join(", "));
   assert.equal(result.counts.executedCriteria, 70);
@@ -85,6 +87,9 @@ test("gate rejects runtime/install, missing or stale artifact, run/coverage, agg
   assert.ok(evaluatePhase8Gate(notExecutedThisRun).failures.includes(`required-evidence-invalid:${PHASE8_GATE_COMPONENTS[0].id}`));
   const noNamedTests = fixture(); noNamedTests.artifacts[0].tests = [];
   assert.ok(evaluatePhase8Gate(noNamedTests).failures.includes(`required-evidence-invalid:${PHASE8_GATE_COMPONENTS[0].id}`));
+  const unrelatedTitle = fixture();
+  unrelatedTitle.artifacts.forEach((artifact) => { artifact.tests = ["the original receipt title passed"]; });
+  assert.ok(evaluatePhase8Gate(unrelatedTitle).failures.includes("criterion-coverage-incomplete:P8-04"));
   const noScenario = fixture(); noScenario.artifacts.forEach((x) => { x.tests = x.tests.filter((title) => !PHASE8_GATE_SCENARIO_EVIDENCE[15].test(title)); });
   assert.ok(evaluatePhase8Gate(noScenario).failures.includes("scenario-coverage-incomplete:S16"));
   const noOptionalOutage = fixture(); noOptionalOutage.artifacts.forEach((x) => { x.tests = x.tests.filter((title) => !PHASE8_GATE_SCENARIO_EVIDENCE[14].test(title)); });
@@ -93,6 +98,13 @@ test("gate rejects runtime/install, missing or stale artifact, run/coverage, agg
   assert.ok(evaluatePhase8Gate({ ...absentCriterion, criterionMatrix: PHASE8_GATE_CRITERION_MATRIX.slice(1) }).failures.includes("criterion-inventory-incomplete"));
   const skipped = fixture(); skipped.checks[0].skipped = 1; skipped.checks[0].passed = false;
   assert.ok(evaluatePhase8Gate(skipped).failures.includes("required-check-failed:validation-ready"));
+  for (const name of ["relational-backup", "object-backup", "recovery"]) {
+    const failedCommand = fixture();
+    const check = failedCommand.checks.find((item) => item.name === name);
+    check.passed = false;
+    check.aggregateSuccess = false;
+    assert.ok(evaluatePhase8Gate(failedCommand).failures.includes(`required-check-failed:${name}`));
+  }
   const aggregate = fixture(); aggregate.integratedEvidence.required.success = false;
   assert.ok(evaluatePhase8Gate(aggregate).failures.includes("integrated-real-service-evidence-invalid"));
   const staleIntegrated = fixture(); staleIntegrated.integratedEvidence.source.workingTreeSha256 = "f".repeat(64);
