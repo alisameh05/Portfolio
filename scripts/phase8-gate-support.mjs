@@ -113,8 +113,10 @@ export function readBoundArtifact(root, component, { sourceRevision, sourceTreeS
   const collectTests = (value) => {
     if (!value || typeof value !== "object") return;
     if (Array.isArray(value)) { value.forEach(collectTests); return; }
-    if (typeof value.title === "string" && !["passed", "failed"].includes(value.status)) tests.add(value.title);
+    if (typeof value.title === "string" && ["passed", "pass", "success"].includes(value.status)) tests.add(value.title);
     if (typeof value.name === "string" && typeof value.suite === "string") tests.add(`${value.suite} :: ${value.name}`);
+    for (const title of value.testNames ?? []) if (typeof title === "string" && title.trim()) tests.add(title.trim());
+    for (const title of value.tests ?? []) if (typeof title === "string" && title.trim()) tests.add(title.trim());
     for (const child of Object.values(value)) collectTests(child);
   };
   collectTests(report);

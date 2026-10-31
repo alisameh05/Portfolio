@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { countReportedSkips, evaluatePhase8Gate, PHASE8_GATE_COMPONENTS, PHASE8_GATE_CRITERION_MATRIX, PHASE8_GATE_REQUIRED_CHECKS, PHASE8_GATE_SCENARIOS } from "../../scripts/phase8-gate-support.mjs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { countReportedSkips, evaluatePhase8Gate, PHASE8_GATE_COMPONENTS, PHASE8_GATE_CRITERION_MATRIX, PHASE8_GATE_REQUIRED_CHECKS, PHASE8_GATE_SCENARIOS, readBoundArtifact } from "../../scripts/phase8-gate-support.mjs";
 
 function fixture() {
   const sourceRevision = "a".repeat(40), sourceTreeSha256 = "b".repeat(64), runId = "gate-run-12345678";
@@ -31,6 +34,20 @@ test("gate reads skip counts from real runner summaries and rejects missing aggr
   assert.equal(countReportedSkips('{"required":{"skipped":0}}'), 0);
   assert.equal(countReportedSkips("Tests 4 passed | 2 skipped"), 2);
   assert.equal(countReportedSkips("no test summary"), null);
+});
+
+test("artifact reader retains named passing checks from testNames and status-bearing reports", () => {
+  const root = mkdtempSync(join(tmpdir(), "phase8-gate-artifact-reader-"));
+  const sourceRevision = "a".repeat(40), sourceTreeSha256 = "b".repeat(64);
+  try {
+    const component = PHASE8_GATE_COMPONENTS[0];
+    const artifactPath = join(root, component.path);
+    mkdirSync(join(root, "evidence"), { recursive: true });
+    writeFileSync(artifactPath, JSON.stringify({ sourceRevision, sourceTreeSha256, required: { success: true, passed: 2, failed: 0, skipped: 0 },
+      cleanup: true, testNames: ["executed report title"], tests: [{ title: "passed suite title", status: "passed" }] }));
+    const evidence = readBoundArtifact(root, component, { sourceRevision, sourceTreeSha256, gateRunId: "gate-run", generatedThisRun: true, scenarios: [] });
+    assert.deepEqual(evidence.tests, ["executed report title", "passed suite title"]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test("gate rejects runtime/install, missing or stale artifact, run/coverage, aggregate, skip, cleanup, and prerequisite failures", () => {
