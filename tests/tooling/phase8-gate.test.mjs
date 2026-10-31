@@ -1,12 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { evaluatePhase8Gate, PHASE8_GATE_COMPONENTS, PHASE8_GATE_CRITERION_MATRIX, PHASE8_GATE_REQUIRED_CHECKS, PHASE8_GATE_SCENARIOS } from "../../scripts/phase8-gate-support.mjs";
+import { countReportedSkips, evaluatePhase8Gate, PHASE8_GATE_COMPONENTS, PHASE8_GATE_CRITERION_MATRIX, PHASE8_GATE_REQUIRED_CHECKS, PHASE8_GATE_SCENARIOS } from "../../scripts/phase8-gate-support.mjs";
 
 function fixture() {
   const sourceRevision = "a".repeat(40), sourceTreeSha256 = "b".repeat(64), runId = "gate-run-12345678";
   const artifacts = PHASE8_GATE_COMPONENTS.map((c) => ({ id: c.id, path: c.path, sha256: "c".repeat(64), sourceRevision,
-    sourceTreeSha256, gateRunId: runId, fresh: true, positiveExecution: true, aggregateSuccess: true, cleanup: true,
-    scenarios: PHASE8_GATE_SCENARIOS.map(({ id }) => id), tests: [`${c.id}.real-service.test`] }));
+    sourceTreeSha256, gateRunId: runId, generatedThisRun: true, fresh: true, positiveExecution: true, aggregateSuccess: true, cleanup: true,
+    scenarios: PHASE8_GATE_SCENARIOS.map(({ id }) => id), tests: [`${c.id}.executed.test`] }));
   const checks = PHASE8_GATE_REQUIRED_CHECKS.map((name) => ({ name, executed: true, passed: true, skipped: 0 }));
   return { runId, startedAt: "2026-10-31T10:00:00.000Z", sourceRevision, sourceTreeSha256, runtime: { node: "v24.21.0", npm: "11.19.0" },
     expectedRuntime: { node: "24.21.0", npm: "11.19.0" }, checks, artifacts,
@@ -26,21 +26,37 @@ test("Phase 8 gate enumerates every criterion and scenario and accepts complete 
   assert.equal(result.counts.executedScenarios, 16);
 });
 
+test("gate reads skip counts from real runner summaries and rejects missing aggregate counts", () => {
+  assert.equal(countReportedSkips("ℹ skipped 0"), 0);
+  assert.equal(countReportedSkips("Tests 4 passed | 2 skipped"), 2);
+  assert.equal(countReportedSkips("no test summary"), null);
+});
+
 test("gate rejects runtime/install, missing or stale artifact, run/coverage, aggregate, skip, cleanup, and prerequisite failures", () => {
   const wrongRuntime = fixture(); wrongRuntime.runtime.node = "20.0.0";
   assert.ok(evaluatePhase8Gate(wrongRuntime).failures.includes("runtime-pin-mismatch"));
+  const staleInstall = fixture(); staleInstall.runtime.npm = "10.0.0";
+  assert.ok(evaluatePhase8Gate(staleInstall).failures.includes("runtime-pin-mismatch"));
   const missing = fixture(); missing.artifacts = missing.artifacts.filter((x) => x.id !== "media");
   assert.ok(evaluatePhase8Gate(missing).failures.includes("required-evidence-invalid:media"));
   const stale = fixture(); stale.artifacts[0].fresh = false;
   assert.ok(evaluatePhase8Gate(stale).failures.includes("required-evidence-invalid:interfaces"));
   const wrongRun = fixture(); wrongRun.artifacts[0].gateRunId = "other-run";
   assert.ok(evaluatePhase8Gate(wrongRun).failures.includes("required-evidence-invalid:interfaces"));
+  const notExecutedThisRun = fixture(); notExecutedThisRun.artifacts[0].generatedThisRun = false;
+  assert.ok(evaluatePhase8Gate(notExecutedThisRun).failures.includes("required-evidence-invalid:interfaces"));
+  const noNamedTests = fixture(); noNamedTests.artifacts[0].tests = [];
+  assert.ok(evaluatePhase8Gate(noNamedTests).failures.includes("required-evidence-invalid:interfaces"));
   const noScenario = fixture(); noScenario.artifacts.forEach((x) => { x.scenarios = x.scenarios.filter((id) => id !== "S16"); });
   assert.ok(evaluatePhase8Gate(noScenario).failures.includes("scenario-coverage-incomplete:S16"));
   const skipped = fixture(); skipped.checks[0].skipped = 1; skipped.checks[0].passed = false;
   assert.ok(evaluatePhase8Gate(skipped).failures.includes("required-check-failed:validation-ready"));
   const aggregate = fixture(); aggregate.integratedEvidence.required.success = false;
   assert.ok(evaluatePhase8Gate(aggregate).failures.includes("integrated-real-service-evidence-invalid"));
+  const missingService = fixture(); missingService.integratedEvidence = null;
+  assert.ok(evaluatePhase8Gate(missingService).failures.includes("integrated-real-service-evidence-invalid"));
+  const zeroExecution = fixture(); zeroExecution.artifacts[0].positiveExecution = false;
+  assert.ok(evaluatePhase8Gate(zeroExecution).failures.includes("required-evidence-invalid:interfaces"));
   const cleanup = fixture(); cleanup.artifacts[0].cleanup = false;
   assert.ok(evaluatePhase8Gate(cleanup).failures.includes("required-evidence-invalid:interfaces"));
   const prerequisite = fixture(); prerequisite.prerequisiteEvidence.acceptedPhases = [3, 4];

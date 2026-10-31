@@ -34,6 +34,10 @@ const componentDefinitions = [
 ];
 export const PHASE8_GATE_COMPONENTS = Object.freeze(componentDefinitions.map(([id, path]) => ({ id, path })));
 export const PHASE8_GATE_REQUIRED_CHECKS = Object.freeze(["validation-ready", "phase8-prerequisites", "integrated", "contract-verification", "architecture", "runtime-boundary", "lint", "typecheck", "production-build", "gate-negative-tests"]);
+export function countReportedSkips(output) {
+  const matches = [...String(output).matchAll(/(?:\bskipped\b\s*[:=]\s*(\d+)|(\d+)\s+skipped\b|\bskipped\s+(\d+)\b)/giu)];
+  return matches.length ? Math.max(...matches.map((m) => Number(m[1] ?? m[2] ?? m[3]))) : null;
+}
 export const PHASE8_GATE_CRITERION_MATRIX = Object.freeze(Array.from({ length: 70 }, (_, i) => {
   const n = i + 1;
   const components = n < 12 ? ["interfaces", "integrated"] : n < 35 ? ["export-replay", "portable-schemas", "content", "taxonomy", "media", "cv", "moderation", "analytics", "reconciliation", "reference-import", "integrated"]
@@ -68,11 +72,14 @@ export function evaluatePhase8Gate({ runId, startedAt, sourceRevision, sourceTre
   for (const item of PHASE8_GATE_COMPONENTS) {
     const a = byId.get(item.id);
     if (!a || a.sourceRevision !== revision || a.sourceTreeSha256 !== sourceTreeSha256 || a.gateRunId !== runId ||
-      a.fresh !== true || a.positiveExecution !== true || a.aggregateSuccess !== true || a.cleanup !== true || !/^[0-9a-f]{64}$/iu.test(a.sha256 ?? "")) {
+      a.generatedThisRun !== true || a.fresh !== true || a.positiveExecution !== true || a.aggregateSuccess !== true ||
+      a.cleanup !== true || !Array.isArray(a.tests) || a.tests.length === 0 || !/^[0-9a-f]{64}$/iu.test(a.sha256 ?? "")) {
       failures.push(`required-evidence-invalid:${item.id}`);
     }
   }
-  for (const c of PHASE8_GATE_CRITERION_MATRIX) if (c.components.some((id) => !byId.has(id) || byId.get(id).positiveExecution !== true)) failures.push(`criterion-coverage-incomplete:${c.id}`);
+  const criterionEvidence = PHASE8_GATE_CRITERION_MATRIX.map((c) => ({ id: c.id, artifacts: c.components,
+    tests: [...new Set(c.components.flatMap((id) => byId.get(id)?.tests ?? []))].sort() }));
+  for (const item of criterionEvidence) if (item.tests.length === 0 || item.artifacts.some((id) => !byId.has(id) || byId.get(id).positiveExecution !== true)) failures.push(`criterion-coverage-incomplete:${item.id}`);
   const scenarioSet = new Set(scenarios);
   for (const { id } of PHASE8_GATE_SCENARIOS) if (!scenarioSet.has(id) || !artifacts.some((a) => a.scenarios?.includes(id))) failures.push(`scenario-coverage-incomplete:${id}`);
   if (!executionOk(integratedEvidence)) failures.push("integrated-real-service-evidence-invalid");
@@ -83,14 +90,14 @@ export function evaluatePhase8Gate({ runId, startedAt, sourceRevision, sourceTre
   if (!executionOk(prerequisiteEvidence) || prerequisiteEvidence.acceptedPhases?.join(",") !== "3,4,5,6,7" ||
       prerequisiteSource.sourceRevision !== revision || prerequisiteSource.sourceTreeSha256 !== sourceTreeSha256) failures.push("failed-or-stale-prerequisite-evidence");
   if (Date.parse(startedAt) > now || now - Date.parse(startedAt) > 24 * 60 * 60 * 1000) failures.push("gate-run-stale");
-  return { verdict: failures.length ? "fail" : "pass", failures: [...new Set(failures)], counts: {
+  return { verdict: failures.length ? "fail" : "pass", failures: [...new Set(failures)], criterionEvidence, counts: {
     criteria: PHASE8_GATE_CRITERION_MATRIX.length, executedCriteria: failures.filter((f) => f.startsWith("criterion-coverage-incomplete:")).length ? 0 : 70,
     scenarios: PHASE8_GATE_SCENARIOS.length, executedScenarios: PHASE8_GATE_SCENARIOS.filter(({ id }) => artifacts.some((a) => a.scenarios?.includes(id))).length,
     requiredChecks: PHASE8_GATE_REQUIRED_CHECKS.length, executedChecks: requiredChecks.size,
   } };
 }
 
-export function readBoundArtifact(root, component, { sourceRevision, sourceTreeSha256, gateRunId, scenarios }) {
+export function readBoundArtifact(root, component, { sourceRevision, sourceTreeSha256, gateRunId, generatedThisRun, scenarios }) {
   const path = `${root}/${component.path}`;
   const bytes = readFileSync(path);
   const report = JSON.parse(bytes.toString("utf8"));
@@ -98,9 +105,18 @@ export function readBoundArtifact(root, component, { sourceRevision, sourceTreeS
   const cleanup = report.cleanup === true || report.cleanup === "passed" || report.cleanup?.success === true || report.cleanupComplete === true;
   const sourceRev = report.sourceRevision ?? report.source?.revision ?? report.repository?.head ?? report.repository?.commit ?? report.evaluator?.sourceRevision;
   const sourceTree = report.sourceTreeSha256 ?? report.source?.workingTreeSha256 ?? report.repository?.sourceTreeSha256 ?? report.evaluator?.sourceTreeSha256;
+  const tests = new Set();
+  const collectTests = (value) => {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) { value.forEach(collectTests); return; }
+    if (typeof value.title === "string" && !["passed", "failed"].includes(value.status)) tests.add(value.title);
+    if (typeof value.name === "string" && typeof value.suite === "string") tests.add(`${value.suite} :: ${value.name}`);
+    for (const child of Object.values(value)) collectTests(child);
+  };
+  collectTests(report);
   return { id: component.id, path: component.path, sha256: createHash("sha256").update(bytes).digest("hex"),
-    sourceRevision: sourceRev, sourceTreeSha256: sourceTree, gateRunId,
+    sourceRevision: sourceRev, sourceTreeSha256: sourceTree, gateRunId, generatedThisRun,
     fresh: sourceRev === sourceRevision && sourceTree === sourceTreeSha256,
     positiveExecution: executionOk(report), aggregateSuccess: executionOk(report), cleanup,
-    scenarios: scenarios.filter((id) => (report.scenarios ?? report.scenarioCoverage ?? []).includes(id)) };
+    tests: [...tests].sort(), scenarios: scenarios.filter((id) => (report.scenarios ?? report.scenarioCoverage ?? []).includes(id)) };
 }
