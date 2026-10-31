@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "ticket": 247,
-  "runId": "7513e1dd-4d43-4ee9-aa66-1b3a023eaeb0",
-  "startedAt": "2026-10-27T04:35:46.218Z",
-  "completedAt": "2026-10-27T04:36:53.590Z",
-  "sourceRevision": "62aaac387cc58cd152c4510648a02e3b40e2b6ab",
-  "sourceTreeSha256": "4a4fa0d0248b4dce29b5a7341e7df48c1f2be0206620fbecaf17662f3bacfdfe",
+  "runId": "1bb37f7a-2564-4deb-9813-a5d031266310",
+  "startedAt": "2026-10-30T20:15:50.078Z",
+  "completedAt": "2026-10-30T20:16:38.327Z",
+  "sourceRevision": "bf8a7c440986b295da1c2ee27073de465774ab4d",
+  "sourceTreeSha256": "338be941238fe07cf9541dbd7c1fa087ae6a57c0001216c8aa598143d0d54436",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migrations": [
     {
@@ -259,6 +259,22 @@
     {
       "name": "20261026164603_phase7_durable_policy_schedule_keys.sql",
       "sha256": "cdd65060a1363d35f93f76c289950e69b26ebb04f718f12fe0cf3563f75668ab"
+    },
+    {
+      "name": "20261027014402_operations_observability_summary_indexes.sql",
+      "sha256": "792f546244568e0f245dbcefe2042de151cec10bff8c58a26d521dd98e569511"
+    },
+    {
+      "name": "20261029120000_actionable_incident_delivery.sql",
+      "sha256": "9bb0b260a3831f9cd376f07deb707f38a447600458e491e0514573d92b3ebc9c"
+    },
+    {
+      "name": "20261029150000_register_relational_backup_copies.sql",
+      "sha256": "f29bb017d9b2344764223df3df0820a075b8d647177f94eb9b1ad142fba9bcde"
+    },
+    {
+      "name": "20261030100000_register_object_backup_copies.sql",
+      "sha256": "072ccc6b900803d95ce6fa8d59daa348bf248c28f814b0c3629248e78dd27fdc"
     }
   ],
   "tools": {
@@ -371,11 +387,11 @@
     }
   ],
   "suites": [
-    "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-assembly.test.ts",
-    "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-migration-postgres.test.ts",
-    "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-moderation-postgres.test.ts",
-    "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-postgres.test.ts",
-    "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-reconciliation.test.ts"
+    "D:/Personal/Personal_Projects/Portfolio-worktrees/issue-256-integrated-verification/tests/phase8/owner-export-assembly.test.ts",
+    "D:/Personal/Personal_Projects/Portfolio-worktrees/issue-256-integrated-verification/tests/phase8/owner-export-migration-postgres.test.ts",
+    "D:/Personal/Personal_Projects/Portfolio-worktrees/issue-256-integrated-verification/tests/phase8/owner-export-moderation-postgres.test.ts",
+    "D:/Personal/Personal_Projects/Portfolio-worktrees/issue-256-integrated-verification/tests/phase8/owner-export-postgres.test.ts",
+    "D:/Personal/Personal_Projects/Portfolio-worktrees/issue-256-integrated-verification/tests/phase8/owner-export-reconciliation.test.ts"
   ],
   "criteria": [
     "AC01",

@@ -486,7 +486,8 @@ describe.runIf(enabled)("Issue #250 full and partial reference import against is
     const operations = createPostgresOperationsPersistence(application!.database);
     const contentRepository = createPostgresContentAuthoringRepository();
     const discovery = createPostgresProjectDiscoveryProjectionWriter();
-    const contentClockAt = "2026-10-26T10:00:00.000Z";
+    const databaseClock = await admin!.query("select transaction_timestamp() + interval '5 minutes' as content_clock");
+    const contentClockAt = new Date(databaseClock.rows[0]!["content_clock"] as Date | string).toISOString();
     const content = createContentAuthoringService({ repository: contentRepository, operations, scope,
       discoveryProjection: discovery, taxonomyAssignments: discovery, clock: { now: () => contentClockAt } });
     const artifactId = createStableId("SupportingArtifact");
