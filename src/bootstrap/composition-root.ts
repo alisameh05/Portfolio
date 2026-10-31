@@ -733,7 +733,10 @@ export async function initializeDatabaseRuntime(
               scanner: createClamAvScanner({
                 ...(env["CLAMSCAN_PATH"] === undefined ? {} : { executable: env["CLAMSCAN_PATH"] }),
                 maxBytes: 50 * 1024 * 1024,
-                timeoutMs: 25_000,
+                // The request's 60-second processing deadline is the outer
+                // bound; leave room for Docker image startup, version probing,
+                // and the actual scan within that same attempt.
+                timeoutMs: 60_000,
               }),
               processor: createOcrMyPdfProcessor({
                 ...(env["PYTHON_PATH"] === undefined ? {} : { python: env["PYTHON_PATH"] }),

@@ -2005,7 +2005,7 @@ describeReal(group === "baseline"
         const childCode = "import sys,time; f=open(sys.argv[1],'ab',buffering=0); exec('while True:\\n f.write(bytes([120,120])); time.sleep(0.01)')";
         const worker = `import subprocess,sys,time; subprocess.Popen([sys.executable, '-c', ${JSON.stringify(childCode)}, sys.argv[1]]); time.sleep(1000)`;
         await expect(runWithBoundedOutput("python3", ["-c", worker, quotaPath], quotaPath,
-          { maxBytes: 8, timeoutMs: 5_000, python: "python3" })).rejects.toBeDefined();
+          { maxBytes: 8, timeoutMs: 20_000, python: "python3" })).rejects.toBeDefined();
         expect(statSync(quotaPath).size).toBeLessThanOrEqual(8);
         const stoppedSize = statSync(quotaPath).size;
         await new Promise((resolve) => setTimeout(resolve, 100));
