@@ -11,7 +11,10 @@ existing module-owned PostgreSQL services.
 ## Security and privacy
 
 - Supabase ES256 signing keys come from its bounded, five-minute cached JWKS
-  endpoint; an unknown key triggers one refresh. The HTTP boundary verifies
+  endpoint. Refresh attempts share a 30-second cooldown per server process,
+  including failed attempts and unknown keys. A newly rotated key can take up
+  to 30 seconds to be discovered; fresh known keys remain usable and expired
+  keys fail closed during an outage. The HTTP boundary verifies
   issuer, audience, expiry, signature, Owner purpose, live Auth session,
   GitHub provider identity, configured immutable-subject allowlist, and the
   stable Owner mapping on every request.

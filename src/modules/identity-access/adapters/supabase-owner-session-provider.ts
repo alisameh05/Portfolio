@@ -32,11 +32,19 @@ export function createSupabaseOwnerSessionProvider(input: {
 
   let cachedKeys: ReadonlyMap<string, string> | undefined;
   let expiresAt = 0;
+  // Bound all fetch attempts per provider, including failures and cold-cache
+  // requests. Unknown/missing kids must not bypass the authenticated limiter
+  // by causing one upstream request per token. Rotation can retry after 30s.
+  const refreshCooldownMilliseconds = Math.min(30_000, cacheMilliseconds);
+  let refreshAfter = 0;
   let pendingKeys: Promise<ReadonlyMap<string, string>> | undefined;
 
   async function signingKeys(force = false): Promise<ReadonlyMap<string, string>> {
-    if (!force && cachedKeys !== undefined && Date.now() < expiresAt) return cachedKeys;
+    const now = Date.now();
+    if (cachedKeys !== undefined && now < expiresAt && (!force || now < refreshAfter)) return cachedKeys;
     if (pendingKeys !== undefined) return pendingKeys;
+    if (now < refreshAfter) throw new Error("OWNER_AUTH_KEYS_UNAVAILABLE");
+    refreshAfter = now + refreshCooldownMilliseconds;
     pendingKeys = (async () => {
       const response = await request(endpoint, {
         method: "GET", redirect: "error", cache: "no-store", credentials: "omit",
