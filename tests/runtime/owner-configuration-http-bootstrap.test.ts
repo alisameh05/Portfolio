@@ -17,7 +17,7 @@ vi.mock("../../src/runtime/http/owner-configuration.js", () => ({
   handleUpdateOwnerProfileConfiguration: async () => Response.json({ dispatched: true }),
 }));
 
-import { handleOwnerConfigurationHttp } from "../../src/runtime/http/owner-configuration-http.js";
+import { dispatchOwnerConfigurationHttp } from "../../src/runtime/http/owner-configuration-http.js";
 
 describe("Owner configuration HTTP bootstrap", () => {
   beforeEach(() => {
@@ -29,8 +29,8 @@ describe("Owner configuration HTTP bootstrap", () => {
       .mockResolvedValueOnce(undefined);
     const request = new Request("https://example.com/api/owner/v1/configuration/profile", { method: "PUT" });
 
-    const unavailable = await handleOwnerConfigurationHttp(request, "updateOwnerProfileConfiguration");
-    const recovered = await handleOwnerConfigurationHttp(request, "updateOwnerProfileConfiguration");
+    const unavailable = await dispatchOwnerConfigurationHttp(request, "updateOwnerProfileConfiguration");
+    const recovered = await dispatchOwnerConfigurationHttp(request, "updateOwnerProfileConfiguration");
 
     expect(unavailable.status).toBe(503);
     expect(recovered.status).toBe(200);

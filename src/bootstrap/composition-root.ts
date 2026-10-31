@@ -1019,7 +1019,8 @@ export async function initializeDatabaseRuntime(
       { name: "configuration", async check() { createRuntimeConfig(env); return true; } },
       { name: "identity", async check() {
         const identityReady = await (options.identityReadiness ?? dependencies.identityReadiness)?.check() === true;
-        const ownerHttpReady = runtimeKind !== "application" || await dependencies.ownerHttpReadiness?.check() === true;
+        const ownerHttpReady = runtimeKind !== "application" || dependencies.ownerHttpReadiness === undefined ||
+          await dependencies.ownerHttpReadiness.check() === true;
         return identityReady && ownerHttpReady;
       } },
       { name: "database", check: () => dependencies.readiness.check() },

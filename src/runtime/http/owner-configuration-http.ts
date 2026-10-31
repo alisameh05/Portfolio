@@ -51,7 +51,7 @@ function unavailable(request: Request): Response {
 }
 
 /** Initializes production composition once per server process and dispatches one existing HTTP adapter. */
-export async function handleOwnerConfigurationHttp(
+export async function dispatchOwnerConfigurationHttp(
   request: Request,
   operation: OwnerConfigurationOperation,
 ): Promise<Response> {
