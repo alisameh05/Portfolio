@@ -17,6 +17,27 @@ export const PHASE4_RELEASE_BOUNDARY = "20261005001318_create_content_authoring.
 export const PHASE5_MIGRATION_FIRST = "20261005001318_create_content_authoring.sql";
 export const PHASE5_MIGRATION_LAST = "20261009100000_index_project_discovery_reads.sql";
 
+// Reviewed route-boundary evolution. Historical foundation checkpoints retain
+// their exact no-product-route rule; Phase 9 derives its finite contract from
+// both OpenAPI bundles and permits a valid incomplete development slice.
+export const PHASE_ROUTE_REGISTRATION_POLICY = Object.freeze({
+  schemaVersion: 1,
+  historical: Object.freeze({
+    phase1: Object.freeze({ productRouteCount: 0 }),
+    phase2: Object.freeze({ productRouteCount: 0,
+      operationalRouteFiles: Object.freeze(["src/app/livez/route.ts", "src/app/readyz/route.ts"]) }),
+  }),
+  phase9: Object.freeze({
+    publicOperationCount: 5,
+    ownerOperationCount: 48,
+    registrationMarker: "registerProductRoute",
+    modes: Object.freeze(["development", "complete"]),
+  }),
+  operationalRouteFiles: Object.freeze(["src/app/livez/route.ts", "src/app/readyz/route.ts"]),
+  protectedJobs: Object.freeze([Object.freeze({ method: "GET", path: "/internal/operations/phase7-due-work",
+    operationId: null, registrationMarker: "registerProtectedDueWorkRoute", registrationPhase: 9, installationPhase: 10 })]),
+});
+
 // Positional phases every migration belongs to exactly once:
 //   baseline | phase4-release | phase5 | operations-transformation | declared-additive
 export const MIGRATION_CLASSIFICATIONS = Object.freeze([
