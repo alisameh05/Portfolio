@@ -150,6 +150,29 @@ test("catalog proof permits only the reviewed Phase 7 Worker retention definers"
   }
 });
 
+test("catalog proof restricts Owner configuration definers to exact signatures and application-only execution", () => {
+  const base = { schema: "identity_access", security_definer: true, owner: "shipwithali_migration",
+    owner_can_login: false, owner_superuser: false, owner_bypass_rls: false,
+    application_execute: true, worker_execute: false, backup_execute: false,
+    anon_execute: false, authenticated_execute: false, service_role_execute: false };
+  const functions = [
+    { name: "owner_session_is_active", argument_types: "uuid", result_type: "boolean", config: ["search_path=pg_catalog, auth"] },
+    { name: "resolve_owner_session_identity", argument_types: "uuid, uuid", result_type: "record", config: ["search_path=pg_catalog, auth, identity_access"] },
+    { name: "check_owner_configuration_rate_limit", argument_types: "text, text", result_type: "record", config: ["search_path=pg_catalog, identity_access"] },
+  ];
+  for (const signature of functions) {
+    const valid = { ...base, ...signature };
+    assert.equal(phase6DefinerFunctionProof(valid), true);
+    assert.equal(phase6DefinerFunctionProof({ ...valid, config: ["search_path=pg_catalog"] }), signature.name !== "check_owner_configuration_rate_limit");
+    for (const changed of [{ name: "unreviewed" }, { argument_types: "text" }, { result_type: "text" },
+      { owner: "postgres" }, { owner_can_login: true }, { owner_superuser: true }, { owner_bypass_rls: true },
+      { config: ["search_path=public"] }, { config: [...valid.config, "row_security=off"] },
+      { application_execute: false }, ...["anon_execute", "authenticated_execute", "service_role_execute", "worker_execute", "backup_execute"].map(key => ({ [key]: true }))]) {
+      assert.equal(phase6DefinerFunctionProof({ ...valid, ...changed }), false);
+    }
+  }
+});
+
 test("catalog proof admits content export schemas only after the declared migration", () => {
   const migration = "20261024120000_read_content_for_owner_exports.sql";
   for (const schema_name of ["content", "taxonomy"]) {

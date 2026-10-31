@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { dirname, join, posix as pathPosix, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { PHASE_ROUTE_REGISTRATION_POLICY } from "./phase-contract-registry.mjs";
@@ -49,15 +49,20 @@ function routePathFromFile(file) {
 function importsCanonicalRegistration(sourceFile, importedName) {
   return sourceFile.statements.some((statement) => {
     if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier) ||
-        statement.moduleSpecifier.text !== "@/runtime/http/product-route-registration.js" ||
         !statement.importClause?.namedBindings || !ts.isNamedImports(statement.importClause.namedBindings)) return false;
+    const specifier = statement.moduleSpecifier.text;
+    const resolvedRelativeSpecifier = specifier.startsWith(".")
+      ? pathPosix.normalize(pathPosix.join(pathPosix.dirname(sourceFile.fileName), specifier))
+      : null;
+    if (specifier !== "@/runtime/http/product-route-registration.js" &&
+        resolvedRelativeSpecifier !== "src/runtime/http/product-route-registration.js") return false;
     return statement.importClause.namedBindings.elements.some((element) =>
       (element.propertyName?.text ?? element.name.text) === importedName);
   });
 }
 
-function exportedMethods(source) {
-  const sourceFile = ts.createSourceFile("route.ts", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+function exportedMethods(source, file = "route.ts") {
+  const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const hasCanonicalRegistration = importsCanonicalRegistration(sourceFile, PHASE_ROUTE_REGISTRATION_POLICY.phase9.registrationMarker);
   const declarations = [];
   for (const statement of sourceFile.statements) {
@@ -96,8 +101,8 @@ function exportedMethods(source) {
   return declarations;
 }
 
-function hasProtectedDueWorkRegistration(source) {
-  const sourceFile = ts.createSourceFile("route.ts", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+function hasProtectedDueWorkRegistration(source, file = "route.ts") {
+  const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   return importsCanonicalRegistration(sourceFile, PROTECTED_DUE_WORK.registrationMarker) && sourceFile.statements.some((statement) => {
     if (!ts.isVariableStatement(statement) ||
         !statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)) return false;
@@ -143,16 +148,16 @@ export function discoverPhase9Registrations(root = DEFAULT_ROOT) {
       continue;
     }
     if (file === PROTECTED_DUE_WORK.file) {
-      const declarations = exportedMethods(source);
+      const declarations = exportedMethods(source, file);
       const valid = declarations.length === 1 && declarations[0].method === PROTECTED_DUE_WORK.method &&
-        hasProtectedDueWorkRegistration(source);
+        hasProtectedDueWorkRegistration(source, file);
       if (!valid) findings.push({ code: "protected-due-work-registration-invalid", file });
       protectedJobRegistered = valid;
       continue;
     }
 
     const path = routePathFromFile(file);
-    const declarations = exportedMethods(source);
+    const declarations = exportedMethods(source, file);
     if (!path || !path.startsWith("/api/")) {
       findings.push({ code: "unapproved-runtime-route", file });
       continue;

@@ -373,6 +373,7 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
     const unusedCrypto = {} as CryptoPort;
     const security: OwnerRequestSecurity = {
       appOrigin: "https://example.com",
+      rateLimit: { async check() { return { allowed: true }; } },
       identity: createIdentityAccessService({ auth, crypto: unusedCrypto }),
     };
     const beforeSpoof = await admin.query(
@@ -519,6 +520,7 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
     let barrier: (() => Promise<void>) | undefined;
     const security: OwnerRequestSecurity = {
       appOrigin: "https://example.com",
+      rateLimit: { async check() { return { allowed: true }; } },
       identity: {
         async resolveActorContext() { return ok(actor); },
         async authorizeOperation(query) {
@@ -651,6 +653,7 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
     let barrier: (() => Promise<void>) | undefined;
     const security: OwnerRequestSecurity = {
       appOrigin: "https://example.com",
+      rateLimit: { async check() { return { allowed: true }; } },
       identity: {
         async resolveActorContext() { return ok(actor); },
         async authorizeOperation(query) {
@@ -839,6 +842,7 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
     let barrier: (() => Promise<void>) | undefined;
     const security: OwnerRequestSecurity = {
       appOrigin: "https://example.com",
+      rateLimit: { async check() { return { allowed: true }; } },
       identity: {
         async resolveActorContext() { return ok(actor); },
         async authorizeOperation(query) {
@@ -997,6 +1001,7 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
     const actor = { kind: "owner" as const, ownerId: scope.ownerId, sessionId: "channel-failure-session" };
     const security: OwnerRequestSecurity = {
       appOrigin: "https://example.com",
+      rateLimit: { async check() { return { allowed: true }; } },
       identity: {
         async resolveActorContext() { return ok(actor); },
         async authorizeOperation(query) { return decideAuthorization(query); },
@@ -1079,6 +1084,7 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
     const actor = { kind: "owner" as const, ownerId: scope.ownerId, sessionId: "failure-session" };
     const security: OwnerRequestSecurity = {
       appOrigin: "https://example.com",
+      rateLimit: { async check() { return { allowed: true }; } },
       identity: {
         async resolveActorContext() { return ok(actor); },
         async authorizeOperation(query) { return decideAuthorization(query); },
@@ -1151,6 +1157,7 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
     let barrier: (() => Promise<void>) | undefined;
     const security: OwnerRequestSecurity = {
       appOrigin: "https://example.com",
+      rateLimit: { async check() { return { allowed: true }; } },
       identity: {
         async resolveActorContext() { return ok(actor); },
         async authorizeOperation(query) {
@@ -1265,6 +1272,7 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
     const actor = { kind: "owner" as const, ownerId: scope.ownerId, sessionId: "cta-failure-session" };
     const security: OwnerRequestSecurity = {
       appOrigin: "https://example.com",
+      rateLimit: { async check() { return { allowed: true }; } },
       identity: {
         async resolveActorContext() { return ok(actor); },
         async authorizeOperation(query) { return decideAuthorization(query); },

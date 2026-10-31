@@ -208,6 +208,18 @@ describe("Phase 4 migration integrity", () => {
       defaultPrivileges: [],
     };
     expect(() => assertPhase4ApplicationRls(snapshot)).not.toThrow();
+    const ownerConfigurationHttpSnapshot = {
+      ...snapshot,
+      migrationLedger: [{ name: "secure_owner_configuration_http" }],
+      policies: [...snapshot.policies, {
+        schema: "identity_access", tableName: "owner_links", name: "owner_links_migration_select_policy",
+        command: "SELECT", roles: "{shipwithali_migration}", permissive: "permissive",
+        usingPredicate: "true", withCheck: "",
+      }],
+    };
+    expect(() => assertPhase4ApplicationRls(ownerConfigurationHttpSnapshot)).not.toThrow();
+    expect(() => assertPhase4ApplicationRls({ ...ownerConfigurationHttpSnapshot, migrationLedger: [] }))
+      .toThrow("PHASE4_APPLICATION_POLICY_PREDICATE_MISSING");
     const backupGrants = PHASE_DECLARED_ADDITIVE_MIGRATIONS.find((item) => item.ticket === 253)!
       .operationsAdditions.filter((entry) => entry.category === "grants" && entry.expected.grantee === "shipwithali_backup")
       .map((entry) => entry.expected);

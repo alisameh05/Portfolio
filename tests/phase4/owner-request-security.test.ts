@@ -99,6 +99,39 @@ describe("Owner request security boundary (#81)", () => {
     expect(guard.actor).toEqual(OWNER);
   });
 
+  it("scopes the limiter subject to the verified Owner and operation", async () => {
+    const base = createOwnerSecurityTestStub({ type: "allow", actor: OWNER });
+    const subjects: string[] = [];
+    const guard = await guardOwnerRequest(mutationRequest(), {
+      operation: "updateOwnerProfileConfiguration",
+      mode: "mutation",
+      security: { ...base, appOrigin: APP_ORIGIN, rateLimit: { async check(subject) {
+        subjects.push(subject);
+        return { allowed: true };
+      } } },
+      traceId: "trace-rate-limit-scope",
+      instance: "/api/owner/v1/configuration/profile",
+    });
+    expect(guard.ok).toBe(true);
+    expect(subjects).toEqual([`owner_session:${OWNER.ownerId}:updateOwnerProfileConfiguration`]);
+  });
+
+  it("fails closed when the rate limiter is missing", async () => {
+    const base = createOwnerSecurityTestStub({ type: "allow", actor: OWNER });
+    const security = { ...base, appOrigin: APP_ORIGIN, rateLimit: undefined } as unknown as typeof base;
+    const guard = await guardOwnerRequest(mutationRequest(), {
+      operation: "updateOwnerProfileConfiguration",
+      mode: "mutation",
+      security,
+      traceId: "trace-rate-limit-missing",
+      instance: "/api/owner/v1/configuration/profile",
+    });
+    expect(guard.ok).toBe(false);
+    if (guard.ok) return;
+    expect(guard.response.status).toBe(503);
+    expect((await guard.response.json()).code).toBe("temporarily_unavailable");
+  });
+
   it("rejects mutations without a session cookie as 401 before dispatch", async () => {
     const security = createOwnerSecurityTestStub({ type: "allow", actor: OWNER });
     let dispatched = 0;
@@ -233,6 +266,35 @@ describe("Owner request security boundary (#81)", () => {
       expect(guard.response.status).toBe(403);
     }
     expect(resolved).toBe(0);
+  });
+
+  it("accepts Next.js forwarded-host normalization only for the configured request host", async () => {
+    const security = createOwnerSecurityTestStub({ type: "allow", actor: OWNER });
+    const request = mutationRequest({ forwardedHost: "example.com" });
+    request.headers.set("host", "example.com");
+    const guard = await guardOwnerRequest(request, {
+      operation: "updateOwnerProfileConfiguration",
+      mode: "mutation",
+      security: { ...security, appOrigin: APP_ORIGIN },
+      traceId: "trace-next-forwarded-host",
+      instance: "/api/owner/v1/configuration/profile",
+    });
+    expect(guard.ok).toBe(true);
+  });
+
+  it("accepts a canonical ingress authority on an internal replica URL and rejects a conflicting Host", async () => {
+    const security = createOwnerSecurityTestStub({ type: "allow", actor: OWNER });
+    for (const host of ["example.com", "forged.example"]) {
+      const request = new Request("http://127.0.0.1:43210/api/owner/v1/configuration/profile",
+        mutationRequest({ forwardedHost: "example.com" }));
+      request.headers.set("host", host);
+      const guard = await guardOwnerRequest(request, {
+        operation: "updateOwnerProfileConfiguration", mode: "mutation",
+        security: { ...security, appOrigin: APP_ORIGIN },
+        traceId: "trace-replica-host", instance: "/api/owner/v1/configuration/profile",
+      });
+      expect(guard.ok).toBe(host === "example.com");
+    }
   });
 
   it("authenticates reads without requiring origin or CSRF proof", async () => {

@@ -147,9 +147,26 @@ export function phase6MediaFactPlanProof(plan) {
     (plan?.Plans ?? []).some(phase6MediaFactPlanProof);
 }
 
-// Phase 7 #204 adds exactly these reviewed Worker-only retention capabilities.
+// Permit only the reviewed retention and Owner configuration capabilities.
 export function phase6DefinerFunctionProof(row) {
   if (row?.security_definer === false) return true;
+  if (row?.schema === "identity_access") {
+    const signatures = {
+      owner_session_is_active: { arguments: "uuid", result: "boolean", path: "pg_catalog, auth" },
+      resolve_owner_session_identity: { arguments: "uuid, uuid", result: "record", path: "pg_catalog, auth, identity_access" },
+      check_owner_configuration_rate_limit: { arguments: "text, text", result: "record", path: "pg_catalog, identity_access" },
+    };
+    const signature = Object.hasOwn(signatures, row.name) ? signatures[row.name] : undefined;
+    return signature !== undefined && row.security_definer === true &&
+      row.argument_types === signature.arguments && row.result_type === signature.result &&
+      row.owner === "shipwithali_migration" && row.owner_can_login === false &&
+      row.owner_superuser === false && row.owner_bypass_rls === false &&
+      Array.isArray(row.config) && row.config.length === 1 &&
+      (row.config[0] === `search_path=${signature.path}` ||
+        (row.name !== "check_owner_configuration_rate_limit" && row.config[0] === "search_path=pg_catalog")) &&
+      row.application_execute === true &&
+      ["anon_execute", "authenticated_execute", "service_role_execute", "worker_execute", "backup_execute"].every(key => row[key] === false);
+  }
   const signatures = {
     seal_daily_aggregate_checkpoint: "uuid, date, boolean, timestamp with time zone",
     begin_retention_checkpoint: "uuid, uuid, text, timestamp with time zone, text",

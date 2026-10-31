@@ -36,7 +36,7 @@ function fixtureRoot() {
   }
   mkdirSync(join(root, "src", "app", "api", "v1", "projects", "[projectId]", "reaction"), { recursive: true });
   writeFileSync(join(root, "src", "app", "api", "v1", "projects", "[projectId]", "reaction", "route.ts"),
-    'import { registerProductRoute } from "@/runtime/http/product-route-registration.js";\n' +
+    'import { registerProductRoute } from "../../../../../../runtime/http/product-route-registration.js";\n' +
     'export const PUT = registerProductRoute("putProjectReaction", async (request: Request) => Response.json({ ok: true }));\n');
   mkdirSync(join(root, "src", "app", "internal", "operations", "phase7-due-work"), { recursive: true });
   writeFileSync(join(root, "src", "app", "internal", "operations", "phase7-due-work", "route.ts"),
@@ -63,8 +63,10 @@ describe("Phase 9 guarded route registration (#293)", () => {
     expect(new Set(report.declared.map((entry: { operationId: string }) => entry.operationId)).size).toBe(53);
     expect(report.declared.filter((entry: { surface: string }) => entry.surface === "public")).toHaveLength(5);
     expect(report.declared.filter((entry: { surface: string }) => entry.surface === "owner")).toHaveLength(48);
-    expect(report.registered).toEqual([]);
-    expect(report.pending).toHaveLength(53);
+    expect(report.registered.map((entry: { operationId: string }) => entry.operationId)).toEqual([
+      "updateOwnerContactChannels", "updateOwnerGlobalProjectCta", "updateOwnerProfileConfiguration",
+    ]);
+    expect(report.pending).toHaveLength(50);
     expect(report.developmentPassed).toBe(true);
     expect(report.phase9Complete).toBe(false);
   });
