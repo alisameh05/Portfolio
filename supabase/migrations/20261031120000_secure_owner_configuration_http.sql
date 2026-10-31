@@ -23,6 +23,7 @@ begin
   elsif to_regclass('auth.sessions') is null or to_regclass('auth.identities') is null then
     raise exception using errcode = '3F000', message = 'Supabase Auth schema is incomplete';
   else
+    execute 'grant usage on schema auth to shipwithali_migration';
     execute 'grant select (id, user_id) on auth.sessions to shipwithali_migration';
     execute 'grant select (user_id, provider, provider_id) on auth.identities to shipwithali_migration';
   end if;

@@ -1,4 +1,4 @@
-import { handleOwnerConfigurationHttp } from "../../../../../../bootstrap/owner-configuration-http.js";
+import { handleOwnerConfigurationHttp } from "../../../../../../runtime/http/owner-configuration-http.js";
 import { registerProductRoute } from "../../../../../../runtime/http/product-route-registration.js";
 
 export const runtime = "nodejs";

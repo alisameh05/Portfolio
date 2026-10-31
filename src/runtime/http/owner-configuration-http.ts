@@ -2,14 +2,14 @@ import {
   getOwnerConfigurationHttpDependencies,
   getRuntimeEnvironmentSnapshot,
   initializeDatabaseRuntime,
-} from "./composition-root.js";
+} from "../../bootstrap/composition-root.js";
 import {
   handleUpdateOwnerContactChannels,
   handleUpdateOwnerGlobalProjectCta,
   handleUpdateOwnerProfileConfiguration,
-} from "../runtime/http/owner-configuration.js";
-import { OWNER_PRIVATE_RESPONSE_HEADERS } from "../runtime/http/owner-security.js";
-import { createCorrelation } from "../runtime/ports.js";
+} from "./owner-configuration.js";
+import { OWNER_PRIVATE_RESPONSE_HEADERS } from "./owner-security.js";
+import { createCorrelation } from "../ports.js";
 
 export type OwnerConfigurationOperation =
   | "updateOwnerProfileConfiguration"

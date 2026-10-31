@@ -17,7 +17,7 @@ vi.mock("../../src/runtime/http/owner-configuration.js", () => ({
   handleUpdateOwnerProfileConfiguration: async () => Response.json({ dispatched: true }),
 }));
 
-import { handleOwnerConfigurationHttp } from "../../src/bootstrap/owner-configuration-http.js";
+import { handleOwnerConfigurationHttp } from "../../src/runtime/http/owner-configuration-http.js";
 
 describe("Owner configuration HTTP bootstrap", () => {
   beforeEach(() => {
