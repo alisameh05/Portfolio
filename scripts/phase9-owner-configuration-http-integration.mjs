@@ -176,7 +176,7 @@ async function main() {
       "tests/phase4/owner-request-security.test.ts",
       "tests/phase4/owner-session-auth.test.ts",
       "tests/phase8/operations-observability.test.ts",
-      "--reporter=json", `--outputFile=${reportPath}`], {
+      "--reporter=json", "--reporter=verbose", `--outputFile.json=${reportPath}`], {
       cwd: ROOT, env: testEnv, encoding: "utf8", timeout: 240_000, stdio: ["ignore", "pipe", "pipe"],
     });
     const report = JSON.parse(readFileSync(reportPath, "utf8"));
@@ -185,8 +185,12 @@ async function main() {
         report.testResults?.length !== 6 || report.testResults.some((suite) => suite.status !== "passed")) {
       const failedAssertions = report.testResults?.flatMap((suite) => suite.assertionResults ?? [])
         .filter((assertion) => assertion.status !== "passed")
-        .map((assertion) => safeAssertionDiagnostic(assertion)) ?? [];
-      console.error(JSON.stringify({ code: "PHASE9_OWNER_HTTP_ACCEPTANCE_TESTS_FAILED", assertions: failedAssertions }));
+        .map((assertion) => ({ ...safeAssertionDiagnostic(assertion),
+          authCode: assertion.failureMessages?.join("\n").match(/PHASE9_AUTH_DIAGNOSTIC:(SESSION_MALFORMED|UNSUPPORTED_ALGORITHM|UNKNOWN_SIGNING_KEY|INVALID_SIGNATURE|SESSION_EXPIRED|INVALID_CLAIMS|SESSION_REVOKED|AUTH_PROVIDER_UNAVAILABLE|UNTRUSTED_PROVIDER_IDENTITY|NOT_OWNER)/u)?.[1] ?? null,
+          httpStatus: assertion.failureMessages?.join("\n").match(/expected (200|400|401|403|409|429|500|503) to be (?:200|400|401|403|409|429|500|503)/u)?.[1] ?? null,
+        })) ?? [];
+      const diagnosticCodes = [...new Set((JSON.stringify(report) + test.stdout + test.stderr + logs.join("")).match(/\b(?:PHASE9_[A-Z_]+|OWNER_RATE_LIMIT_[A-Z_]+|INVALID_CLAIMS|INVALID_SIGNATURE|SESSION_REVOKED|AUTH_PROVIDER_UNAVAILABLE|UNKNOWN_SIGNING_KEY)\b/gu) ?? [])];
+      console.error(JSON.stringify({ code: "PHASE9_OWNER_HTTP_ACCEPTANCE_TESTS_FAILED", assertions: failedAssertions, diagnosticCodes }));
       throw new Error("PHASE9_OWNER_HTTP_ACCEPTANCE_TESTS_FAILED");
     }
     executedTests = report.testResults.flatMap((suite) => (suite.assertionResults ?? []).map((assertion) => ({

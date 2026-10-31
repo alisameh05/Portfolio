@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { request as httpRequest } from "node:http";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
@@ -11,6 +12,8 @@ import { createPostgresPortfolioSettingsRepository } from "../../src/modules/por
 import { createPortfolioSettingsService } from "../../src/modules/portfolio-configuration/application/settings-service.js";
 import { createPostgresRuntimeDatabase } from "../../src/shared/adapters/postgres/runtime.js";
 import type { StableId } from "../../src/shared/domain/index.js";
+import { createSupabaseOwnerSessionProvider } from "../../src/modules/identity-access/adapters/supabase-owner-session-provider.js";
+import { createPostgresOwnerConfigurationRateLimit } from "../../src/modules/identity-access/adapters/postgres-owner-configuration-rate-limit.js";
 
 const enabled = process.env["PHASE9_REQUIRE_OWNER_HTTP"] === "1";
 const suite = enabled ? describe : describe.skip;
@@ -30,11 +33,29 @@ const unavailableUrl = process.env["PHASE9_OWNER_HTTP_UNREADY_URL"];
 
 // Both listeners model replicas behind one ingress and receive its canonical Host.
 function fetch(input: string, init?: RequestInit): Promise<Response> {
+  if (!urls.some((url) => input.startsWith(`${url}/`))) return globalThis.fetch(input, init);
   const headers = new Headers(init?.headers);
-  if (urls.some((url) => input.startsWith(`${url}/`)) && !headers.has("host")) {
+  if (!headers.has("host")) {
     headers.set("host", new URL(urls[0]!).host);
   }
-  return globalThis.fetch(input, { ...init, headers });
+  // Node fetch replaces Host; use a real HTTP request to model ingress routing.
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(input, { method: init?.method ?? "GET", headers: Object.fromEntries(headers),
+      ...(init?.signal ? { signal: init.signal } : {}) }, (response) => {
+      const chunks: Buffer[] = [];
+      response.on("data", (chunk: Buffer) => chunks.push(chunk));
+      response.on("error", reject);
+      response.on("end", () => {
+        const responseHeaders = new Headers();
+        for (const [name, value] of Object.entries(response.headers)) {
+          if (value !== undefined) responseHeaders.set(name, Array.isArray(value) ? value.join(", ") : value);
+        }
+        resolve(new Response(Buffer.concat(chunks), { status: response.statusCode ?? 500, headers: responseHeaders }));
+      });
+    });
+    request.on("error", reject);
+    request.end(init?.body);
+  });
 }
 
 async function expectPrivateProblem(response: Response, status: number): Promise<void> {
@@ -89,6 +110,17 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     ownerSecondSession = await createLogin("phase9-owner-second-session@example.test", secondGithubSubject, ownerId);
     foreignOwner = await createLogin("phase9-foreign@example.test", foreignGithubSubject,
       "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ec1");
+    const verified = await createSupabaseOwnerSessionProvider({
+      config: { supabaseUrl: apiUrl, issuer: `${apiUrl}/auth/v1`, audience: "authenticated", ownerAllowlist: [githubSubject, secondGithubSubject] },
+      stableOwnerId: ownerId, database: appDatabase.database,
+    }).verifyOwnerSession({ sessionToken: owner.token, expectedPurpose: "owner_session" });
+    if (!verified.ok) {
+      console.error(`PHASE9_AUTH_DIAGNOSTIC:${verified.error.code}`);
+      throw new Error(`PHASE9_AUTH_DIAGNOSTIC:${verified.error.code}`);
+    }
+    const limit = await createPostgresOwnerConfigurationRateLimit(appDatabase.database)
+      .check(`owner_session:${ownerId}:updateOwnerProfileConfiguration`);
+    expect(limit.allowed).toBe(true);
   }, 60_000);
 
   afterAll(async () => {
@@ -143,7 +175,8 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
       const [left, right] = await Promise.all([make(0, entry.body, operationVersion, owner), make(1, entry.body, operationVersion, ownerSecondSession)]);
       const leftBody: unknown = await left.json();
       const rightBody: unknown = await right.json();
-      expect([left.status, right.status]).toEqual([200, 200]);
+      expect(left.status).toBe(200);
+      expect(right.status).toBe(200);
       expect(leftBody).toEqual(rightBody);
       expect(entry.responseSchema.safeParse(leftBody).success).toBe(true);
       currentVersion += 1;

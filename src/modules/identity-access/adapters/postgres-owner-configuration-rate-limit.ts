@@ -8,7 +8,7 @@ const OWNER_CONFIGURATION_OPERATIONS = new Set([
   "updateOwnerContactChannels",
   "updateOwnerGlobalProjectCta",
 ]);
-const OWNER_SCOPE_PATTERN = /^owner_session:([0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}):([A-Za-z]+)$/i;
+const OWNER_SCOPE_PATTERN = /^owner_session:([0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}):([A-Za-z]+)$/i;
 
 /** Shared fixed-window policy: 30 requests per Owner and operation each 60 seconds. */
 export function createPostgresOwnerConfigurationRateLimit(database: Kysely<DB>): OwnerRateLimitCheck {

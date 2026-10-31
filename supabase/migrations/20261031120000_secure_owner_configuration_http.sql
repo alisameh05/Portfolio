@@ -31,6 +31,10 @@ begin
     execute 'grant usage on schema auth to shipwithali_migration';
     execute 'grant select (id, user_id) on auth.sessions to shipwithali_migration';
     execute 'grant select (user_id, provider, provider_id) on auth.identities to shipwithali_migration';
+    -- Auth tables use RLS. Column grants alone leave the restricted definer
+    -- unable to see live sessions or identities, making every session revoked.
+    execute 'create policy owner_configuration_session_lookup on auth.sessions for select to shipwithali_migration using (true)';
+    execute 'create policy owner_configuration_identity_lookup on auth.identities for select to shipwithali_migration using (true)';
   end if;
 end;
 $$;
