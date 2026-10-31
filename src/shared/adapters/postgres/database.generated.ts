@@ -396,6 +396,13 @@ export interface CvPortfolioVersions {
   version_number: number;
 }
 
+export interface IdentityAccessOwnerConfigurationLimitWindows {
+  operation: string;
+  request_count: number;
+  subject_hash: string;
+  window_started_at: Timestamp;
+}
+
 export interface IdentityAccessOwnerLinks {
   created_at: Generated<Timestamp>;
   /**
@@ -920,6 +927,7 @@ export interface DB {
   "cv_portfolio.portfolios": CvPortfolioPortfolios;
   "cv_portfolio.registration_commands": CvPortfolioRegistrationCommands;
   "cv_portfolio.versions": CvPortfolioVersions;
+  "identity_access.owner_configuration_limit_windows": IdentityAccessOwnerConfigurationLimitWindows;
   "identity_access.owner_links": IdentityAccessOwnerLinks;
   "media.acceptance_commands": MediaAcceptanceCommands;
   "media.assets": MediaAssets;

@@ -828,7 +828,7 @@ export const PHASE_DECLARED_ADDITIVE_MIGRATIONS = Object.freeze([
   }),
   Object.freeze({
     migration: "20261031120000_secure_owner_configuration_http.sql",
-    migrationSha256: "7550d3e807481de8022bb4f8e4700d92c2283ec8155df3224403536fa8e93184",
+    migrationSha256: "67f9c56b372b9585b57c34adb37927ad3a687866d224a8cb54267a0bc2153c58",
     ticket: 294,
     capability: "identity_access.secure_owner_configuration_http",
   }),
