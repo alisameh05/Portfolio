@@ -293,10 +293,9 @@ export async function initializeDatabaseRuntime(
           if (configuredScope === undefined || !configuredScope.ownerId.ok) {
             throw new RuntimeConfigError("OWNER_ID", "must be configured for Owner HTTP authorization");
           }
-          const [identityAccess, identityAdapters, ownerRateLimit] = await Promise.all([
+          const [identityAccess, identityAdapters] = await Promise.all([
             import("../modules/identity-access/application/index.js"),
             import("../modules/identity-access/adapters/index.js"),
-            import("../runtime/http/owner-postgres-rate-limit.js"),
           ]);
           const ownerAuthConfig = identityAdapters.createOwnerAuthConfig(env);
           ownerRequestSecurity = {
@@ -309,7 +308,7 @@ export async function initializeDatabaseRuntime(
               }),
               crypto: new identityAdapters.StubCryptoAdapter(),
             }),
-            rateLimit: ownerRateLimit.createPostgresOwnerConfigurationRateLimit(database.database),
+            rateLimit: identityAdapters.createPostgresOwnerConfigurationRateLimit(database.database),
           };
         }
         const [{ createPostgresOwnerExportStore }, { createOwnerExportService }, { createPostgresFeedbackOwnerExportSnapshotReader },

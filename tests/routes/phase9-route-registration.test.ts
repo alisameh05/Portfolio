@@ -36,7 +36,7 @@ function fixtureRoot() {
   }
   mkdirSync(join(root, "src", "app", "api", "v1", "projects", "[projectId]", "reaction"), { recursive: true });
   writeFileSync(join(root, "src", "app", "api", "v1", "projects", "[projectId]", "reaction", "route.ts"),
-    'import { registerProductRoute } from "@/runtime/http/product-route-registration.js";\n' +
+    'import { registerProductRoute } from "../../../../../../runtime/http/product-route-registration.js";\n' +
     'export const PUT = registerProductRoute("putProjectReaction", async (request: Request) => Response.json({ ok: true }));\n');
   mkdirSync(join(root, "src", "app", "internal", "operations", "phase7-due-work"), { recursive: true });
   writeFileSync(join(root, "src", "app", "internal", "operations", "phase7-due-work", "route.ts"),

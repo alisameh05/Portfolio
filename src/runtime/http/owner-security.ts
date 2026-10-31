@@ -49,6 +49,7 @@ import type {
   Result,
 } from "../../shared/domain/index.js";
 import { err, ok } from "../../shared/domain/index.js";
+import type { OwnerRateLimitCheck } from "../../modules/identity-access/index.js";
 
 export const OWNER_PRIVATE_RESPONSE_HEADERS = {
   "Cache-Control": "private, no-store",
@@ -75,13 +76,6 @@ export const OWNER_CSRF_HEADER = "x-csrf-token";
 export const OWNER_SESSION_MAX_AGE_SECONDS = 3600;
 
 const CSRF_PROOF_PATTERN = /^[\x21-\x7E]{8,256}$/;
-
-/** Required rate-limit seam keyed by verified Owner and operation. */
-export interface OwnerRateLimitCheck {
-  check(
-    subject: string,
-  ): Promise<{ readonly allowed: boolean; readonly retryAfterSeconds?: number }>;
-}
 
 /**
  * Injected security dependencies. The composition root supplies the exact

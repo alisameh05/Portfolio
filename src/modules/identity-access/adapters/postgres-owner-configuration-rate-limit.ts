@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { sql, type Kysely } from "kysely";
-import type { DB } from "../../shared/adapters/postgres/database.generated.js";
-import type { OwnerRateLimitCheck } from "./owner-security.js";
+import type { DB } from "../../../shared/adapters/postgres/database.generated.js";
+import type { OwnerRateLimitCheck } from "../ports/owner-rate-limit.js";
 
 const OWNER_CONFIGURATION_OPERATIONS = new Set([
   "updateOwnerProfileConfiguration",

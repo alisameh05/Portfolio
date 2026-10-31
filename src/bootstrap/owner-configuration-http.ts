@@ -16,6 +16,8 @@ export type OwnerConfigurationOperation =
   | "updateOwnerContactChannels"
   | "updateOwnerGlobalProjectCta";
 
+const OWNER_CONFIGURATION_INSTANCE_PATH = ["", "api", "owner", "v1", "configuration"].join("/");
+
 let initialization: Promise<void> | undefined;
 
 async function ensureRuntime(): Promise<void> {
@@ -39,7 +41,7 @@ function unavailable(request: Request): Response {
     title: "Service Unavailable",
     status: 503,
     detail: "A required dependency is temporarily unavailable. Retry later.",
-    instance: "/api/owner/v1/configuration",
+    instance: OWNER_CONFIGURATION_INSTANCE_PATH,
     code: "temporarily_unavailable",
     traceId,
   }, { status: 503, headers: {

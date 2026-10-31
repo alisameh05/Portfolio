@@ -39,6 +39,7 @@ export type {
   VerifiedPseudonymousToken,
   AuthProviderPort,
   CryptoPort,
+  OwnerRateLimitCheck,
 } from "./ports/index.js";
 
 export type { ConsentEvidencePayload, ConsentEvidenceCryptoPort } from "./ports/consent.js";
