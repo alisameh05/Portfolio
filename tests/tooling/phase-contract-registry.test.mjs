@@ -44,7 +44,7 @@ test("the Phase 7 schedule migration stays between its true predecessor prefix a
   const boundary = partitionMigrationsAt(files, "20261026164603_phase7_durable_policy_schedule_keys.sql");
   assert.equal(boundary.predecessorMigrations.at(-1), "20261026100000_reconcile_all_owner_export_artifacts.sql");
   assert.equal(boundary.forwardMigration, "20261026164603_phase7_durable_policy_schedule_keys.sql");
-  assert.deepEqual(boundary.laterMigrations, ["20261027014402_operations_observability_summary_indexes.sql", "20261029120000_actionable_incident_delivery.sql", "20261029150000_register_relational_backup_copies.sql", "20261030100000_register_object_backup_copies.sql"]);
+  assert.deepEqual(boundary.laterMigrations, ["20261027014402_operations_observability_summary_indexes.sql", "20261029120000_actionable_incident_delivery.sql", "20261029150000_register_relational_backup_copies.sql", "20261030100000_register_object_backup_copies.sql", "20261031120000_secure_owner_configuration_http.sql"]);
   assert.throws(() => partitionMigrationsAt([...files, boundary.forwardMigration], boundary.forwardMigration),
     /PHASE7_MIGRATION_BOUNDARY_INVALID/u);
 });

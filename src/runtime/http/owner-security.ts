@@ -137,10 +137,22 @@ function unauthenticatedResponse(
   return response;
 }
 
-function hasForwardedHost(request: Request): boolean {
+function hasForwardedHost(request: Request, appOrigin: string): boolean {
   const explicit = request.headers.get("x-forwarded-host");
   if (explicit !== null && explicit.trim() !== "") {
-    return true;
+    // Next.js adds x-forwarded-host from Host when the ingress did not supply
+    // it. Accept that normalized value only when all three authorities agree:
+    // the configured application origin, the request URL, and Host. A client
+    // supplied conflicting value remains rejected.
+    try {
+      const expectedHost = new URL(appOrigin).host.toLowerCase();
+      const forwardedHost = explicit.trim().toLowerCase();
+      const requestHost = new URL(request.url).host.toLowerCase();
+      const hostHeader = request.headers.get("host")?.trim().toLowerCase();
+      if (forwardedHost !== expectedHost || requestHost !== expectedHost || hostHeader !== expectedHost) return true;
+    } catch {
+      return true;
+    }
   }
   const forwarded = request.headers.get("forwarded");
   if (forwarded !== null && /(?:^|[;,])\s*host\s*=/i.test(forwarded)) {
@@ -191,7 +203,7 @@ export async function guardOwnerRequest(
 ): Promise<OwnerGuardResult> {
   const { operation, mode, security, traceId, instance, logger } = options;
 
-  if (hasForwardedHost(request)) {
+  if (hasForwardedHost(request, security.appOrigin)) {
     return {
       ok: false,
       response: forbiddenResponse("FORWARDED_HOST_REJECTED", traceId, instance, logger),

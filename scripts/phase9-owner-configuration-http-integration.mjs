@@ -164,6 +164,7 @@ async function main() {
     };
     const test = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), "run",
       "tests/runtime/owner-configuration-network.integration.test.ts",
+      "tests/runtime/owner-configuration-http-bootstrap.test.ts",
       "tests/runtime/owner-configuration.test.ts",
       "tests/phase4/owner-request-security.test.ts",
       "tests/phase4/owner-session-auth.test.ts",
@@ -174,7 +175,7 @@ async function main() {
     const report = JSON.parse(readFileSync(reportPath, "utf8"));
     if (test.error || test.status !== 0 || report.success !== true || report.numPassedTests <= 3 ||
         report.numFailedTests !== 0 || report.numPendingTests !== 0 || report.numTodoTests !== 0 ||
-        report.testResults?.length !== 5 || report.testResults.some((suite) => suite.status !== "passed")) {
+        report.testResults?.length !== 6 || report.testResults.some((suite) => suite.status !== "passed")) {
       const failedAssertions = report.testResults?.flatMap((suite) => suite.assertionResults ?? [])
         .filter((assertion) => assertion.status !== "passed")
         .map((assertion) => [...(assertion.ancestorTitles ?? []), assertion.title].join(" / ")) ?? [];

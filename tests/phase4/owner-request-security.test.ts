@@ -268,6 +268,20 @@ describe("Owner request security boundary (#81)", () => {
     expect(resolved).toBe(0);
   });
 
+  it("accepts Next.js forwarded-host normalization only for the configured request host", async () => {
+    const security = createOwnerSecurityTestStub({ type: "allow", actor: OWNER });
+    const request = mutationRequest({ forwardedHost: "example.com" });
+    request.headers.set("host", "example.com");
+    const guard = await guardOwnerRequest(request, {
+      operation: "updateOwnerProfileConfiguration",
+      mode: "mutation",
+      security: { ...security, appOrigin: APP_ORIGIN },
+      traceId: "trace-next-forwarded-host",
+      instance: "/api/owner/v1/configuration/profile",
+    });
+    expect(guard.ok).toBe(true);
+  });
+
   it("authenticates reads without requiring origin or CSRF proof", async () => {
     const security = createOwnerSecurityTestStub({ type: "allow", actor: OWNER });
     const guard = await guardOwnerRequest(readRequest(), {

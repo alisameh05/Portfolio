@@ -13,45 +13,70 @@ grant shipwithali_migration to current_user;
 set role shipwithali_migration;
 
 reset role;
-grant select (id, user_id) on auth.sessions to shipwithali_migration;
-grant select (user_id, provider, provider_id) on auth.identities to shipwithali_migration;
+do $$
+begin
+  if to_regclass('auth.sessions') is null and to_regclass('auth.identities') is null then
+    -- Native PostgreSQL phase gates do not install Supabase Auth. Keep those
+    -- migration inventories usable with fail-closed session lookups; the
+    -- isolated #294 acceptance project exercises the real Auth branch below.
+    null;
+  elsif to_regclass('auth.sessions') is null or to_regclass('auth.identities') is null then
+    raise exception using errcode = '3F000', message = 'Supabase Auth schema is incomplete';
+  else
+    execute 'grant select (id, user_id) on auth.sessions to shipwithali_migration';
+    execute 'grant select (user_id, provider, provider_id) on auth.identities to shipwithali_migration';
+  end if;
+end;
+$$;
 set role shipwithali_migration;
 
 create policy owner_links_migration_select_policy on identity_access.owner_links
   for select to shipwithali_migration using (true);
 
-create or replace function identity_access.owner_session_is_active(p_session_id uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = pg_catalog, auth
-as $$
-  select exists (select 1 from auth.sessions as s where s.id = p_session_id)
+do $$
+begin
+  if to_regclass('auth.sessions') is null then
+    execute $function$
+      create or replace function identity_access.owner_session_is_active(p_session_id uuid)
+      returns boolean language sql stable security definer
+      set search_path = pg_catalog
+      as 'select false'
+    $function$;
+    execute $function$
+      create or replace function identity_access.resolve_owner_session_identity(
+        p_user_id uuid, p_session_id uuid
+      ) returns table(provider text, subject text, owner_id uuid)
+      language sql stable security definer
+      set search_path = pg_catalog
+      as 'select null::text, null::text, null::uuid where false'
+    $function$;
+  else
+    execute $function$
+      create or replace function identity_access.owner_session_is_active(p_session_id uuid)
+      returns boolean language sql stable security definer
+      set search_path = pg_catalog, auth
+      as 'select exists (select 1 from auth.sessions as s where s.id = p_session_id)'
+    $function$;
+    execute $function$
+      create or replace function identity_access.resolve_owner_session_identity(
+        p_user_id uuid, p_session_id uuid
+      ) returns table(provider text, subject text, owner_id uuid)
+      language sql stable security definer
+      set search_path = pg_catalog, auth, identity_access
+      as 'select i.provider::text, i.provider_id::text, l.owner_id
+        from auth.sessions as s
+        join auth.identities as i on i.user_id = s.user_id and i.provider = ''github''
+        join identity_access.owner_links as l on l.github_subject = i.provider_id
+        where s.id = p_session_id and s.user_id = p_user_id'
+    $function$;
+  end if;
+end;
 $$;
 
 revoke all on function identity_access.owner_session_is_active(uuid)
   from public, anon, authenticated;
 grant execute on function identity_access.owner_session_is_active(uuid)
   to shipwithali_application;
-
-create or replace function identity_access.resolve_owner_session_identity(
-  p_user_id uuid,
-  p_session_id uuid
-)
-returns table(provider text, subject text, owner_id uuid)
-language sql
-stable
-security definer
-set search_path = pg_catalog, auth, identity_access
-as $$
-  select i.provider::text, i.provider_id::text, l.owner_id
-  from auth.sessions as s
-  join auth.identities as i on i.user_id = s.user_id and i.provider = 'github'
-  join identity_access.owner_links as l on l.github_subject = i.provider_id
-  where s.id = p_session_id
-    and s.user_id = p_user_id
-$$;
 
 revoke all on function identity_access.resolve_owner_session_identity(uuid, uuid)
   from public, anon, authenticated;

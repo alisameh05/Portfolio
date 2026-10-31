@@ -23,7 +23,13 @@ async function ensureRuntime(): Promise<void> {
     const environment = getRuntimeEnvironmentSnapshot();
     await initializeDatabaseRuntime(environment, "application");
   })();
-  await initialization;
+  const pending = initialization;
+  try {
+    await pending;
+  } catch (error) {
+    if (initialization === pending) initialization = undefined;
+    throw error;
+  }
 }
 
 function unavailable(request: Request): Response {
