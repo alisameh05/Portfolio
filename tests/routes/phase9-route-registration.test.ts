@@ -207,6 +207,8 @@ describe("Phase 9 guarded route registration (#293)", () => {
       "missing-ticket", "missing-execution-result", "invalid-source-tree", "invalid-migration-inventory",
     ]));
     expect(validatePhase9EvidenceDescriptor(valid, valid)).toEqual([]);
+    expect(validatePhase9EvidenceDescriptor({ ...valid, predecessors: { verdict: "pass", blockers: [{ phase: 3, reasons: ["stale"] }] } }, valid))
+      .toContain("passing-prerequisites-have-blockers");
     expect(validatePhase9EvidenceDescriptor(valid, { ...valid, source: { ...valid.source, treeSha256: "f".repeat(64) } }))
       .toContain("stale-source-tree");
     expect(validatePhase9EvidenceDescriptor({ ...valid, run: { ...valid.run,

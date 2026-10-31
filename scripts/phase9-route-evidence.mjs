@@ -73,6 +73,9 @@ export function validatePhase9EvidenceDescriptor(descriptor, expected = {}) {
       (!Array.isArray(descriptor.predecessors.blockers) || descriptor.predecessors.blockers.length === 0 ||
        descriptor.predecessors.blockers.some((blocker) => !Number.isInteger(blocker.phase) || !Array.isArray(blocker.reasons) || blocker.reasons.length === 0))) {
     add("blocked-prerequisites-not-named");
+  } else if (descriptor.predecessors?.verdict === "pass" &&
+      (!Array.isArray(descriptor.predecessors.blockers) || descriptor.predecessors.blockers.length !== 0)) {
+    add("passing-prerequisites-have-blockers");
   } else if (!descriptor.predecessors || !["pass", "blocked"].includes(descriptor.predecessors.verdict)) {
     add("missing-prerequisite-verdict");
   }
