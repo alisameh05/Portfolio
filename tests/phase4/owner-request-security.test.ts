@@ -99,6 +99,39 @@ describe("Owner request security boundary (#81)", () => {
     expect(guard.actor).toEqual(OWNER);
   });
 
+  it("scopes the limiter subject to the verified Owner and operation", async () => {
+    const base = createOwnerSecurityTestStub({ type: "allow", actor: OWNER });
+    const subjects: string[] = [];
+    const guard = await guardOwnerRequest(mutationRequest(), {
+      operation: "updateOwnerProfileConfiguration",
+      mode: "mutation",
+      security: { ...base, appOrigin: APP_ORIGIN, rateLimit: { async check(subject) {
+        subjects.push(subject);
+        return { allowed: true };
+      } } },
+      traceId: "trace-rate-limit-scope",
+      instance: "/api/owner/v1/configuration/profile",
+    });
+    expect(guard.ok).toBe(true);
+    expect(subjects).toEqual([`owner_session:${OWNER.ownerId}:updateOwnerProfileConfiguration`]);
+  });
+
+  it("fails closed when the rate limiter is missing", async () => {
+    const base = createOwnerSecurityTestStub({ type: "allow", actor: OWNER });
+    const security = { ...base, appOrigin: APP_ORIGIN, rateLimit: undefined } as unknown as typeof base;
+    const guard = await guardOwnerRequest(mutationRequest(), {
+      operation: "updateOwnerProfileConfiguration",
+      mode: "mutation",
+      security,
+      traceId: "trace-rate-limit-missing",
+      instance: "/api/owner/v1/configuration/profile",
+    });
+    expect(guard.ok).toBe(false);
+    if (guard.ok) return;
+    expect(guard.response.status).toBe(503);
+    expect((await guard.response.json()).code).toBe("temporarily_unavailable");
+  });
+
   it("rejects mutations without a session cookie as 401 before dispatch", async () => {
     const security = createOwnerSecurityTestStub({ type: "allow", actor: OWNER });
     let dispatched = 0;

@@ -49,7 +49,9 @@ import type { OwnerIdentity } from "../domain/index.js";
 
 export interface TrustedProviderIdentity {
   readonly provider: string;
+  /** Immutable provider subject, which may differ from the Supabase user UUID in JWT `sub`. */
   readonly subject: string;
+  readonly ownerId?: string;
 }
 
 export interface OwnerSessionAdapterDeps {
@@ -61,7 +63,8 @@ export interface OwnerSessionAdapterDeps {
   readonly stableOwnerId: string;
   readonly nowSeconds: () => number;
   readonly resolveProviderIdentity: (
-    subject: string,
+    userId: string,
+    sessionId: string,
   ) => Promise<TrustedProviderIdentity | null>;
   readonly isSessionRevoked: (sessionId: string) => Promise<boolean>;
 }
@@ -213,24 +216,25 @@ export class SupabaseOwnerSessionAdapter implements AuthProviderPort {
 
     let identity: TrustedProviderIdentity | null;
     try {
-      identity = await this.deps.resolveProviderIdentity(subject);
+      identity = await this.deps.resolveProviderIdentity(subject, sessionId);
     } catch {
       return err(unavailable("AUTH_PROVIDER_UNAVAILABLE"));
     }
     if (
       identity === null ||
       identity.provider !== "github" ||
-      identity.subject !== subject
+      identity.subject.length === 0 ||
+      (identity.ownerId !== undefined && identity.ownerId !== this.deps.stableOwnerId)
     ) {
       return err(forbidden("UNTRUSTED_PROVIDER_IDENTITY"));
     }
-    if (!this.deps.ownerAllowlist.includes(subject)) {
+    if (!this.deps.ownerAllowlist.includes(identity.subject)) {
       return err(forbidden("NOT_OWNER"));
     }
 
     return ok({
       ownerId: this.deps.stableOwnerId as StableId<"Owner">,
-      githubSubject: subject,
+      githubSubject: identity.subject,
       sessionId,
     });
   }

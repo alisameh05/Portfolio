@@ -1,7 +1,7 @@
 /**
  * owner-security.ts — Phase 4 #81 shared verified-actor boundary.
  *
- * One shared guard for all thirty-nine existing Owner HTTP entrypoints. It
+ * One shared guard for the current Owner HTTP entrypoints. It
  * replaces the deterministic Phase 2 placeholder Owner construction that lived
  * in every owner adapter: handlers resolve the verified Owner actor here and
  * never fabricate one.
@@ -20,7 +20,7 @@
  *    request — application access and idempotency replay included, not just
  *    login. Reads neither mutate nor issue identity: this guard is pure
  *    verification.
- * 5. Apply the purpose-limited rate-limit check (`owner_session:<operation>`);
+ * 5. Verify exact Origin and CSRF proof for mutations before rate limiting.
  *    denial is 429 with `Retry-After`, limiter outage fails closed to 503.
  *    No new anti-abuse subsystem or Redis is introduced: the existing
  *    `rate_limited` rejection seam carries the verdict.
@@ -76,7 +76,7 @@ export const OWNER_SESSION_MAX_AGE_SECONDS = 3600;
 
 const CSRF_PROOF_PATTERN = /^[\x21-\x7E]{8,256}$/;
 
-/** Purpose-limited rate-limit seam keyed by verification purpose + operation. */
+/** Required rate-limit seam keyed by verified Owner and operation. */
 export interface OwnerRateLimitCheck {
   check(
     subject: string,
@@ -86,8 +86,8 @@ export interface OwnerRateLimitCheck {
 /**
  * Injected security dependencies. The composition root supplies the exact
  * configured application origin and the Identity and Access service; tests
- * inject deterministic fakes. The rate-limit hook is optional and defaults
- * to allow — deployments inject real limiting.
+ * inject deterministic fakes. Rate limiting is required and has no
+ * default-allow behavior.
  */
 export interface OwnerRequestSecurity {
   readonly appOrigin: string;
@@ -95,7 +95,7 @@ export interface OwnerRequestSecurity {
     IdentityAccessService,
     "resolveActorContext" | "authorizeOperation"
   >;
-  readonly rateLimit?: OwnerRateLimitCheck | undefined;
+  readonly rateLimit: OwnerRateLimitCheck;
 }
 
 export type OwnerGuardMode = "mutation" | "read";
@@ -248,44 +248,6 @@ export async function guardOwnerRequest(
     return { ok: false, response };
   }
 
-  if (security.rateLimit !== undefined) {
-    let verdict: { readonly allowed: boolean; readonly retryAfterSeconds?: number };
-    try {
-      verdict = await security.rateLimit.check(`owner_session:${operation}`);
-    } catch (error) {
-      const rejection: Rejection = {
-        kind: "temporarily_unavailable",
-        code: "RATE_LIMIT_UNAVAILABLE",
-      };
-      const response = rejectionToProblem(rejection, traceId, instance);
-      logger?.warn("request.rejected", {
-        traceId,
-        status: response.status,
-        code: rejection.code,
-      });
-      void error;
-      return { ok: false, response };
-    }
-    if (!verdict.allowed) {
-      const retryAfterSeconds = Number.isSafeInteger(verdict.retryAfterSeconds) &&
-        (verdict.retryAfterSeconds ?? -1) >= 0
-        ? (verdict.retryAfterSeconds as number)
-        : 60;
-      const rejection: Rejection = {
-        kind: "rate_limited",
-        code: "RATE_LIMIT_EXCEEDED",
-        retryAfterSeconds,
-      };
-      const response = rejectionToProblem(rejection, traceId, instance);
-      logger?.warn("request.rejected", {
-        traceId,
-        status: response.status,
-        code: rejection.code,
-      });
-      return { ok: false, response };
-    }
-  }
-
   if (mode === "mutation") {
     if (request.headers.get("origin") !== security.appOrigin) {
       return {
@@ -299,6 +261,26 @@ export async function guardOwnerRequest(
         response: forbiddenResponse("CSRF_PROOF_INVALID", traceId, instance, logger),
       };
     }
+  }
+
+  let verdict: { readonly allowed: boolean; readonly retryAfterSeconds?: number };
+  try {
+    verdict = await security.rateLimit.check(`owner_session:${resolved.value.ownerId}:${operation}`);
+  } catch {
+    const rejection: Rejection = { kind: "temporarily_unavailable", code: "RATE_LIMIT_UNAVAILABLE" };
+    const response = rejectionToProblem(rejection, traceId, instance);
+    logger?.warn("request.rejected", { traceId, status: response.status, code: rejection.code });
+    return { ok: false, response };
+  }
+  if (!verdict.allowed) {
+    const retryAfterSeconds = Number.isSafeInteger(verdict.retryAfterSeconds) &&
+      (verdict.retryAfterSeconds ?? 0) > 0
+      ? Math.min(3600, verdict.retryAfterSeconds as number)
+      : 60;
+    const rejection: Rejection = { kind: "rate_limited", code: "RATE_LIMIT_EXCEEDED", retryAfterSeconds };
+    const response = rejectionToProblem(rejection, traceId, instance);
+    logger?.warn("request.rejected", { traceId, status: response.status, code: rejection.code });
+    return { ok: false, response };
   }
 
   return { ok: true, actor: resolved.value };
@@ -400,6 +382,7 @@ export function createOwnerSecurityTestStub(
             return decideAuthorization(query);
           },
         },
+        rateLimit: { async check() { return { allowed: true }; } },
       };
     case "deny":
       return {
@@ -412,6 +395,7 @@ export function createOwnerSecurityTestStub(
             return err(mode.rejection);
           },
         },
+        rateLimit: { async check() { return { allowed: true }; } },
       };
     case "rate-limited":
       return {

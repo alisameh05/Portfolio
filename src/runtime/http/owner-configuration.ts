@@ -48,6 +48,7 @@ import type { ContactChannel } from "../../modules/portfolio-configuration/index
 import { createCorrelation, type Logger } from "../ports.js";
 import {
   guardOwnerRequest,
+  OWNER_PRIVATE_RESPONSE_HEADERS,
   type OwnerRequestSecurity,
 } from "./owner-security.js";
 import {
@@ -135,10 +136,39 @@ async function readJsonBody(request: Request): Promise<
   | { readonly ok: false }
 > {
   try {
-    return { ok: true, value: (await request.json()) as unknown };
+    const contentType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+    if (contentType !== "application/json") return { ok: false };
+    const declaredLength = request.headers.get("content-length");
+    if (declaredLength !== null && (!/^\d+$/.test(declaredLength) || Number(declaredLength) > 65_536)) {
+      return { ok: false };
+    }
+    if (request.body === null) return { ok: false };
+    const reader = request.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let byteLength = 0;
+    while (true) {
+      const part = await reader.read();
+      if (part.done) break;
+      byteLength += part.value.byteLength;
+      if (byteLength > 65_536) {
+        await reader.cancel();
+        return { ok: false };
+      }
+      chunks.push(part.value);
+    }
+    const bytes = new Uint8Array(byteLength);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    return { ok: true, value: JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as unknown };
   } catch {
     return { ok: false };
   }
+}
+
+function privateNoStore(response: Response): Response {
+  const headers = new Headers(response.headers);
+  for (const [name, value] of Object.entries(OWNER_PRIVATE_RESPONSE_HEADERS)) headers.set(name, value);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
 function reject(
@@ -375,13 +405,16 @@ async function dispatchReceipt(
 
 
 export function handleUpdateOwnerProfileConfiguration(request: Request, deps: OwnerConfigurationAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-configuration", () => handleUpdateOwnerProfileConfigurationUnobserved(request, deps), deps.logger);
+  return observeHttpRequest("owner-configuration", () => handleUpdateOwnerProfileConfigurationUnobserved(request, deps), deps.logger)
+    .then(privateNoStore);
 }
 
 export function handleUpdateOwnerContactChannels(request: Request, deps: OwnerConfigurationAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-configuration", () => handleUpdateOwnerContactChannelsUnobserved(request, deps), deps.logger);
+  return observeHttpRequest("owner-configuration", () => handleUpdateOwnerContactChannelsUnobserved(request, deps), deps.logger)
+    .then(privateNoStore);
 }
 
 export function handleUpdateOwnerGlobalProjectCta(request: Request, deps: OwnerConfigurationAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-configuration", () => handleUpdateOwnerGlobalProjectCtaUnobserved(request, deps), deps.logger);
+  return observeHttpRequest("owner-configuration", () => handleUpdateOwnerGlobalProjectCtaUnobserved(request, deps), deps.logger)
+    .then(privateNoStore);
 }

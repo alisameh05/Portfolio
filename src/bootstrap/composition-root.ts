@@ -24,7 +24,8 @@ import {
 import { RuntimeConfigError } from "./configuration.js";
 import type { OperationsPersistencePorts } from "../modules/portability-operations/application/index.js";
 import type { OwnerExportApplicationService } from "../modules/portability-operations/index.js";
-import type { OwnerConfigurationApplicationService } from "../runtime/http/owner-configuration.js";
+import type { OwnerConfigurationApplicationService, OwnerConfigurationAdapterDeps } from "../runtime/http/owner-configuration.js";
+import type { OwnerRequestSecurity } from "../runtime/http/owner-security.js";
 import type { ContentAuthoringService } from "../modules/content-publishing/application/authoring.js";
 import type { MediaAcceptancePort } from "../modules/content-publishing/application/service.js";
 import type { OwnerProjectApplicationService } from "../runtime/http/owner-project.js";
@@ -43,6 +44,7 @@ import type { InteractionModerationService, FunctionalInteractionContextPort } f
 import { createPhase7DueWorkWorker } from "./phase7-due-work-worker.js";
 import { isValidPhase8DueWorkBudget, phase8DueWorkBudgetFromEnvironment, type Phase8DueWorkBudget } from "../runtime/phase8-due-work-control.js";
 import { createOperationsReadiness, type OptionalOperationsCapabilityProbe } from "../modules/portability-operations/index.js";
+import { sql } from "kysely";
 
 export interface ReactionRuntimeServices {
   readonly scope: { readonly kind: "portfolio"; readonly portfolioId: StableId<"Portfolio"> };
@@ -74,6 +76,7 @@ let currentOperations: OperationsPersistencePorts | undefined;
 let currentOwnerExport: OwnerExportApplicationService | undefined;
 let currentOwnerExportAssembly: ReturnType<typeof import("../modules/portability-operations/application/owner-export-assembly.js").createOwnerExportAssemblyService> | undefined;
 let currentOwnerConfiguration: OwnerConfigurationApplicationService | undefined;
+let currentOwnerRequestSecurity: OwnerRequestSecurity | undefined;
 let currentContentAuthoring: ContentAuthoringService | undefined;
 let currentOwnerTaxonomy: OwnerTaxonomyApplicationService | undefined;
 let currentPublicDiscovery: PublicDiscoveryService | undefined;
@@ -173,6 +176,7 @@ export interface DatabaseRuntimeDependencies {
   readonly ownerExport?: OwnerExportApplicationService;
   readonly ownerExportAssembly?: ReturnType<typeof import("../modules/portability-operations/application/owner-export-assembly.js").createOwnerExportAssemblyService>;
   readonly ownerConfiguration?: OwnerConfigurationApplicationService;
+  readonly ownerRequestSecurity?: OwnerRequestSecurity;
   readonly contentAuthoring?: ContentAuthoringService;
   readonly ownerTaxonomy?: OwnerTaxonomyApplicationService;
   readonly publicDiscovery?: PublicDiscoveryService;
@@ -185,6 +189,7 @@ export interface DatabaseRuntimeDependencies {
   readonly readiness: ReadinessCheck;
   /** Required identity validation supplied by an assembled identity adapter. */
   readonly identityReadiness: ReadinessCheck;
+  readonly ownerHttpReadiness?: ReadinessCheck;
   /** Capability failures are reported separately and never gate safe core reads. */
   readonly capabilityReadiness?: readonly OptionalOperationsCapabilityProbe[];
 }
@@ -283,6 +288,30 @@ export async function initializeDatabaseRuntime(
             } });
         const database = createPostgresRuntimeDatabase(databaseUrl);
         const operations = createPostgresOperationsPersistence(database.database);
+        let ownerRequestSecurity: OwnerRequestSecurity | undefined;
+        if (runtimeKind === "application") {
+          if (configuredScope === undefined || !configuredScope.ownerId.ok) {
+            throw new RuntimeConfigError("OWNER_ID", "must be configured for Owner HTTP authorization");
+          }
+          const [identityAccess, identityAdapters, ownerRateLimit] = await Promise.all([
+            import("../modules/identity-access/application/index.js"),
+            import("../modules/identity-access/adapters/index.js"),
+            import("../runtime/http/owner-postgres-rate-limit.js"),
+          ]);
+          const ownerAuthConfig = identityAdapters.createOwnerAuthConfig(env);
+          ownerRequestSecurity = {
+            appOrigin: new URL(config.appBaseUrl).origin,
+            identity: identityAccess.createIdentityAccessService({
+              auth: identityAdapters.createSupabaseOwnerSessionProvider({
+                config: ownerAuthConfig,
+                stableOwnerId: configuredScope.ownerId.value,
+                database: database.database,
+              }),
+              crypto: new identityAdapters.StubCryptoAdapter(),
+            }),
+            rateLimit: ownerRateLimit.createPostgresOwnerConfigurationRateLimit(database.database),
+          };
+        }
         const [{ createPostgresOwnerExportStore }, { createOwnerExportService }, { createPostgresFeedbackOwnerExportSnapshotReader },
           { createPostgresOwnerMediaExportSnapshotReader }, { projectFeedbackOwnerExportSnapshot }, { matchesOwnerExportModerationFacts }] = await Promise.all([
           import("../modules/portability-operations/adapters/postgres-owner-export-store.js"),
@@ -944,6 +973,19 @@ export async function initializeDatabaseRuntime(
             rejection: { rejectOwnerMediaAsset: mediaRejection.rejectOwnerMediaAsset },
           });
         }
+        const ownerHttpReadiness: ReadinessCheck | undefined = runtimeKind === "application"
+          ? { name: "owner-configuration-http", async check() {
+              if (ownerRequestSecurity === undefined || ownerConfiguration === undefined) return false;
+              const result = await sql<{ readonly session_identity: boolean; readonly session_revocation: boolean; readonly configuration_limit: boolean }>`
+                select
+                  to_regprocedure('identity_access.resolve_owner_session_identity(uuid,uuid)') is not null as session_identity,
+                  to_regprocedure('identity_access.owner_session_is_active(uuid)') is not null as session_revocation,
+                  to_regprocedure('identity_access.check_owner_configuration_rate_limit(text,text)') is not null as configuration_limit
+              `.execute(database.database);
+              const row = result.rows[0];
+              return row?.session_identity === true && row.session_revocation === true && row.configuration_limit === true;
+            } }
+          : undefined;
         return {
           operations,
           ...(ownerExportService === undefined ? {} : { ownerExport: ownerExportService }),
@@ -958,6 +1000,8 @@ export async function initializeDatabaseRuntime(
           ...(consent === undefined ? {} : { consent }),
           ...(eventIngestion === undefined ? {} : { eventIngestion }),
           ...(ownerConfiguration === undefined ? {} : { ownerConfiguration }),
+          ...(ownerRequestSecurity === undefined ? {} : { ownerRequestSecurity }),
+          ...(ownerHttpReadiness === undefined ? {} : { ownerHttpReadiness }),
           ...(contentAuthoring === undefined ? {} : { contentAuthoring }),
           ...(ownerTaxonomy === undefined ? {} : { ownerTaxonomy }),
           ...(publicDiscovery === undefined ? {} : { publicDiscovery }),
@@ -978,6 +1022,7 @@ export async function initializeDatabaseRuntime(
         return await (options.identityReadiness ?? dependencies.identityReadiness)?.check() === true;
       } },
       { name: "database", check: () => dependencies.readiness.check() },
+      ...(runtimeKind === "application" ? [{ name: "owner-configuration-http", check: () => dependencies.ownerHttpReadiness?.check() ?? false }] : []),
     ], optional: dependencies.capabilityReadiness ?? [], timeoutMs: 2_000 });
     let ready = false;
     try {
@@ -1009,6 +1054,7 @@ export async function initializeDatabaseRuntime(
     currentConsent = dependencies.consent;
     currentEventIngestion = dependencies.eventIngestion;
     currentOwnerConfiguration = dependencies.ownerConfiguration;
+    currentOwnerRequestSecurity = dependencies.ownerRequestSecurity;
     currentContentAuthoring = dependencies.contentAuthoring;
     currentOwnerTaxonomy = dependencies.ownerTaxonomy;
     currentPublicDiscovery = dependencies.publicDiscovery;
@@ -1064,6 +1110,14 @@ export async function getOwnerConfigurationApplicationService(): Promise<OwnerCo
   if (currentOwnerConfiguration !== undefined) return currentOwnerConfiguration;
   const { createProductionOwnerConfigurationService } = await import("../runtime/fakes/owner-configuration.js");
   return createProductionOwnerConfigurationService();
+}
+
+/** Strict route boundary: production configuration HTTP never falls back to a fake service or allow-all security. */
+export function getOwnerConfigurationHttpDependencies(): OwnerConfigurationAdapterDeps {
+  if (currentOwnerConfiguration === undefined || currentOwnerRequestSecurity === undefined) {
+    throw new Error("OWNER_CONFIGURATION_HTTP_NOT_CONFIGURED");
+  }
+  return { service: currentOwnerConfiguration, security: currentOwnerRequestSecurity };
 }
 
 /** Only the configured PostgreSQL application assembly can activate content authoring. */
@@ -1235,6 +1289,7 @@ export function resetRuntimeForTests(): void {
   currentOwnerAggregateReport = undefined;
   currentInteractionSummary = undefined;
   currentOwnerConfiguration = undefined;
+  currentOwnerRequestSecurity = undefined;
   currentContentAuthoring = undefined;
   currentOwnerTaxonomy = undefined;
   currentPublicDiscovery = undefined;
