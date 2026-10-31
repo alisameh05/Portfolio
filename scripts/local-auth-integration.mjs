@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
+import { createServer } from "node:net";
 import { randomUUID } from "node:crypto";
 import { copyFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -30,14 +31,31 @@ export function requireExecutedTests(report) {
   }
 }
 
-export function isolatedConfig(source, id) {
+export function isolatedConfig(source, id, ports = { api: 56321, db: 56322, shadow: 56320 }) {
   return source
     .replace(/^project_id = .*$/m, `project_id = "${id}"`)
     .replace(/(\[api\]\s*)enabled = false/, "$1enabled = true")
     .replace(/(\[auth\]\s*)enabled = false/, "$1enabled = true")
-    .replace(/^port = 54321$/m, "port = 56321")
-    .replace(/^port = 54322$/m, "port = 56322")
-    .replace(/^shadow_port = 54320$/m, "shadow_port = 56320");
+    .replace(/^port = 54321$/m, `port = ${ports.api}`)
+    .replace(/^port = 54322$/m, `port = ${ports.db}`)
+    .replace(/^shadow_port = 54320$/m, `shadow_port = ${ports.shadow}`);
+}
+
+async function availablePorts(count) {
+  const servers = [];
+  try {
+    while (servers.length < count) {
+      const server = createServer();
+      await new Promise((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, "0.0.0.0", resolve);
+      });
+      servers.push(server);
+    }
+    return servers.map((server) => server.address().port);
+  } finally {
+    await Promise.all(servers.map((server) => new Promise((resolve) => server.close(resolve))));
+  }
 }
 
 export function localEnvironment(source = process.env) {
@@ -48,11 +66,13 @@ export function localEnvironment(source = process.env) {
   return env;
 }
 
-export function main() {
+export async function main() {
   requireDocker();
   const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
   const installed = JSON.parse(readFileSync(join(ROOT, "node_modules/supabase/package.json"), "utf8"));
   if (installed.version !== pkg.devDependencies.supabase) throw new Error("LOCAL_AUTH_CLI_PIN_MISMATCH");
+  const [apiPort, dbPort, shadowPort] = await availablePorts(3);
+  const ports = { api: apiPort, db: dbPort, shadow: shadowPort };
   const workdir = mkdtempSync(join(tmpdir(), "shipwithali-auth-"));
   const id = `shipwithali-auth-${randomUUID().replaceAll("-", "").slice(0, 16)}`;
   const env = localEnvironment();
@@ -70,7 +90,7 @@ export function main() {
   try {
     const dir = join(workdir, "supabase");
     mkdirSync(dir);
-    writeFileSync(join(dir, "config.toml"), isolatedConfig(readFileSync(join(ROOT, "supabase/config.toml"), "utf8"), id));
+    writeFileSync(join(dir, "config.toml"), isolatedConfig(readFileSync(join(ROOT, "supabase/config.toml"), "utf8"), id, ports));
     cpSync(join(ROOT, "supabase/migrations"), join(dir, "migrations"), { recursive: true });
     copyFileSync(join(ROOT, "supabase/seed.sql"), join(dir, "seed.sql"));
     const created = spawnSync("docker", ["network", "create", "-o", "com.docker.network.bridge.host_binding_ipv4=127.0.0.1", network], {
@@ -86,7 +106,7 @@ export function main() {
     });
     const status = JSON.parse(invoke(["status", "-o", "json"], 30_000));
     const url = new URL(status.API_URL);
-    if (url.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(url.hostname) || url.port !== "56321") {
+    if (url.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(url.hostname) || url.port !== String(apiPort)) {
       throw new Error("LOCAL_AUTH_ENDPOINT_NOT_ISOLATED");
     }
     for (const key of ["ANON_KEY", "SERVICE_ROLE_KEY"]) {
@@ -95,7 +115,7 @@ export function main() {
     const reportPath = join(workdir, "test-report.json");
     const result = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), "run",
       "tests/phase4/local-auth-token.integration.test.ts", "--reporter=json", `--outputFile=${reportPath}`], {
-      cwd: ROOT, env: { ...env, PHASE4_REQUIRE_LOCAL_AUTH: "1", PHASE4_LOCAL_AUTH_URL: status.API_URL,
+      cwd: ROOT, env: { ...env, PHASE4_REQUIRE_LOCAL_AUTH: "1", PHASE4_LOCAL_AUTH_EXPECTED_PORT: String(apiPort), PHASE4_LOCAL_AUTH_URL: status.API_URL,
         PHASE4_LOCAL_AUTH_ANON_KEY: status.ANON_KEY, PHASE4_LOCAL_AUTH_SERVICE_ROLE_KEY: status.SERVICE_ROLE_KEY },
       encoding: "utf8", timeout: 90_000, stdio: ["ignore", "pipe", "pipe"],
     });
@@ -129,7 +149,7 @@ export function main() {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try { main(); } catch (error) {
+  try { await main(); } catch (error) {
     console.error(error instanceof Error && error.message.startsWith("LOCAL_AUTH_") ? error.message : "LOCAL_AUTH_RUNNER_FAILED: raw diagnostics suppressed to protect credentials.");
     process.exitCode = 1;
   }
