@@ -169,7 +169,11 @@ async function main() {
       OWNER_ID: ownerId, PORTFOLIO_ID: portfolioId,
     };
     stage = "tests";
-    const test = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), "run",
+    // Keep draining the live servers' pipes while tests send HTTP requests.
+    // Blocking this event loop can fill a server's stdout pipe on Linux and
+    // stall its responses until the test's request deadline expires.
+    const test = await new Promise((resolve) => {
+      const child = spawn(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), "run",
       "--config", "vitest.owner-configuration-network.config.ts",
       "tests/runtime/owner-configuration-network.integration.test.ts",
       "tests/runtime/owner-configuration-http-bootstrap.test.ts",
@@ -178,7 +182,15 @@ async function main() {
       "tests/phase4/owner-session-auth.test.ts",
       "tests/phase8/operations-observability.test.ts",
       "--reporter=json", "--reporter=verbose", `--outputFile.json=${reportPath}`], {
-      cwd: ROOT, env: testEnv, encoding: "utf8", timeout: 240_000, stdio: ["ignore", "pipe", "pipe"],
+        cwd: ROOT, env: testEnv, timeout: 240_000, stdio: ["ignore", "pipe", "pipe"], windowsHide: true,
+      });
+      let stdout = "";
+      let stderr = "";
+      let error;
+      child.stdout.on("data", (chunk) => { stdout += String(chunk); });
+      child.stderr.on("data", (chunk) => { stderr += String(chunk); });
+      child.on("error", (cause) => { error = cause; });
+      child.on("close", (status) => resolve({ status, error, stdout, stderr }));
     });
     const report = JSON.parse(readFileSync(reportPath, "utf8"));
     if (test.error || test.status !== 0 || report.success !== true || report.numPassedTests <= 3 ||
