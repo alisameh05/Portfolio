@@ -82,6 +82,8 @@
     "phase6:gate": "node scripts/phase6-gate.mjs",
     "test:phase6:gate": "node --test tests/tooling/phase6-gate.test.mjs",
     "phase7:gate": "node scripts/phase7-gate.mjs",
+    "phase8:gate": "node scripts/phase8-gate.mjs",
+    "test:phase8:gate": "node --test tests/tooling/phase8-gate.test.mjs",
     "phase8:prerequisites": "node scripts/phase8-prerequisite-qualification.mjs",
     "phase8:qualify": "node scripts/phase8-qualify.mjs",
     "prephase8:focus:integrated": "npm run validation:ready",

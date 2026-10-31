@@ -23,6 +23,10 @@ test("isolated Auth config preserves signup restrictions and leaves source untou
   assert.match(config, /port = 56321/);
   assert.match(config, /port = 56322/);
   assert.match(config, /shadow_port = 56320/);
+  const dynamicallyAllocated = isolatedConfig(source, "test-auth-dynamic", { api: 54010, db: 54011, shadow: 54012 });
+  assert.match(dynamicallyAllocated, /port = 54010/);
+  assert.match(dynamicallyAllocated, /port = 54011/);
+  assert.match(dynamicallyAllocated, /shadow_port = 54012/);
   assert.equal((config.match(/enable_signup = false/g) ?? []).length, (source.match(/enable_signup = false/g) ?? []).length);
   assert.match(config, /enable_anonymous_sign_ins = false/);
   assert.match(source, /\[auth\]\s*enabled = false/);
