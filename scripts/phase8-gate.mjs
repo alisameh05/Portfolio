@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 import { randomUUID } from "node:crypto";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { observeRuntime, verifyEnvironment } from "./validation-environment.mjs";
+import { observeRuntime, verifyEnvironment, fingerprint } from "./validation-environment.mjs";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 import { countReportedSkips, evaluatePhase8Gate, PHASE8_GATE_COMPONENTS, PHASE8_GATE_CRITERION_MATRIX, PHASE8_GATE_REQUIRED_CHECKS, PHASE8_GATE_SCENARIOS, readBoundArtifact } from "./phase8-gate-support.mjs";
 
@@ -19,14 +19,15 @@ const COMMANDS = [
   ["protected-trigger", "phase8:focus:protected-trigger"], ["owner-exports", "phase8:focus:exports"],
   ["taxonomy", "phase8:focus:taxonomy"], ["analytics-export", "phase8:focus:analytics-export"],
   ["reference-import", "phase8:focus:reference-import"], ["operations-observability", "phase8:focus:operations-observability"],
-  ["incidents", "phase8:focus:incidents"], ["relational-backup", "phase8:focus:relational-backup"],
-  ["object-backup", "phase8:focus:object-backup"], ["recovery", "phase8:focus:recovery"],
+  ["incidents", "phase8:focus:incidents"], ["relational-backup", "test:phase8:relational-backup"],
+  ["object-backup", "test:phase8:object-backup"], ["recovery", "phase8:focus:recovery"],
   ["contract-verification", "contract:verify"], ["architecture", "test:arch"], ["runtime-boundary", "runtime:boundary"],
   ["lint", "lint"], ["typecheck", "typecheck"], ["production-build", "build"],
   ["gate-negative-tests", "test:phase8:gate"],
 ];
 const REPORTING_COMMANDS = new Set(["phase8-prerequisites", "integrated", "retry-recovery", "retention-passes", "protected-trigger", "owner-exports",
-  "taxonomy", "analytics-export", "reference-import", "operations-observability", "incidents", "recovery", "gate-negative-tests"]);
+  "taxonomy", "analytics-export", "reference-import", "operations-observability", "incidents", "relational-backup", "object-backup", "recovery", "gate-negative-tests"]);
+function readJson(path) { try { return JSON.parse(readFileSync(join(ROOT, path), "utf8")); } catch { return null; } }
 function git(args) { return spawnSync("git", args, { cwd: ROOT, encoding: "utf8", windowsHide: true }).stdout.trim(); }
 function run(name, script) {
   const startedAt = new Date().toISOString();
@@ -49,12 +50,14 @@ async function main() {
   mkdirSync(LOGS, { recursive: true }); rmSync(REPORT, { force: true });
   const runId = randomUUID(), startedAt = new Date().toISOString(), sourceRevision = git(["rev-parse", "HEAD"]), sourceTreeSha256 = workingTreeSourceSha256();
   const initialArtifactDigests = new Map(PHASE8_GATE_COMPONENTS.map((component) => {
-    try { return [component.id, createHash("sha256").update(readFileSync(join(ROOT, component.path))).digest("hex")]; }
+    try { return [component.id, createHash("sha256").update(Buffer.concat(component.paths.map((path) => readFileSync(join(ROOT, path))))).digest("hex")]; }
     catch { return [component.id, null]; }
   }));
   const runtime = observeRuntime();
   const packageJson = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
   const readinessErrors = verifyEnvironment(ROOT, runtime);
+  const installEvidence = { expectedFingerprint: fingerprint(ROOT),
+    actualFingerprint: readJson("node_modules/.shipwithali-validation.json")?.fingerprint ?? null };
   const checks = [{ name: "validation-ready", executed: true, passed: readinessErrors.length === 0, exitCode: readinessErrors.length ? 1 : 0, skipped: 0 }];
   if (readinessErrors.length === 0) for (const [name, script] of COMMANDS) checks.push(run(name, script));
   const stable = git(["rev-parse", "HEAD"]) === sourceRevision && workingTreeSourceSha256() === sourceTreeSha256;
@@ -62,25 +65,62 @@ async function main() {
   const artifacts = [];
   for (const component of PHASE8_GATE_COMPONENTS) {
     try {
-      const bytes = readFileSync(join(ROOT, component.path));
+      const bytes = Buffer.concat(component.paths.map((path) => readFileSync(join(ROOT, path))));
       const digest = createHash("sha256").update(bytes).digest("hex");
       artifacts.push(readBoundArtifact(ROOT, component, { sourceRevision, sourceTreeSha256, gateRunId: runId,
-        generatedThisRun: digest !== initialArtifactDigests.get(component.id), scenarios: PHASE8_GATE_SCENARIOS.map(({ id }) => id) }));
+        gateStartedAt: startedAt, generatedThisRun: digest !== initialArtifactDigests.get(component.id), scenarios: PHASE8_GATE_SCENARIOS.map(({ id }) => id) }));
     }
-    catch { artifacts.push({ id: component.id, path: component.path, fresh: false, positiveExecution: false, aggregateSuccess: false, cleanup: false, sourceRevision: null, sourceTreeSha256: null, gateRunId: runId, sha256: "", scenarios: [] }); }
+    catch { artifacts.push({ id: component.id, paths: component.paths, fresh: false, positiveExecution: false, aggregateSuccess: false, cleanup: false, sourceRevision: null, sourceTreeSha256: null, gateRunId: runId, sha256: "", scenarios: [], tests: [] }); }
   }
-  const readJson = (path) => { try { return JSON.parse(readFileSync(join(ROOT, path), "utf8")); } catch { return null; } };
   const integratedEvidence = readJson("evidence/phase8-integrated-verification-256.json");
   const prerequisiteEvidence = readJson("evidence/phase8-prerequisite-qualification.json");
+  const expectedMigrations = readdirSync(join(ROOT, "supabase/migrations")).filter((name) => name.endsWith(".sql")).sort().map((name) => ({
+    name, sha256: createHash("sha256").update(readFileSync(join(ROOT, "supabase/migrations", name))).digest("hex"),
+  }));
+  const walkNamed = (value, wanted, output = []) => {
+    if (!value || typeof value !== "object") return output;
+    if (Array.isArray(value)) { for (const child of value) walkNamed(child, wanted, output); return output; }
+    for (const [key, child] of Object.entries(value)) {
+      if (wanted.has(key) && child && typeof child === "object") output.push(child);
+      walkNamed(child, wanted, output);
+    }
+    return output;
+  };
+  const sourceReports = PHASE8_GATE_COMPONENTS.flatMap(({ paths }) => paths.map((path) => readJson(path)).filter(Boolean));
+  const roleEvidence = walkNamed(sourceReports, new Set(["databaseRoles", "roles", "roleMatrix"]));
+  const volumeEvidence = walkNamed(sourceReports, new Set(["volumes", "fixture", "measurements"]));
+  const namedRoles = roleEvidence.flatMap((entry) => Array.isArray(entry) ? entry : Array.isArray(entry.roles) ? entry.roles : [])
+    .map((role) => typeof role === "string" ? role : role?.role ?? role?.name).filter((role) => typeof role === "string" && role.length > 0);
+  const hasFixtureVolume = volumeEvidence.some((entry) => Object.entries(entry).some(([key, value]) =>
+    /count|bytes|volume|size|rto|rpo|elapsed|objects|records|schemas|relations|items/iu.test(key) && typeof value === "number"));
+  const serviceVersions = sourceReports.flatMap((report) => [
+    ...Object.entries(report.tools ?? {}).filter(([key, value]) => /version/iu.test(key) && typeof value === "string").map(([key, value]) => ({ source: "tools", name: key, version: value })),
+    ...Object.entries(report.services ?? {}).filter(([key, value]) => /version/iu.test(key) && typeof value === "string").map(([key, value]) => ({ source: "services", name: key, version: value })),
+    ...(typeof report.postgresVersion === "string" ? [{ source: "report", name: "postgres", version: report.postgresVersion }] : []),
+  ]);
+  const allMigrations = walkNamed(sourceReports, new Set(["migrations"])).flat();
+  const evidenceMigrationMap = new Map(allMigrations.filter((migration) => migration && migration.name && migration.sha256).map((migration) => [migration.name, migration.sha256]));
+  const migrationEvidence = expectedMigrations.map(({ name, sha256 }) => ({ name, sha256, verified: evidenceMigrationMap.get(name) === sha256 }));
   const result = evaluatePhase8Gate({ runId, startedAt, sourceRevision, sourceTreeSha256, runtime,
-    expectedRuntime: { node: packageJson.engines.node, npm: packageJson.engines.npm }, checks, artifacts, integratedEvidence, prerequisiteEvidence });
+    expectedRuntime: { node: packageJson.engines.node, npm: packageJson.engines.npm }, checks, artifacts, installEvidence, integratedEvidence, prerequisiteEvidence });
+  if (migrationEvidence.some(({ verified }) => !verified)) result.failures.push("migration-checksum-inventory-incomplete");
+  if (!namedRoles.length) result.failures.push("service-role-evidence-missing");
+  if (!hasFixtureVolume) result.failures.push("fixture-volume-evidence-missing");
+  if (!serviceVersions.some(({ name }) => /postgres|supabase|node|npm/iu.test(name))) result.failures.push("service-version-evidence-missing");
   if (!stable) result.failures.push("source-changed-during-gate");
+  result.verdict = result.failures.length ? "fail" : "pass";
   const report = { schemaVersion: 1, ticket: 257, runId, startedAt, completedAt: new Date().toISOString(), source: { revision: sourceRevision,
-    treeSha256: sourceTreeSha256, stableDuringRun: stable }, runtime, checks, artifacts, criterionMatrix: PHASE8_GATE_CRITERION_MATRIX,
-    criterionEvidence: result.criterionEvidence, requiredCheckInventory: PHASE8_GATE_REQUIRED_CHECKS, scenarios: PHASE8_GATE_SCENARIOS,
+    treeSha256: sourceTreeSha256, stableDuringRun: stable }, runtime, validationInstall: installEvidence, checks, artifacts,
+    criterionMatrix: PHASE8_GATE_CRITERION_MATRIX.map(({ id, components }) => ({ id, components })),
+    criterionEvidence: result.criterionEvidence, requiredCheckInventory: PHASE8_GATE_REQUIRED_CHECKS,
+    scenarios: PHASE8_GATE_SCENARIOS.map((scenario, index) => ({ ...scenario, ...result.scenarioEvidence[index] })),
     serviceEvidence: { tools: integratedEvidence?.tools ?? null,
-      migrations: [...new Map((integratedEvidence?.runs ?? []).flatMap((run) => (run.artifacts ?? []).flatMap((artifact) => artifact.migrations ?? []))
-        .map((migration) => [migration.name, migration])).values()],
+      migrations: migrationEvidence,
+      versions: [...new Map(serviceVersions.map((item) => [`${item.name}:${item.version}`, item])).values()],
+      roles: roleEvidence.map((entry) => ({ roles: (entry.roles ?? entry).map?.((role) => typeof role === "string" ? role : ({ role: role.role ?? role.name ?? role.id, purpose: role.purpose, privileges: role.privileges })) ?? [],
+        worker: entry.worker, application: entry.application, anon: entry.anon })),
+      fixturesAndVolumes: volumeEvidence.map((entry) => Object.fromEntries(Object.entries(entry).filter(([key, value]) =>
+        /count|bytes|volume|size|rto|rpo|elapsed|objects|records|schemas|relations|items|fixture/iu.test(key) && ["string", "number", "boolean"].includes(typeof value)))),
       fixtureAndCleanup: (integratedEvidence?.runs ?? []).map(({ id, cleanupVerified, cleanupEvidence, testNames }) => ({ id, cleanupVerified, cleanupEvidence, testNames })),
       integratedRuns: (integratedEvidence?.runs ?? []).map(({ id, success, testNames, artifacts: runArtifacts }) => ({ id, success,
         testNames, artifacts: (runArtifacts ?? []).map(({ path, sha256, passed, failed, skipped, migrations }) => ({ path, sha256, passed, failed, skipped, migrations })) })) },
