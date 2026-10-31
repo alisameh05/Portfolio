@@ -170,6 +170,7 @@ async function main() {
     };
     stage = "tests";
     const test = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), "run",
+      "--config", "vitest.owner-configuration-network.config.ts",
       "tests/runtime/owner-configuration-network.integration.test.ts",
       "tests/runtime/owner-configuration-http-bootstrap.test.ts",
       "tests/runtime/owner-configuration.test.ts",
