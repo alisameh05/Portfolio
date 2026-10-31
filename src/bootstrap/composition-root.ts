@@ -1019,10 +1019,11 @@ export async function initializeDatabaseRuntime(
     const readiness = createOperationsReadiness({ required: [
       { name: "configuration", async check() { createRuntimeConfig(env); return true; } },
       { name: "identity", async check() {
-        return await (options.identityReadiness ?? dependencies.identityReadiness)?.check() === true;
+        const identityReady = await (options.identityReadiness ?? dependencies.identityReadiness)?.check() === true;
+        const ownerHttpReady = runtimeKind !== "application" || await dependencies.ownerHttpReadiness?.check() === true;
+        return identityReady && ownerHttpReady;
       } },
       { name: "database", check: () => dependencies.readiness.check() },
-      ...(runtimeKind === "application" ? [{ name: "owner-configuration-http", check: () => dependencies.ownerHttpReadiness?.check() ?? false }] : []),
     ], optional: dependencies.capabilityReadiness ?? [], timeoutMs: 2_000 });
     let ready = false;
     try {

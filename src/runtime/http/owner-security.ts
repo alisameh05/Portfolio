@@ -237,6 +237,12 @@ export async function guardOwnerRequest(
     });
     return { ok: false, response };
   }
+  if (resolved.value.kind !== "owner") {
+    return {
+      ok: false,
+      response: forbiddenResponse("OWNER_REQUIRED", traceId, instance, logger),
+    };
+  }
 
   let authorized: Result<boolean, Rejection>;
   try {

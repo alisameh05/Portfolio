@@ -84,7 +84,11 @@ export async function main() {
     const result = spawnSync(process.execPath, [CLI, "--workdir", workdir, ...args], {
       cwd: ROOT, env: environment, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout,
     });
-    if (result.error || result.status !== 0) throw new Error(`LOCAL_AUTH_CLI_FAILED:${args[0]} (raw output suppressed to protect credentials)`);
+    if (result.error || result.status !== 0) {
+      const output = `${result.stderr ?? ""}\n${result.stdout ?? ""}`;
+      const sqlState = output.match(/SQLSTATE\s*[:=]?\s*([0-9A-Z]{5})/iu)?.[1] ?? "unknown";
+      throw new Error(`LOCAL_AUTH_CLI_FAILED:${args[0]}:${sqlState} (raw output suppressed to protect credentials)`);
+    }
     return result.stdout;
   };
   try {
