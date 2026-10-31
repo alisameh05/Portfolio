@@ -91,6 +91,7 @@ export function validatePhase9EvidenceDescriptor(descriptor, expected = {}) {
   return errors;
 }
 
+/** @param {{ executions?: Array<Record<string, any>>, predecessors?: any, cleanupVerified?: boolean, startedAt?: string, completedAt?: string, runId?: string, root?: string }} options */
 export function createPhase9EvidenceDescriptor({ executions, predecessors, cleanupVerified, startedAt, completedAt,
   runId = randomUUID(), root = ROOT } = {}) {
   const sourceBoundExecutions = executions?.map((execution) => {
@@ -161,10 +162,28 @@ export function evaluatePhase9EvidenceDescriptor(descriptor, { root = ROOT, sour
   return { accepted: errors.length === 0, errors: [...new Set(errors)], expected };
 }
 
+export function capturePhase9ExecutionIdentity(root = ROOT) {
+  return {
+    source: { revision: gitRevision(root), treeSha256: workingTreeSourceSha256() },
+    contracts: Object.fromEntries(["public", "owner"].map((surface) => [surface, {
+      path: `openapi/generated/${surface}-v1.json`,
+      sha256: sha256(readFileSync(join(root, `openapi/generated/${surface}-v1.json`))),
+    }])),
+    migrations: migrationInventory(root),
+    toolVersions: { node: process.versions.node, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? null },
+  };
+}
+
+export function verifyPhase9ExecutionIdentity(identity, root = ROOT) {
+  if (!identity || JSON.stringify(identity) !== JSON.stringify(capturePhase9ExecutionIdentity(root))) {
+    throw new Error("PHASE9_EXECUTION_IDENTITY_MISMATCH: rerun checks with an execution-time identity");
+  }
+}
 export function recordPhase9Evidence({ root = ROOT, summaryPath = "evidence/phase9-route-run-summary.json",
   prerequisitePath = "evidence/phase8-prerequisite-qualification.json",
   outputPath = "evidence/phase9-route-registration-293.json" } = {}) {
   const summary = JSON.parse(readFileSync(join(root, summaryPath), "utf8"));
+  verifyPhase9ExecutionIdentity(summary.identity, root);
   const prerequisites = JSON.parse(readFileSync(join(root, prerequisitePath), "utf8"));
   const blockers = Array.isArray(prerequisites.blockers) ? prerequisites.blockers.map((blocker) => ({
     phase: blocker.phase,
@@ -181,12 +200,18 @@ export function recordPhase9Evidence({ root = ROOT, summaryPath = "evidence/phas
     runId: summary.runId,
     root,
   });
+  descriptor.source = summary.identity.source;
+  descriptor.contracts = summary.identity.contracts;
+  descriptor.migrations = summary.identity.migrations;
+  descriptor.run.toolVersions = summary.identity.toolVersions;
   writePhase9EvidenceDescriptor(descriptor, outputPath, root);
   return descriptor;
 }
 
 if (process.argv[1]?.replaceAll("\\", "/").endsWith("scripts/phase9-route-evidence.mjs")) {
-  if (process.argv.includes("--record")) {
+  if (process.argv.includes("--start")) {
+    writeFileSync(join(ROOT, "evidence/phase9-route-run-summary.json"), JSON.stringify({ runId: randomUUID(), startedAt: new Date().toISOString(), identity: capturePhase9ExecutionIdentity(), executions: [], cleanupVerified: false }, null, 2) + "\n");
+  } else if (process.argv.includes("--record")) {
     try {
       const descriptor = recordPhase9Evidence();
       console.log(JSON.stringify({ ticket: 293, sourceRevision: descriptor.source.revision,

@@ -232,3 +232,12 @@ the failing domain check (for database era questions,
 `npm run phase3:focus:role-rls`, which now reads the declared
 `PHASE_DATABASE_CAPABILITIES` list instead of inferring the era from the
 database being checked).
+
+Phase 9 route evidence must retain the identity captured before its checks run.
+Run `node scripts/phase9-route-evidence.mjs --start` before executing the
+Phase 9 checks. This initializes `evidence/phase9-route-run-summary.json`
+with source, contract, migration and runtime identities. Populate that summary's
+execution results, completion timestamp and cleanup result after the commands
+finish, preserving its identity. Then run `npm run phase9:record-evidence`.
+Recording rejects legacy summaries without an identity and any source or runtime
+change since initialization; rerun the checks after such a change.

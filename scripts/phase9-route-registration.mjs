@@ -61,6 +61,17 @@ function exportedMethods(source) {
   const hasCanonicalRegistration = importsCanonicalRegistration(sourceFile, PHASE_ROUTE_REGISTRATION_POLICY.phase9.registrationMarker);
   const declarations = [];
   for (const statement of sourceFile.statements) {
+    if (ts.isExportDeclaration(statement)) {
+      if (!statement.exportClause) {
+        declarations.push({ method: "*", operationId: null, registered: false });
+      } else if (ts.isNamedExports(statement.exportClause)) {
+        for (const element of statement.exportClause.elements) {
+          if (HTTP_METHODS.has(element.name.text.toUpperCase())) {
+            declarations.push({ method: element.name.text.toUpperCase(), operationId: null, registered: false });
+          }
+        }
+      }
+    }
     if (ts.isFunctionDeclaration(statement) && statement.name && HTTP_METHODS.has(statement.name.text.toUpperCase()) &&
         statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)) {
       declarations.push({ method: statement.name.text.toUpperCase(), operationId: null, registered: false });
@@ -183,9 +194,9 @@ export function discoverPhase9Registrations(root = DEFAULT_ROOT) {
   };
 }
 
-export function createPhase9RouteManifest({ operations, registrations, sourceFindings = [], mode = "development",
-  expectedCounts = { public: PHASE_ROUTE_REGISTRATION_POLICY.phase9.publicOperationCount,
-    owner: PHASE_ROUTE_REGISTRATION_POLICY.phase9.ownerOperationCount } }) {
+export function createPhase9RouteManifest({ operations, registrations, sourceFindings = /** @type {{ code: string, file?: string, method?: string }[]} */ ([]), mode = "development",
+  expectedCounts = /** @type {{ public: number, owner: number }} */ ({ public: PHASE_ROUTE_REGISTRATION_POLICY.phase9.publicOperationCount,
+    owner: PHASE_ROUTE_REGISTRATION_POLICY.phase9.ownerOperationCount }) }) {
   if (!PHASE_ROUTE_REGISTRATION_POLICY.phase9.modes.includes(mode)) throw new Error(`PHASE9_ROUTE_MODE_INVALID:${mode}`);
   const invalidRegistrations = [];
   const operationById = new Map();

@@ -12,7 +12,7 @@ import { evaluateRuntimeRouteBoundary } from "../../scripts/check-runtime-bounda
 import { inspectRuntimeArchitecture } from "../../scripts/check-runtime-architecture.mjs";
 import { PHASE8_PROTECTED_DUE_WORK_HANDOFF } from "../../src/runtime/protected-due-work-trigger.js";
 import { PHASE_ROUTE_REGISTRATION_POLICY } from "../../scripts/phase-contract-registry.mjs";
-import { createPhase9EvidenceDescriptor, evaluatePhase9EvidenceDescriptor, validatePhase9EvidenceDescriptor } from "../../scripts/phase9-route-evidence.mjs";
+import { capturePhase9ExecutionIdentity, verifyPhase9ExecutionIdentity, recordPhase9Evidence, createPhase9EvidenceDescriptor, evaluatePhase9EvidenceDescriptor, validatePhase9EvidenceDescriptor } from "../../scripts/phase9-route-evidence.mjs";
 
 const ROOT = process.cwd();
 const operations = [
@@ -55,14 +55,14 @@ describe("Phase 9 guarded route registration (#293)", () => {
     const report = buildPhase9RouteManifest(ROOT, { mode: "development" });
     expect(report.declared).toHaveLength(53);
     const expectedIds = ["public-v1.json", "owner-v1.json"].flatMap((name) =>
-      Object.values(JSON.parse(readFileSync(join(ROOT, "openapi", "generated", name), "utf8")).paths)
+      Object.values((JSON.parse(readFileSync(join(ROOT, "openapi", "generated", name), "utf8")) as { paths: Record<string, Record<string, { operationId?: string }>> }).paths)
         .flatMap((pathItem: Record<string, { operationId?: string }>) => Object.values(pathItem)
           .map((operation) => operation.operationId).filter((operationId): operationId is string => typeof operationId === "string")),
     ).sort();
-    expect(report.declared.map((entry) => entry.operationId)).toEqual(expectedIds);
-    expect(new Set(report.declared.map((entry) => entry.operationId)).size).toBe(53);
-    expect(report.declared.filter((entry) => entry.surface === "public")).toHaveLength(5);
-    expect(report.declared.filter((entry) => entry.surface === "owner")).toHaveLength(48);
+    expect(report.declared.map((entry: { operationId: string }) => entry.operationId)).toEqual(expectedIds);
+    expect(new Set(report.declared.map((entry: { operationId: string }) => entry.operationId)).size).toBe(53);
+    expect(report.declared.filter((entry: { surface: string }) => entry.surface === "public")).toHaveLength(5);
+    expect(report.declared.filter((entry: { surface: string }) => entry.surface === "owner")).toHaveLength(48);
     expect(report.registered).toEqual([]);
     expect(report.pending).toHaveLength(53);
     expect(report.developmentPassed).toBe(true);
@@ -73,7 +73,7 @@ describe("Phase 9 guarded route registration (#293)", () => {
     const root = fixtureRoot();
     const report = buildPhase9RouteManifest(root, { mode: "development" });
     expect(report.declared).toHaveLength(53);
-    expect(report.registered.map((entry) => entry.operationId)).toEqual(["putProjectReaction"]);
+    expect(report.registered.map((entry: { operationId: string }) => entry.operationId)).toEqual(["putProjectReaction"]);
     expect(report.pending).toHaveLength(52);
     expect(report.protectedJobs[0]).toMatchObject({ registered: true, operationId: null, installationPhase: 10 });
     expect(report.developmentPassed).toBe(true);
@@ -82,7 +82,7 @@ describe("Phase 9 guarded route registration (#293)", () => {
 
     const inventory = buildInventory({ root, mode: "development" });
     expect(inventory.checks.every((check) => check.passed)).toBe(true);
-    expect(inventory.productRoutes.map((entry) => entry.operationId)).toEqual(["putProjectReaction"]);
+    expect(inventory.productRoutes.map((entry: { operationId: string }) => entry.operationId)).toEqual(["putProjectReaction"]);
     expect(inventory.productRoutes).toHaveLength(1);
     expect(inventory.phase9Complete).toBe(false);
 
@@ -93,7 +93,7 @@ describe("Phase 9 guarded route registration (#293)", () => {
 
     const architecture = inspectRuntimeArchitecture(root);
     expect(architecture.verdict).toBe("pass");
-    expect(architecture.phase9RouteManifest.registered.map((entry) => entry.operationId)).toEqual(["putProjectReaction"]);
+    expect(architecture.phase9RouteManifest.registered.map((entry: { operationId: string }) => entry.operationId)).toEqual(["putProjectReaction"]);
 
     expect(buildInventory({ root, mode: "foundation" }).checks.some((check) => !check.passed)).toBe(true);
     expect(evaluateRuntimeRouteBoundary(root, { mode: "foundation" }).routeRegistrationValid).toBe(false);
@@ -173,9 +173,22 @@ describe("Phase 9 guarded route registration (#293)", () => {
     expect(inspectRuntimeArchitecture(root).verdict).toBe("fail");
   });
 
+  it.each([
+    'const remove = async () => Response.json({}); export { remove as DELETE };',
+    'export { remove as DELETE } from "./other.js";',
+    'export * from "./other.js";',
+  ])("rejects indirect HTTP exports: %s", (extra) => {
+    const root = fixtureRoot();
+    const route = join(root, "src/app/api/v1/projects/[projectId]/reaction/route.ts");
+    writeFileSync(route, readFileSync(route, "utf8") + extra);
+    expect(buildPhase9RouteManifest(root).developmentPassed).toBe(false);
+    expect(buildInventory({ root }).checks.every((check) => check.passed)).toBe(false);
+    expect(evaluateRuntimeRouteBoundary(root).routeRegistrationValid).toBe(false);
+    expect(inspectRuntimeArchitecture(root).verdict).toBe("fail");
+  });
   it("counts probes and protected due work outside the 53 product contracts", () => {
     const report = buildPhase9RouteManifest(ROOT, { mode: "development" });
-    expect(report.operationalRoutes.map((route) => route.file)).toEqual([
+    expect(report.operationalRoutes.map((route: { file: string }) => route.file)).toEqual([
       "src/app/livez/route.ts", "src/app/readyz/route.ts",
     ]);
     expect(report.protectedJobs).toEqual([{ method: PHASE8_PROTECTED_DUE_WORK_HANDOFF.method,
@@ -215,6 +228,22 @@ describe("Phase 9 guarded route registration (#293)", () => {
       executions: [{ ...execution, status: "passed", failed: 1 }] } }, valid)).toContain("execution-claims-unearned-pass");
   });
 
+  it("rejects stale execution identity and legacy summaries before recording", () => {
+    const identity = capturePhase9ExecutionIdentity();
+    expect(() => verifyPhase9ExecutionIdentity(identity)).not.toThrow();
+    const source = join(ROOT, "src/runtime/http/product-route-registration.ts");
+    const original = readFileSync(source, "utf8");
+    try {
+      writeFileSync(source, original + "\n// evidence source mutation fixture\n");
+      expect(() => verifyPhase9ExecutionIdentity(identity)).toThrow("PHASE9_EXECUTION_IDENTITY_MISMATCH");
+    } finally {
+      writeFileSync(source, original);
+    }
+    const summaryPath = "evidence/phase9-legacy-summary-fixture.tmp";
+    evidenceFiles.push(join(ROOT, summaryPath));
+    writeFileSync(join(ROOT, summaryPath), JSON.stringify({ executions: [] }));
+    expect(() => recordPhase9Evidence({ summaryPath })).toThrow("PHASE9_EXECUTION_IDENTITY_MISMATCH");
+  });
   it("re-hashes named execution artifacts and fails if their bytes change", () => {
     const artifact = "evidence/phase9-evidence-descriptor-fixture.tmp";
     const artifactPath = join(ROOT, artifact);
@@ -228,7 +257,7 @@ describe("Phase 9 guarded route registration (#293)", () => {
       cleanupVerified: true,
       startedAt: now,
       completedAt: now,
-      runId: "phase9-descriptor-run-293",
+      runId: "00000000-0000-4000-8000-000000000293",
     });
     expect(evaluatePhase9EvidenceDescriptor(descriptor).accepted).toBe(true);
     writeFileSync(artifactPath, "changed output\n");
