@@ -1,4 +1,4 @@
-import { isolatedIdentityReadiness } from "../fixtures/identity-readiness.js";
+import { isolatedIdentityReadiness, isolatedOwnerAuthEnvironment } from "../fixtures/identity-readiness.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Client } from "pg";
 import { createHmac } from "node:crypto";
@@ -260,7 +260,7 @@ describe.runIf(Boolean(url))("real PostgreSQL suppression and keyset page accept
     expect(await inspect(retained)).toMatchObject({ok:true,value:{state:"pending"}});
   });
   it("standard runtime existing HTTP suppression and in-process pages use real persistence with Measurement/worker absent", async () => {
-    const project=await seed(),id=await submit(project);resetRuntimeForTests();await initializeDatabaseRuntime({NODE_ENV:"test",APP_BASE_URL:"https://example.com",DATABASE_URL:url!,PORTFOLIO_ID:portfolioId,OWNER_ID:ownerId},"application", undefined, { identityReadiness: isolatedIdentityReadiness });
+    const project=await seed(),id=await submit(project);resetRuntimeForTests();await initializeDatabaseRuntime({ ...isolatedOwnerAuthEnvironment,NODE_ENV:"test",APP_BASE_URL:"https://example.com",DATABASE_URL:url!,PORTFOLIO_ID:portfolioId,OWNER_ID:ownerId},"application", undefined, { identityReadiness: isolatedIdentityReadiness });
     const assembled=await getOwnerModerationRuntimeServices();expect((await approveHttp(id,{}, {...assembled,security:deps.security})).status).toBe(200);
     expect((await suppressHttp(id,{}, {...assembled,security:deps.security})).status).toBe(200);
     expect(await getApprovedFeedbackApplicationService().getApprovedFeedback({scope,portfolioId,projectId:project,locale:"en",correlationId:"assembled"})).toEqual({ok:true,value:{items:[],nextCursor:null}});

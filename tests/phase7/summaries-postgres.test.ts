@@ -1,4 +1,4 @@
-import { isolatedIdentityReadiness } from "../fixtures/identity-readiness.js";
+import { isolatedIdentityReadiness, isolatedOwnerAuthEnvironment } from "../fixtures/identity-readiness.js";
 import { createPostgresFeedbackSubmissionRepository } from "../../src/modules/interaction-moderation/adapters/postgres-feedback.js";
 import { createPostgresModerationRepository } from "../../src/modules/interaction-moderation/adapters/postgres-moderation.js";
 import { createFeedbackApplicationService, createOwnerFeedbackModerationService } from "../../src/modules/interaction-moderation/index.js";
@@ -306,7 +306,7 @@ describe.runIf(Boolean(url))("real current interaction summaries", () => {
   });
   it("standard runtime composes current summaries without Measurement or workers and fails closed on database loss", async () => {
     const projectId = await seed(); resetRuntimeForTests();
-    await initializeDatabaseRuntime({ NODE_ENV: "test", APP_BASE_URL: "https://example.com", DATABASE_URL: url!, PORTFOLIO_ID: portfolioId, OWNER_ID: ownerId }, "application", undefined, { identityReadiness: isolatedIdentityReadiness });
+    await initializeDatabaseRuntime({ ...isolatedOwnerAuthEnvironment, NODE_ENV: "test", APP_BASE_URL: "https://example.com", DATABASE_URL: url!, PORTFOLIO_ID: portfolioId, OWNER_ID: ownerId }, "application", undefined, { identityReadiness: isolatedIdentityReadiness });
     const service = getProjectInteractionSummaryApplicationService();
     expect(await service.getProjectAggregate({ scope, portfolioId, projectId, locale: "en", correlationId: "assembled" })).toMatchObject({ ok: true, value: { ratingState: "no-data", likesCount: 0, approvedFeedbackCount: 0 } });
     await getLifecycleCoordinator().shutdown();
