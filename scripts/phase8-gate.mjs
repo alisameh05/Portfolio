@@ -27,17 +27,41 @@ const COMMANDS = [
 ];
 const REPORTING_COMMANDS = new Set(["phase8-prerequisites", "integrated", "retry-recovery", "retention-passes", "protected-trigger", "owner-exports",
   "taxonomy", "analytics-export", "reference-import", "operations-observability", "incidents", "relational-backup", "object-backup", "recovery", "gate-negative-tests"]);
+const REPORTING_ARTIFACTS = Object.freeze({
+  "phase8-prerequisites": "evidence/phase8-prerequisite-qualification.json", integrated: "evidence/phase8-integrated-verification-256.json",
+  "retry-recovery": "evidence/phase8-retry-recovery-237.json", "retention-passes": "evidence/phase8-retention-passes-248.json",
+  "protected-trigger": "evidence/phase8-protected-trigger-249.json", "owner-exports": "evidence/phase8-owner-exports-241.json",
+  taxonomy: "evidence/phase8-owner-export-taxonomy-242.json", "analytics-export": "evidence/phase8-owner-export-analytics-246.json",
+  "reference-import": "evidence/phase8-owner-export-reference-import-250.json", "operations-observability": "evidence/phase8-operations-observability-251.json",
+  incidents: "evidence/phase8-actionable-incidents-252.json",
+});
 function readJson(path) { try { return JSON.parse(readFileSync(join(ROOT, path), "utf8")); } catch { return null; } }
+function countArtifactSkips(name) {
+  const reportPath = REPORTING_ARTIFACTS[name];
+  if (!reportPath) return null;
+  const report = readJson(reportPath);
+  if (!report) return null;
+  const counts = [];
+  const inspect = (value) => {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) { value.forEach(inspect); return; }
+    if (typeof value.skipped === "number") counts.push(value.skipped);
+    Object.values(value).forEach(inspect);
+  };
+  inspect(report);
+  return counts.length ? Math.max(...counts) : null;
+}
 function git(args) { return spawnSync("git", args, { cwd: ROOT, encoding: "utf8", windowsHide: true }).stdout.trim(); }
 function run(name, script) {
   const startedAt = new Date().toISOString();
   const entry = process.env.npm_execpath ? process.execPath : (process.platform === "win32" ? "npm.cmd" : "npm");
   const args = process.env.npm_execpath ? [process.env.npm_execpath, "run", script] : ["run", script];
-  const result = spawnSync(entry, args, { cwd: ROOT, encoding: "utf8", windowsHide: true, shell: process.platform === "win32" && !process.env.npm_execpath, timeout: 60 * 60 * 1000, maxBuffer: 64 * 1024 * 1024 });
+  const env = process.platform === "win32" ? { ...process.env, TEMP: "C:/t", TMP: "C:/t" } : process.env;
+  const result = spawnSync(entry, args, { cwd: ROOT, env, encoding: "utf8", windowsHide: true, shell: process.platform === "win32" && !process.env.npm_execpath, timeout: 60 * 60 * 1000, maxBuffer: 64 * 1024 * 1024 });
   const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
   const safe = output.replace(/(?:postgres(?:ql)?:\/\/|https?:\/\/)[^\s]+/giu, "[redacted-url]").replace(/(?:password|secret|token|service_role_key)[=: ]+[^\s]+/giu, "[redacted]");
   writeFileSync(join(LOGS, `${name}.log`), safe, "utf8");
-  const reportedSkipped = countReportedSkips(output);
+  const reportedSkipped = countReportedSkips(output) ?? countArtifactSkips(name);
   const skipped = reportedSkipped ?? (REPORTING_COMMANDS.has(name) ? null : 0);
   const aggregateReported = !REPORTING_COMMANDS.has(name) || reportedSkipped !== null;
   const passed = result.status === 0 && !result.error && aggregateReported && (skipped === 0 || skipped === null && !REPORTING_COMMANDS.has(name));

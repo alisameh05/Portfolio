@@ -47,6 +47,7 @@ test("gate reads skip counts from real runner summaries and rejects missing aggr
   assert.equal(countReportedSkips("ℹ skipped 0"), 0);
   assert.equal(countReportedSkips('{"required":{"skipped":0}}'), 0);
   assert.equal(countReportedSkips("Tests 4 passed | 2 skipped"), 2);
+  assert.equal(countReportedSkips("Test Files 1 passed (1)\nTests 18 passed (18)"), 0);
   assert.equal(countReportedSkips("no test summary"), null);
 });
 

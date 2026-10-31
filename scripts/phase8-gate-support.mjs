@@ -24,8 +24,12 @@ const componentDefinitions = [
 export const PHASE8_GATE_COMPONENTS = Object.freeze(componentDefinitions.map(([id, paths, cleanupRequired = true]) => ({ id, paths, cleanupRequired })));
 export const PHASE8_GATE_REQUIRED_CHECKS = Object.freeze(["validation-ready", "phase8-prerequisites", "integrated", "contract-verification", "architecture", "runtime-boundary", "lint", "typecheck", "production-build", "gate-negative-tests"]);
 export function countReportedSkips(output) {
-  const matches = [...String(output).matchAll(/(?:\bskipped\b["']?\s*[:=]\s*["']?(\d+)|(\d+)\s+skipped\b|\bskipped\s+(\d+)\b)/giu)];
-  return matches.length ? Math.max(...matches.map((m) => Number(m[1] ?? m[2] ?? m[3]))) : null;
+  const text = String(output);
+  const matches = [...text.matchAll(/(?:\bskipped\b["']?\s*[:=]\s*["']?(\d+)|(\d+)\s+skipped\b|\bskipped\s+(\d+)\b)/giu)];
+  if (matches.length) return Math.max(...matches.map((m) => Number(m[1] ?? m[2] ?? m[3])));
+  const vitestSummaries = [...text.matchAll(/\bTests\s+(\d+)\s+passed(?:\s*\((\d+)\))?/giu)];
+  if (vitestSummaries.length) return Math.max(...vitestSummaries.map((m) => Math.max(0, Number(m[2] ?? m[1]) - Number(m[1]))));
+  return null;
 }
 const criterionComponents = [
   ["prerequisites", "integrated"], ["content-and-exports"], ["content-and-exports"], ["content-and-exports", "integrated"], ["content-and-exports"],
