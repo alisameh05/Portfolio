@@ -115,6 +115,19 @@ jobs:
         run: node scripts/setup-ci-native-postgres.mjs
       - run: npm run test:setup
       - run: npm run typecheck
+      - name: Build the production Owner configuration HTTP application
+        run: npm run build
+      - name: Require Issue #294 built-server, real Auth and PostgreSQL acceptance
+        id: owner-configuration-http
+        run: npm run phase9:focus:owner-configuration-http
+      - name: Publish sanitized Issue #294 network acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase9-owner-configuration-http-294
+          path: evidence/phase9-owner-configuration-http-294.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Require Phase 8 Owner exports, Issues #243/#244/#245/#247 acceptance with zero skips
         run: npm run phase8:focus:exports -- --with-storage
       - name: Require Issue #242 taxonomy PostgreSQL acceptance with zero skips

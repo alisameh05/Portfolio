@@ -159,6 +159,9 @@ export function assertPhase4ApplicationRls(snapshot) {
   const phase7DurableScheduleApplied = snapshot.migrationLedger?.some((migration) =>
     migration.name === "phase7_durable_policy_schedule_keys",
   ) === true;
+  const ownerConfigurationHttpApplied = snapshot.migrationLedger?.some((migration) =>
+    migration.name === "secure_owner_configuration_http",
+  ) === true;
   const appliedMigrationNames = new Set((snapshot.migrationLedger ?? []).map((migration) => migration.name));
   const reviewedBackupGrants = PHASE_DECLARED_ADDITIVE_MIGRATIONS
     .filter((item) => item.ticket >= 253 && appliedMigrationNames.has(item.migration.slice(15, -4)))
@@ -178,6 +181,9 @@ export function assertPhase4ApplicationRls(snapshot) {
     const baseExpected = PHASE4_APPLICATION_POLICIES.get(name);
     const expected = baseExpected === undefined ? undefined : [
       ...baseExpected,
+      ...(ownerConfigurationHttpApplied && name === "identity_access.owner_links"
+        ? [["owner_links_migration_select_policy", "SELECT", "{shipwithali_migration}", "true"]]
+        : []),
       ...(configurationExportApplied ? CONFIGURATION_EXPORT_WORKER_POLICIES.get(name) ?? [] : []),
       ...reviewedBackupGrants.filter(item => item.category === "policies" && `${item.expected.schema}.${item.expected.tableName}` === name)
         .map(item => [item.expected.name, item.expected.command, item.expected.roles, item.expected.usingPredicate]),

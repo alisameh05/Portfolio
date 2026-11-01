@@ -6,3 +6,4 @@ export type {
   AuthProviderPort,
   CryptoPort,
 } from "./auth.js";
+export type { OwnerRateLimitCheck } from "./owner-rate-limit.js";

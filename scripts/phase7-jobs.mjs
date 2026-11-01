@@ -220,9 +220,11 @@ try {
   if (mode.routeInventory) {
     stage = "route-inventory";
     const output = run(process.execPath, ["scripts/check-route-inventory.mjs", "--no-write"], env);
-    const summary = output.match(/route inventory: all \d+ checks passed \(5 public, \d+ owner, 2 operational, 0 registered, 53 pending product routes\)/u)?.[0];
-    if (summary === undefined) throw new Error("PHASE8_PROTECTED_TRIGGER_ROUTE_INVENTORY_FAILED");
-    routeInventory = { success: true, summary };
+    const summary = output.match(/route inventory: all \d+ checks passed \(5 public, 48 owner, 2 operational, (\d+) registered, (\d+) pending product routes\)/u);
+    if (summary === null || Number(summary[1]) + Number(summary[2]) !== 53) {
+      throw new Error("PHASE8_PROTECTED_TRIGGER_ROUTE_INVENTORY_FAILED");
+    }
+    routeInventory = { success: true, summary: summary[0] };
   }
   stage = "type-generation";
   for (const [schema, typeFile] of [

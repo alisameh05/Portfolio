@@ -309,6 +309,7 @@ describe("verified GitHub Owner sessions (#80)", () => {
         mode: "mutation",
         security: {
           appOrigin: "https://example.com",
+          rateLimit: { async check() { return { allowed: true }; } },
           identity: {
             async resolveActorContext(query) {
               const verified = await failing.verifyOwnerSession(query);

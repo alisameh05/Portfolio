@@ -826,6 +826,12 @@ export const PHASE_DECLARED_ADDITIVE_MIGRATIONS = Object.freeze([
       }),
     ]),
   }),
+  Object.freeze({
+    migration: "20261031120000_secure_owner_configuration_http.sql",
+    migrationSha256: "6ea8b12798d3918c491105bfa02474da068666b7ee8b6dbe14f99ea5630f0d40",
+    ticket: 294,
+    capability: "identity_access.secure_owner_configuration_http",
+  }),
 ]);
 
 // Historical checkpoints and their paired database checks. A suite whose

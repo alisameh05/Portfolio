@@ -114,6 +114,8 @@ describe("Owner Configuration adapter (#29)", () => {
       { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(fake.calls.updateOwnerProfile).toHaveLength(1);
     expect(fake.calls.updateOwnerContactChannels).toHaveLength(0);
     expect(fake.calls.updateOwnerGlobalProjectCta).toHaveLength(0);
@@ -170,6 +172,7 @@ describe("Owner Configuration adapter (#29)", () => {
 
   it.each([
     ["malformed JSON", { rawBody: "{not-json" }],
+    ["oversized JSON", { rawBody: JSON.stringify({ ...PROFILE_BODY, bio: "x".repeat(66_000) }) }],
     ["missing Idempotency-Key", { idempotencyKey: null }],
     ["missing If-Match", { ifMatch: null }],
     ["invalid If-Match", { ifMatch: '"0"' }],
@@ -185,10 +188,32 @@ describe("Owner Configuration adapter (#29)", () => {
       { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(400);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(fake.calls.updateOwnerProfile).toHaveLength(0);
     const body = (await response.json()) as Record<string, unknown>;
     expect(zProblem.safeParse(body).success).toBe(true);
     expect(body["code"]).toBe("validation");
+  });
+
+  it("rejects invalid Origin before charging the shared limiter or dispatching", async () => {
+    const fake = createOwnerConfigurationTestFake({ type: "success" });
+    let limiterCalls = 0;
+    const security = {
+      ...ownerTestSecurity(),
+      rateLimit: { async check() { limiterCalls += 1; return { allowed: true }; } },
+    };
+    const headers = withOwnerTestAuth({ "content-type": "application/json" });
+    headers["origin"] = "https://attacker.example";
+    const response = await handleUpdateOwnerProfileConfiguration(
+      new Request(`https://example.com${PROFILE_PATH}`, { method: "PUT", headers,
+        body: JSON.stringify(PROFILE_BODY) }),
+      { service: fake, security },
+    );
+    expect(response.status).toBe(403);
+    expect(limiterCalls).toBe(0);
+    expect(fake.calls.updateOwnerProfile).toHaveLength(0);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
   });
 
   it.each([

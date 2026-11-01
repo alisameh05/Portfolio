@@ -1,4 +1,4 @@
-import { isolatedIdentityReadiness } from "../fixtures/identity-readiness.js";
+import { isolatedIdentityReadiness, isolatedOwnerAuthEnvironment } from "../fixtures/identity-readiness.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sql } from "kysely";
 import { Client } from "pg";
@@ -483,7 +483,7 @@ describe.runIf(Boolean(DATABASE_URL && ADMIN_URL))("Measurement daily aggregatio
     if (!DATABASE_URL) throw new Error("PHASE7_AGGREGATE_DATABASE_REQUIRED");
     resetRuntimeForTests();
     try {
-      await initializeDatabaseRuntime({ NODE_ENV: "test", APP_BASE_URL: "https://example.com", DATABASE_URL,
+      await initializeDatabaseRuntime({ ...isolatedOwnerAuthEnvironment, NODE_ENV: "test", APP_BASE_URL: "https://example.com", DATABASE_URL,
         PORTFOLIO_ID: portfolioId, OWNER_ID: ownerId }, "application", undefined, { identityReadiness: isolatedIdentityReadiness });
       const result = await getOwnerAggregateReportApplicationService().getAggregateReport({
         scope: { kind: "portfolio", portfolioId }, correlationId: "daily-report-standard-assembly",

@@ -1,4 +1,4 @@
-import { isolatedIdentityReadiness } from "../fixtures/identity-readiness.js";
+import { isolatedIdentityReadiness, isolatedOwnerAuthEnvironment } from "../fixtures/identity-readiness.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Client } from "pg";
 import { createStableId, parseIdempotencyKey, type StableId } from "../../src/shared/domain/index.js";
@@ -271,7 +271,7 @@ describe.runIf(Boolean(url))("real PostgreSQL Reaction acceptance", () => {
     const env = { NODE_ENV: "test", APP_BASE_URL: "https://example.com", DATABASE_URL: url!, PORTFOLIO_ID: portfolioId, OWNER_ID: ownerId,
       FUNCTIONAL_ID_HASH_KEY: config.functional.active.secret, FUNCTIONAL_ID_HASH_KEY_VERSION: "1" };
     resetRuntimeForTests();
-    await initializeDatabaseRuntime(env, "application", undefined, { identityReadiness: isolatedIdentityReadiness });
+    await initializeDatabaseRuntime({ ...isolatedOwnerAuthEnvironment, ...env }, "application", undefined, { identityReadiness: isolatedIdentityReadiness });
     const assembled = await getReactionRuntimeServices();
     if (!("functionalIdentity" in assembled)) throw new Error("not assembled");
     const logger = createTestLogger();
@@ -281,7 +281,7 @@ describe.runIf(Boolean(url))("real PostgreSQL Reaction acceptance", () => {
     await getLifecycleCoordinator().shutdown();
     const failed = await http(projectId, "like", undefined, key(), assembled);
     expect(failed.status).toBe(503); expect(failed.headers.get("set-cookie")).toBeNull(); resetRuntimeForTests();
-    await initializeDatabaseRuntime({ ...env, MEASUREMENT_ID_HASH_KEY: "invalid", MEASUREMENT_ID_HASH_KEY_VERSION: "invalid" }, "application", undefined, { identityReadiness: isolatedIdentityReadiness });
+    await initializeDatabaseRuntime({ ...isolatedOwnerAuthEnvironment, ...env, MEASUREMENT_ID_HASH_KEY: "invalid", MEASUREMENT_ID_HASH_KEY_VERSION: "invalid" }, "application", undefined, { identityReadiness: isolatedIdentityReadiness });
     const invalidMeasurement = await getReactionRuntimeServices();
     if (!("functionalIdentity" in invalidMeasurement)) throw new Error("not assembled");
     expect((await http(projectId, "like", undefined, key(), invalidMeasurement)).status).toBe(200);

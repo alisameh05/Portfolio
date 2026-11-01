@@ -1468,6 +1468,9 @@ describeReal(group === "baseline"
       PORTFOLIO_ID: portfolioId,
       OWNER_ID: ownerId,
       SUPABASE_URL: STORAGE_URL!,
+      SUPABASE_JWT_ISSUER: `${STORAGE_URL!.replace(/\/$/, "")}/auth/v1`,
+      SUPABASE_JWT_AUDIENCE: "authenticated",
+      OWNER_GITHUB_SUBJECTS: "910294",
       SUPABASE_SERVICE_ROLE_KEY: SERVICE_ROLE_KEY!,
       MEDIA_UPLOAD_REPLAY_ENCRYPTION_KEY: REPLAY_KEY!,
     }, "application", undefined, { identityReadiness: isolatedIdentityReadiness });
