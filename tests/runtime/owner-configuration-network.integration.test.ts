@@ -400,6 +400,29 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
       "idempotency-key": createKey,
     }, body: JSON.stringify(createBody), signal: AbortSignal.timeout(15_000) });
     await expectPrivateProblem(replayAfterRevocation, 401);
+    const saveReplayAfterRevocation = await fetch(`${urls[1]}/api/owner/v1/content/${contentId}/revisions`, { method: "POST", headers: {
+      host: new URL(urls[0]!).host, "content-type": "application/json", origin,
+      cookie: `sw_owner_session=${ownerSecondSession.token}`, "x-csrf-token": secondCsrf,
+      "idempotency-key": saveKey, "if-match": `\"${created.data.aggregateVersion}\"`,
+    }, body: JSON.stringify(saveBody), signal: AbortSignal.timeout(15_000) });
+    await expectPrivateProblem(saveReplayAfterRevocation, 401);
+    const reviewReplayAfterRevocation = await fetch(`${urls[1]}/api/owner/v1/content/${contentId}/revisions/${revisionId}/review`, { method: "POST", headers: {
+      host: new URL(urls[0]!).host, "content-type": "application/json", origin,
+      cookie: `sw_owner_session=${ownerSecondSession.token}`, "x-csrf-token": secondCsrf,
+      "idempotency-key": reviewKey, "if-match": `\"${saved.data.aggregateVersion}\"`,
+    }, body: JSON.stringify(reviewBody), signal: AbortSignal.timeout(15_000) });
+    await expectPrivateProblem(reviewReplayAfterRevocation, 401);
+    const foreignSaveReplay = await fetch(`${urls[1]}/api/owner/v1/content/${contentId}/revisions`, { method: "POST", headers: {
+      host: new URL(urls[0]!).host, "content-type": "application/json", origin,
+      cookie: `sw_owner_session=${foreignOwner.token}`, "idempotency-key": saveKey,
+      "if-match": `\"${created.data.aggregateVersion}\"`,
+    }, body: JSON.stringify(saveBody), signal: AbortSignal.timeout(15_000) });
+    await expectPrivateProblem(foreignSaveReplay, 403);
+    const foreignReviewReplay = await fetch(`${urls[1]}/api/owner/v1/content/${contentId}/revisions/${revisionId}/review`, { method: "POST", headers: {
+      host: new URL(urls[0]!).host, "content-type": "application/json", origin,
+      cookie: `sw_owner_session=${foreignOwner.token}`, "idempotency-key": reviewKey,
+    }, body: JSON.stringify(reviewBody), signal: AbortSignal.timeout(15_000) });
+    await expectPrivateProblem(foreignReviewReplay, 403);
   }, 90_000);
 
   it("enforces the shared database limit across independent built instances and fails closed on limiter outage", async () => {
