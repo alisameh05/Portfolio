@@ -1,12 +1,12 @@
 {
   "ticket": 295,
   "scope": "built-next-owner-content-authoring-review-preview-history-http-real-auth-postgresql",
-  "runId": "80d44bb4-c8a1-478d-8055-8d448daa7b4a",
+  "runId": "352f4418-4a4e-4061-80f9-a133177dfb8a",
   "githubRunId": null,
   "githubRunAttempt": null,
   "source": {
-    "commit": "98c4acad280b56d4318fe0416f7179316bd2d91d",
-    "treeSha256": "a9a2f52a5332bc291e3193be5b2e18a7b98baac38f328ebe7eda4c3b7e003602"
+    "commit": "0374812b0155f523b7eee98a3a0a8b7d87a976e0",
+    "treeSha256": "c8b6d8dc26eae868fede19427bc081da604fc681807f125effafb6c95f7a043b"
   },
   "contractBundles": {
     "public": "623116c76c4df5fa9d42c76da5bcee19a172be6adbac607b200b03334dcccf19",
@@ -367,6 +367,7 @@
       "assertions": [
         "201 response contract and private headers",
         "exact cross-instance replay",
+        "403 replay denial for foreign session",
         "401 replay denial after revocation"
       ]
     },
@@ -938,151 +939,6 @@
         "status": "passed"
       },
       {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / #252 AC06 preserves safe core reads while absent export and recovery producers remain unknown",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / requires the fixed system purpose and returns durable zero, watermark, and explicit unknown values",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / does not call failed summary reads healthy and validates the clock",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / marks age unknown when bounded queue or lease samples cannot establish coverage",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / documents every operational signal with a bounded source, query, and explicit unknown rule",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / evaluates bounded dashboard definitions over serialized safe producer records and rejects field drift and inherited metric IDs",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / keeps event drops unknown while measuring accepted intake without an owning drop producer",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / evaluates relational and object backup RPOs from separate source watermarks and leaves absent producers unknown",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / records consent rejection separately from HTTP status without leaking request markers",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / records a real consent database outage as unavailable rather than rejected",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / records unavailable, committed acceptance, and indeterminate commit acknowledgement as distinct outcomes",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / accepts only the documented Portfolio CLI flag and rejects missing, extra, conflicting, and oversized scope",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / observes the existing private Owner export status route without recording URL or session markers",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / observes otherwise-uninstrumented public and Owner adapters with safe status classes",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / keeps a successful adapter response when its telemetry logger throws",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / source-inventories every active handwritten HTTP handler and its fixed observer wrapper",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / records one Owner export download read success only after verified stream completion",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / records one failed Owner export download read without provider or identity details",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / records a safe Storage failure when the content iterator cannot be initialized",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / records streamed integrity mismatch and read failure once without buffering or consuming twice",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / keeps a cancelled Owner export HTTP read out of Storage failures without claiming readiness",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / records a provider read failure when cancellation races with its rejection",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / retains integrity classification when cancellation races with a proven mismatch",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / queries and summarizes an actual streamed Owner export integrity mismatch from a complete bounded system log window",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / keeps export integrity unknown for absent, incomplete, malformed, capped or unavailable log windows and measures a complete zero",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / queries actual terminal retention failures through a bounded system-wide query and summary",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / ignores sink failures and rejects out-of-contract observations without throwing",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / records an export assembly Storage write failure from a fixture adapter without private values",
-        "status": "passed"
-      },
-      {
-        "file": "tests/phase8/operations-observability.test.ts",
-        "name": "Phase 8 operations observability / distinguishes Owner export assembly read interruption from completed integrity mismatch",
-        "status": "passed"
-      },
-      {
         "file": "tests/runtime/owner-configuration-http-bootstrap.test.ts",
         "name": "Owner configuration HTTP bootstrap / retries initialization after a transient failure and dispatches the recovered request",
         "status": "passed"
@@ -1535,6 +1391,151 @@
       {
         "file": "tests/runtime/owner-publication.test.ts",
         "name": "Owner Publication commands (#30) / maps unexpected exceptions to generic 500 without leaking secrets",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / #252 AC06 preserves safe core reads while absent export and recovery producers remain unknown",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / requires the fixed system purpose and returns durable zero, watermark, and explicit unknown values",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / does not call failed summary reads healthy and validates the clock",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / marks age unknown when bounded queue or lease samples cannot establish coverage",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / documents every operational signal with a bounded source, query, and explicit unknown rule",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / evaluates bounded dashboard definitions over serialized safe producer records and rejects field drift and inherited metric IDs",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / keeps event drops unknown while measuring accepted intake without an owning drop producer",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / evaluates relational and object backup RPOs from separate source watermarks and leaves absent producers unknown",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / records consent rejection separately from HTTP status without leaking request markers",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / records a real consent database outage as unavailable rather than rejected",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / records unavailable, committed acceptance, and indeterminate commit acknowledgement as distinct outcomes",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / accepts only the documented Portfolio CLI flag and rejects missing, extra, conflicting, and oversized scope",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / observes the existing private Owner export status route without recording URL or session markers",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / observes otherwise-uninstrumented public and Owner adapters with safe status classes",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / keeps a successful adapter response when its telemetry logger throws",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / source-inventories every active handwritten HTTP handler and its fixed observer wrapper",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / records one Owner export download read success only after verified stream completion",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / records one failed Owner export download read without provider or identity details",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / records a safe Storage failure when the content iterator cannot be initialized",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / records streamed integrity mismatch and read failure once without buffering or consuming twice",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / keeps a cancelled Owner export HTTP read out of Storage failures without claiming readiness",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / records a provider read failure when cancellation races with its rejection",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / retains integrity classification when cancellation races with a proven mismatch",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / queries and summarizes an actual streamed Owner export integrity mismatch from a complete bounded system log window",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / keeps export integrity unknown for absent, incomplete, malformed, capped or unavailable log windows and measures a complete zero",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / queries actual terminal retention failures through a bounded system-wide query and summary",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / ignores sink failures and rejects out-of-contract observations without throwing",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / records an export assembly Storage write failure from a fixture adapter without private values",
+        "status": "passed"
+      },
+      {
+        "file": "tests/phase8/operations-observability.test.ts",
+        "name": "Phase 8 operations observability / distinguishes Owner export assembly read interruption from completed integrity mismatch",
         "status": "passed"
       }
     ]

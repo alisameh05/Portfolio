@@ -321,7 +321,7 @@ async function main() {
       { method: "POST", route: "/api/owner/v1/content", operation: "createOwnerContent",
         application: "dispatchOwnerContentAuthoringHttp(createOwnerContent) -> ContentAuthoringService.create",
         executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all six private Content authoring, review, preview and history operations over built HTTP",
-        assertions: ["201 response contract and private headers", "exact cross-instance replay", "401 replay denial after revocation"] },
+        assertions: ["201 response contract and private headers", "exact cross-instance replay", "403 replay denial for foreign session", "401 replay denial after revocation"] },
       { method: "GET", route: "/api/owner/v1/content/{contentId}", operation: "getOwnerContentAggregate",
         application: "dispatchOwnerContentAuthoringHttp(getOwnerContentAggregate) -> ContentAuthoringService.getOwnerContentAggregate",
         executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all six private Content authoring, review, preview and history operations over built HTTP",

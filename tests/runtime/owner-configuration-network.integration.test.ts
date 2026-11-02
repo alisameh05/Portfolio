@@ -387,6 +387,11 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
       }, signal: AbortSignal.timeout(15_000) });
       await expectPrivateProblem(denied, 403);
     }
+    const createReplayByForeignOwner = await fetch(`${urls[1]}/api/owner/v1/content`, { method: "POST", headers: {
+      host: new URL(urls[0]!).host, "content-type": "application/json", origin,
+      cookie: `sw_owner_session=${foreignOwner.token}`, "idempotency-key": createKey,
+    }, body: JSON.stringify(createBody), signal: AbortSignal.timeout(15_000) });
+    await expectPrivateProblem(createReplayByForeignOwner, 403);
     await admin.query("delete from auth.sessions where id = $1::uuid", [ownerSecondSession.sessionId]);
     for (const url of privateReadUrls) {
       const revoked = await fetch(url, { method: "GET", headers: {
