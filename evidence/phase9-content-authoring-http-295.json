@@ -1,12 +1,12 @@
 {
   "ticket": 295,
   "scope": "built-next-owner-content-authoring-review-preview-history-http-real-auth-postgresql",
-  "runId": "57fdaad5-10a8-4a54-82c0-637512f978e1",
+  "runId": "80d44bb4-c8a1-478d-8055-8d448daa7b4a",
   "githubRunId": null,
   "githubRunAttempt": null,
   "source": {
-    "commit": "e99d13c3783c8ea2dff678bbe5329fdd1b43c372",
-    "treeSha256": "541d7319a1ce518a1c871a8344d0d0bc87db5dcb8dddf21f3bcf0b9bfb732240"
+    "commit": "98c4acad280b56d4318fe0416f7179316bd2d91d",
+    "treeSha256": "a9a2f52a5332bc291e3193be5b2e18a7b98baac38f328ebe7eda4c3b7e003602"
   },
   "contractBundles": {
     "public": "623116c76c4df5fa9d42c76da5bcee19a172be6adbac607b200b03334dcccf19",
@@ -321,10 +321,10 @@
   ],
   "acceptanceCriteria": {
     "AC01": [
-      "tests/runtime/owner-configuration-network.integration.test.ts :: serves all six private Content authoring, review, preview and history operations over built HTTP"
+      "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all six private Content authoring, review, preview and history operations over built HTTP"
     ],
     "AC02": [
-      "tests/runtime/owner-configuration-network.integration.test.ts :: serves all six private Content authoring, review, preview and history operations over built HTTP",
+      "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all six private Content authoring, review, preview and history operations over built HTTP",
       "tests/database/content-authoring.integration.test.ts :: Content authoring production PostgreSQL invariants / serializes same-key and stale-version races and preserves the original replay receipt",
       "tests/database/content-authoring.integration.test.ts :: Content authoring production PostgreSQL invariants / persists immutable exact-snapshot reviews atomically and does not transfer them to later Revisions"
     ],
@@ -332,11 +332,18 @@
       "tests/database/content-authoring.integration.test.ts :: Content authoring production PostgreSQL invariants / publishes reviewed Achievements with internal or public evidence into a locale-specific ordered Timeline"
     ],
     "AC04": [
-      "tests/runtime/owner-configuration-network.integration.test.ts :: serves all six private Content authoring, review, preview and history operations over built HTTP"
+      "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all six private Content authoring, review, preview and history operations over built HTTP"
     ],
     "AC05": [
       "tests/runtime/owner-content-http.test.ts :: Owner content authoring HTTP adapters / rejects unknown draft fields before dispatch",
       "tests/runtime/owner-content-http.test.ts :: Owner content authoring HTTP adapters / records an exact-snapshot review through strict contract and concurrency validation",
+      "tests/runtime/owner-content-http.test.ts :: Owner content authoring HTTP adapters / rejects create with missing Idempotency-Key before dispatch",
+      "tests/runtime/owner-content-http.test.ts :: Owner content authoring HTTP adapters / rejects create with malformed Idempotency-Key before dispatch",
+      "tests/runtime/owner-content-http.test.ts :: Owner content authoring HTTP adapters / rejects review with missing Idempotency-Key before dispatch",
+      "tests/runtime/owner-content-http.test.ts :: Owner content authoring HTTP adapters / rejects review with malformed Idempotency-Key before dispatch",
+      "tests/runtime/owner-content-http.test.ts :: Owner content authoring HTTP adapters / rejects review with missing If-Match before dispatch",
+      "tests/runtime/owner-content-http.test.ts :: Owner content authoring HTTP adapters / rejects review with malformed If-Match before dispatch",
+      "tests/runtime/owner-content-http.test.ts :: Owner content authoring HTTP adapters / rejects an invalid review path before dispatch",
       "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command malformed JSON revisions as 400 before dispatch",
       "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command missing Idempotency-Key revisions as 400 before dispatch",
       "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command malformed Idempotency-Key revisions as 400 before dispatch",
@@ -356,7 +363,7 @@
       "route": "/api/owner/v1/content",
       "operation": "createOwnerContent",
       "application": "dispatchOwnerContentAuthoringHttp(createOwnerContent) -> ContentAuthoringService.create",
-      "executedTest": "tests/runtime/owner-configuration-network.integration.test.ts :: serves all six private Content authoring, review, preview and history operations over built HTTP",
+      "executedTest": "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all six private Content authoring, review, preview and history operations over built HTTP",
       "assertions": [
         "201 response contract and private headers",
         "exact cross-instance replay",
@@ -368,7 +375,7 @@
       "route": "/api/owner/v1/content/{contentId}",
       "operation": "getOwnerContentAggregate",
       "application": "dispatchOwnerContentAuthoringHttp(getOwnerContentAggregate) -> ContentAuthoringService.getOwnerContentAggregate",
-      "executedTest": "tests/runtime/owner-configuration-network.integration.test.ts :: serves all six private Content authoring, review, preview and history operations over built HTTP",
+      "executedTest": "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all six private Content authoring, review, preview and history operations over built HTTP",
       "assertions": [
         "200 response contract and private headers",
         "foreign 403 and revoked 401"
@@ -379,7 +386,7 @@
       "route": "/api/owner/v1/content/{contentId}/revisions",
       "operation": "saveOwnerContentRevision",
       "application": "dispatchOwnerContentAuthoringHttp(saveOwnerContentRevision) -> ContentAuthoringService.saveRevision",
-      "executedTest": "tests/runtime/owner-configuration-network.integration.test.ts :: serves all six private Content authoring, review, preview and history operations over built HTTP",
+      "executedTest": "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all six private Content authoring, review, preview and history operations over built HTTP",
       "assertions": [
         "201 response contract and private headers",
         "exact cross-instance replay",
@@ -393,7 +400,7 @@
       "route": "/api/owner/v1/content/{contentId}/revisions/{revisionId}/preview",
       "operation": "previewOwnerContentRevision",
       "application": "dispatchOwnerContentAuthoringHttp(previewOwnerContentRevision) -> ContentAuthoringService.preview",
-      "executedTest": "tests/runtime/owner-configuration-network.integration.test.ts :: serves all six private Content authoring, review, preview and history operations over built HTTP",
+      "executedTest": "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all six private Content authoring, review, preview and history operations over built HTTP",
       "assertions": [
         "200 response contract and private non-indexable/no-store headers",
         "foreign 403 and revoked 401"
@@ -404,7 +411,7 @@
       "route": "/api/owner/v1/content/{contentId}/revisions/{revisionId}/review",
       "operation": "reviewOwnerContentRevision",
       "application": "dispatchOwnerContentAuthoringHttp(reviewOwnerContentRevision) -> ContentAuthoringService.review",
-      "executedTest": "tests/runtime/owner-configuration-network.integration.test.ts :: serves all six private Content authoring, review, preview and history operations over built HTTP",
+      "executedTest": "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all six private Content authoring, review, preview and history operations over built HTTP",
       "assertions": [
         "200 response contract and private headers",
         "exact cross-instance replay",
@@ -416,7 +423,7 @@
       "route": "/api/owner/v1/content/{contentId}/history",
       "operation": "getOwnerContentHistory",
       "application": "dispatchOwnerContentAuthoringHttp(getOwnerContentHistory) -> ContentAuthoringService.history",
-      "executedTest": "tests/runtime/owner-configuration-network.integration.test.ts :: serves all six private Content authoring, review, preview and history operations over built HTTP",
+      "executedTest": "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all six private Content authoring, review, preview and history operations over built HTTP",
       "assertions": [
         "200 response contract and private headers",
         "ordered retained revisions",
@@ -483,7 +490,7 @@
       "privateHeaders": true
     }
   ],
-  "passed": 200,
+  "passed": 207,
   "failed": 0,
   "skipped": 0,
   "productionBuild": true,
@@ -491,7 +498,7 @@
   "execution": {
     "command": "npm run phase9:focus:content-authoring-http",
     "exitCode": 0,
-    "passed": 200,
+    "passed": 207,
     "failed": 0,
     "skipped": 0,
     "tests": [
@@ -1282,6 +1289,16 @@
       },
       {
         "file": "tests/runtime/owner-content-http.test.ts",
+        "name": "Owner content authoring HTTP adapters / rejects create with missing Idempotency-Key before dispatch",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-content-http.test.ts",
+        "name": "Owner content authoring HTTP adapters / rejects create with malformed Idempotency-Key before dispatch",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-content-http.test.ts",
         "name": "Owner content authoring HTTP adapters / inspects a scoped aggregate and saves a Revision using the declared precondition headers",
         "status": "passed"
       },
@@ -1303,6 +1320,31 @@
       {
         "file": "tests/runtime/owner-content-http.test.ts",
         "name": "Owner content authoring HTTP adapters / records an exact-snapshot review through strict contract and concurrency validation",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-content-http.test.ts",
+        "name": "Owner content authoring HTTP adapters / rejects review with missing Idempotency-Key before dispatch",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-content-http.test.ts",
+        "name": "Owner content authoring HTTP adapters / rejects review with malformed Idempotency-Key before dispatch",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-content-http.test.ts",
+        "name": "Owner content authoring HTTP adapters / rejects review with missing If-Match before dispatch",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-content-http.test.ts",
+        "name": "Owner content authoring HTTP adapters / rejects review with malformed If-Match before dispatch",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-content-http.test.ts",
+        "name": "Owner content authoring HTTP adapters / rejects an invalid review path before dispatch",
         "status": "passed"
       },
       {

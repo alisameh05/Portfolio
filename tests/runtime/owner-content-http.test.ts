@@ -159,6 +159,22 @@ describe("Owner content authoring HTTP adapters", () => {
     expect(fake.calls.create).toHaveLength(0);
   });
 
+  it.each([
+    ["missing Idempotency-Key", undefined],
+    ["malformed Idempotency-Key", "bad key"],
+  ])("rejects create with %s before dispatch", async (_case, idempotencyKey) => {
+    const fake = createService();
+    const headers = idempotencyKey === undefined ? {} : { "idempotency-key": idempotencyKey };
+    const response = await handleCreateOwnerContent(
+      request("POST", { contentType: "project", locale: "en", title: "Atlas", summary: "Draft.", body: "Draft body.", candidateSlug: "atlas" }, headers),
+      { service: fake.service, security: ownerTestSecurity(), logger: createTestLogger() },
+    );
+    expect(response.status).toBe(400);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(fake.calls.create).toHaveLength(0);
+  });
+
   it("inspects a scoped aggregate and saves a Revision using the declared precondition headers", async () => {
     const fake = createService();
     const publicationFake = createOwnerPublicationTestFake({ type: "success" });
@@ -268,5 +284,39 @@ describe("Owner content authoring HTTP adapters", () => {
     expect(malformed.status).toBe(400);
     expect(fake.calls.review).toHaveLength(1);
     expect(JSON.stringify(logger.records)).not.toContain("Keep review notes private.");
+  });
+
+  it.each([
+    ["missing Idempotency-Key", undefined, '"1"'],
+    ["malformed Idempotency-Key", "bad key", '"1"'],
+    ["missing If-Match", "review-transport", undefined],
+    ["malformed If-Match", "review-transport", "not-an-etag"],
+  ])("rejects review with %s before dispatch", async (_case, idempotencyKey, ifMatch) => {
+    const fake = createService();
+    const headers = {
+      ...(idempotencyKey === undefined ? {} : { "idempotency-key": idempotencyKey }),
+      ...(ifMatch === undefined ? {} : { "if-match": ifMatch }),
+    };
+    const response = await handleReviewOwnerContentRevision(
+      request("POST", { locale: "en", snapshotHash: "a".repeat(64), evidenceVersion: 1, decision: "accepted", findings: [] }, headers),
+      { contentId: CONTENT_ID, revisionId: REVISION_ID },
+      { service: fake.service, security: ownerTestSecurity(), logger: createTestLogger() },
+    );
+    expect(response.status).toBe(400);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(fake.calls.review).toHaveLength(0);
+  });
+
+  it("rejects an invalid review path before dispatch", async () => {
+    const fake = createService();
+    const response = await handleReviewOwnerContentRevision(
+      request("POST", { locale: "en", snapshotHash: "a".repeat(64), evidenceVersion: 1, decision: "accepted", findings: [] },
+        { "idempotency-key": "review-invalid-path", "if-match": '"1"' }),
+      { contentId: "not-a-uuid", revisionId: REVISION_ID },
+      { service: fake.service, security: ownerTestSecurity(), logger: createTestLogger() },
+    );
+    expect(response.status).toBe(400);
+    expect(fake.calls.review).toHaveLength(0);
   });
 });
