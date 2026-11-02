@@ -1,12 +1,12 @@
 {
   "ticket": 295,
   "scope": "built-next-owner-content-authoring-review-preview-history-http-real-auth-postgresql",
-  "runId": "6b4ac03a-bb19-42ea-90a8-5c0632a7889b",
+  "runId": "57fdaad5-10a8-4a54-82c0-637512f978e1",
   "githubRunId": null,
   "githubRunAttempt": null,
   "source": {
-    "commit": "d8b37154767437e1e580820e9ddb5a0ae2f5fcac",
-    "treeSha256": "f149aa0e050490c16a87f8e3f6eca6d1d0a22ed6ddd90b5015c8f3eed59c96e2"
+    "commit": "e99d13c3783c8ea2dff678bbe5329fdd1b43c372",
+    "treeSha256": "541d7319a1ce518a1c871a8344d0d0bc87db5dcb8dddf21f3bcf0b9bfb732240"
   },
   "contractBundles": {
     "public": "623116c76c4df5fa9d42c76da5bcee19a172be6adbac607b200b03334dcccf19",
@@ -316,8 +316,40 @@
     "all-six-content-authoring-http-operations",
     "content-cross-instance-exact-replay-and-conflict",
     "foreign-and-revoked-content-read-and-replay-denial",
+    "strict-content-transport-validation-before-effects",
     "postgres-content-save-preserves-public-projection"
   ],
+  "acceptanceCriteria": {
+    "AC01": [
+      "tests/runtime/owner-configuration-network.integration.test.ts :: serves all six private Content authoring, review, preview and history operations over built HTTP"
+    ],
+    "AC02": [
+      "tests/runtime/owner-configuration-network.integration.test.ts :: serves all six private Content authoring, review, preview and history operations over built HTTP",
+      "tests/database/content-authoring.integration.test.ts :: Content authoring production PostgreSQL invariants / serializes same-key and stale-version races and preserves the original replay receipt",
+      "tests/database/content-authoring.integration.test.ts :: Content authoring production PostgreSQL invariants / persists immutable exact-snapshot reviews atomically and does not transfer them to later Revisions"
+    ],
+    "AC03": [
+      "tests/database/content-authoring.integration.test.ts :: Content authoring production PostgreSQL invariants / publishes reviewed Achievements with internal or public evidence into a locale-specific ordered Timeline"
+    ],
+    "AC04": [
+      "tests/runtime/owner-configuration-network.integration.test.ts :: serves all six private Content authoring, review, preview and history operations over built HTTP"
+    ],
+    "AC05": [
+      "tests/runtime/owner-content-http.test.ts :: Owner content authoring HTTP adapters / rejects unknown draft fields before dispatch",
+      "tests/runtime/owner-content-http.test.ts :: Owner content authoring HTTP adapters / records an exact-snapshot review through strict contract and concurrency validation",
+      "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command malformed JSON revisions as 400 before dispatch",
+      "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command missing Idempotency-Key revisions as 400 before dispatch",
+      "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command malformed Idempotency-Key revisions as 400 before dispatch",
+      "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command missing If-Match commands/publish-language as 400 before dispatch",
+      "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command invalid If-Match commands/hide as 400 before dispatch",
+      "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command malformed If-Match revisions as 400 before dispatch",
+      "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command invalid contentId commands/archive as 400 before dispatch",
+      "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command absent body fields revisions as 400 before dispatch",
+      "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command unknown closed-shape property commands/publish-language as 400 before dispatch",
+      "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command out-of-shape body commands/restore as 400 before dispatch"
+    ],
+    "AC06": "traceability"
+  },
   "traceability": [
     {
       "method": "POST",
@@ -335,7 +367,7 @@
       "method": "GET",
       "route": "/api/owner/v1/content/{contentId}",
       "operation": "getOwnerContentAggregate",
-      "application": "dispatchOwnerContentAuthoringHttp(getOwnerContentAggregate) -> OwnerPublicationService.getAggregate",
+      "application": "dispatchOwnerContentAuthoringHttp(getOwnerContentAggregate) -> ContentAuthoringService.getOwnerContentAggregate",
       "executedTest": "tests/runtime/owner-configuration-network.integration.test.ts :: serves all six private Content authoring, review, preview and history operations over built HTTP",
       "assertions": [
         "200 response contract and private headers",
@@ -346,7 +378,7 @@
       "method": "POST",
       "route": "/api/owner/v1/content/{contentId}/revisions",
       "operation": "saveOwnerContentRevision",
-      "application": "dispatchOwnerContentAuthoringHttp(saveOwnerContentRevision) -> OwnerPublicationService.saveRevision",
+      "application": "dispatchOwnerContentAuthoringHttp(saveOwnerContentRevision) -> ContentAuthoringService.saveRevision",
       "executedTest": "tests/runtime/owner-configuration-network.integration.test.ts :: serves all six private Content authoring, review, preview and history operations over built HTTP",
       "assertions": [
         "201 response contract and private headers",
@@ -451,7 +483,7 @@
       "privateHeaders": true
     }
   ],
-  "passed": 154,
+  "passed": 200,
   "failed": 0,
   "skipped": 0,
   "productionBuild": true,
@@ -459,7 +491,7 @@
   "execution": {
     "command": "npm run phase9:focus:content-authoring-http",
     "exitCode": 0,
-    "passed": 154,
+    "passed": 200,
     "failed": 0,
     "skipped": 0,
     "tests": [
@@ -1231,6 +1263,236 @@
       {
         "file": "tests/runtime/owner-configuration.test.ts",
         "name": "Owner Configuration adapter (#29) / maps unexpected exceptions to generic 500 without leaking secrets",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-content-http.test.ts",
+        "name": "Owner content authoring HTTP adapters / creates Draft content without an If-Match header and dispatches one validated command",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-content-http.test.ts",
+        "name": "Owner content authoring HTTP adapters / dispatches a minimal Testimonial through the existing strict Owner content boundary",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-content-http.test.ts",
+        "name": "Owner content authoring HTTP adapters / rejects unknown draft fields before dispatch",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-content-http.test.ts",
+        "name": "Owner content authoring HTTP adapters / inspects a scoped aggregate and saves a Revision using the declared precondition headers",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-content-http.test.ts",
+        "name": "Owner content authoring HTTP adapters / publishes through the PostgreSQL-backed Content facade and returns the new ETag",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-content-http.test.ts",
+        "name": "Owner content authoring HTTP adapters / passes the server trace ID to lifecycle events separately from the idempotency key",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-content-http.test.ts",
+        "name": "Owner content authoring HTTP adapters / serves private non-indexable previews and returns a bounded Owner history page",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-content-http.test.ts",
+        "name": "Owner content authoring HTTP adapters / records an exact-snapshot review through strict contract and concurrency validation",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication aggregate retrieval (#30) / retrieves the aggregate once and returns the declared view",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication aggregate retrieval (#30) / rejects invalid contentId as 400 before dispatch",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication aggregate retrieval (#30) / translates unauthenticated rejection to NaN",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication aggregate retrieval (#30) / translates forbidden rejection to NaN",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication aggregate retrieval (#30) / translates not_found rejection to NaN",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication aggregate retrieval (#30) / translates rate_limited rejection to NaN",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication aggregate retrieval (#30) / translates temporarily_unavailable rejection to NaN",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication aggregate retrieval (#30) / fails safely when fake output is contract-invalid",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication aggregate retrieval (#30) / uses a server-generated trace identifier shared by Problem Details and logs",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / saves a Revision once and returns the declared 201 receipt",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / publishes a Language version once and returns the declared receipt",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / hides content once and returns the declared receipt",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / archives content once and returns the declared receipt",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / restores content once and returns the declared receipt",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / rejects command malformed JSON revisions as 400 before dispatch",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / rejects command missing Idempotency-Key revisions as 400 before dispatch",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / rejects command malformed Idempotency-Key revisions as 400 before dispatch",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / rejects command missing If-Match commands/publish-language as 400 before dispatch",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / rejects command invalid If-Match commands/hide as 400 before dispatch",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / rejects command malformed If-Match revisions as 400 before dispatch",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / rejects command invalid contentId commands/archive as 400 before dispatch",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / rejects command absent body fields revisions as 400 before dispatch",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / rejects command invalid locale enum revisions as 400 before dispatch",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / rejects command out-of-range title revisions as 400 before dispatch",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / rejects command unknown closed-shape property commands/publish-language as 400 before dispatch",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / rejects command out-of-shape body commands/restore as 400 before dispatch",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / translates status unauthenticated rejection to NaN",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / translates status forbidden rejection to NaN",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / translates status not_found rejection to NaN",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / translates status conflict rejection to NaN",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / translates status precondition_failed rejection to NaN",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / translates status validation rejection to NaN",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / translates status rate_limited rejection to NaN",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / translates status temporarily_unavailable rejection to NaN",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / translates publish forbidden and hide validation without provider auth",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / fails safely when command fake output is contract-invalid",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / production composition fails closed with 503 RUNTIME_NOT_IMPLEMENTED for all six operations",
+        "status": "passed"
+      },
+      {
+        "file": "tests/runtime/owner-publication.test.ts",
+        "name": "Owner Publication commands (#30) / maps unexpected exceptions to generic 500 without leaking secrets",
         "status": "passed"
       }
     ]

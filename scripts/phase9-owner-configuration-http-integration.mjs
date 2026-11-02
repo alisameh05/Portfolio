@@ -179,6 +179,7 @@ async function main() {
     const test = await new Promise((resolve) => {
       const suites = [
         "tests/runtime/owner-configuration-network.integration.test.ts",
+        ...(ticket === 295 ? ["tests/runtime/owner-content-http.test.ts", "tests/runtime/owner-publication.test.ts"] : []),
         "tests/runtime/owner-configuration-http-bootstrap.test.ts",
         "tests/runtime/owner-configuration.test.ts",
         "tests/phase4/owner-request-security.test.ts",
@@ -203,7 +204,7 @@ async function main() {
     const report = JSON.parse(readFileSync(reportPath, "utf8"));
     if (test.error || test.status !== 0 || report.success !== true || report.numPassedTests <= 3 ||
         report.numFailedTests !== 0 || report.numPendingTests !== 0 || report.numTodoTests !== 0 ||
-        report.testResults?.length !== (ticket === 295 ? 7 : 6) || report.testResults.some((suite) => suite.status !== "passed")) {
+        report.testResults?.length !== (ticket === 295 ? 9 : 6) || report.testResults.some((suite) => suite.status !== "passed")) {
       const failedAssertions = report.testResults?.flatMap((suite) => suite.assertionResults ?? [])
         .filter((assertion) => assertion.status !== "passed")
         .map((assertion) => ({ ...safeAssertionDiagnostic(assertion),
@@ -286,18 +287,40 @@ async function main() {
       "cross-instance-exact-replay-and-version-conflict", "csrf-origin-forwarded-host-and-non-owner-denials",
       "revoked-session-denial", "shared-database-rate-limit", "limiter-outage-fails-closed", "log-privacy",
       ...(ticket === 295 ? ["all-six-content-authoring-http-operations", "content-cross-instance-exact-replay-and-conflict",
-        "foreign-and-revoked-content-read-and-replay-denial", "postgres-content-save-preserves-public-projection"] : [])],
+        "foreign-and-revoked-content-read-and-replay-denial", "strict-content-transport-validation-before-effects",
+        "postgres-content-save-preserves-public-projection"] : [])],
+    ...(ticket === 295 ? { acceptanceCriteria: {
+      AC01: ["tests/runtime/owner-configuration-network.integration.test.ts :: serves all six private Content authoring, review, preview and history operations over built HTTP"],
+      AC02: ["tests/runtime/owner-configuration-network.integration.test.ts :: serves all six private Content authoring, review, preview and history operations over built HTTP",
+        "tests/database/content-authoring.integration.test.ts :: Content authoring production PostgreSQL invariants / serializes same-key and stale-version races and preserves the original replay receipt",
+        "tests/database/content-authoring.integration.test.ts :: Content authoring production PostgreSQL invariants / persists immutable exact-snapshot reviews atomically and does not transfer them to later Revisions"],
+      AC03: ["tests/database/content-authoring.integration.test.ts :: Content authoring production PostgreSQL invariants / publishes reviewed Achievements with internal or public evidence into a locale-specific ordered Timeline"],
+      AC04: ["tests/runtime/owner-configuration-network.integration.test.ts :: serves all six private Content authoring, review, preview and history operations over built HTTP"],
+      AC05: ["tests/runtime/owner-content-http.test.ts :: Owner content authoring HTTP adapters / rejects unknown draft fields before dispatch",
+        "tests/runtime/owner-content-http.test.ts :: Owner content authoring HTTP adapters / records an exact-snapshot review through strict contract and concurrency validation",
+        "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command malformed JSON revisions as 400 before dispatch",
+        "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command missing Idempotency-Key revisions as 400 before dispatch",
+        "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command malformed Idempotency-Key revisions as 400 before dispatch",
+        "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command missing If-Match commands/publish-language as 400 before dispatch",
+        "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command invalid If-Match commands/hide as 400 before dispatch",
+        "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command malformed If-Match revisions as 400 before dispatch",
+        "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command invalid contentId commands/archive as 400 before dispatch",
+        "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command absent body fields revisions as 400 before dispatch",
+        "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command unknown closed-shape property commands/publish-language as 400 before dispatch",
+        "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command out-of-shape body commands/restore as 400 before dispatch"],
+      AC06: "traceability",
+    } } : {}),
     ...(ticket === 295 ? { traceability: [
       { method: "POST", route: "/api/owner/v1/content", operation: "createOwnerContent",
         application: "dispatchOwnerContentAuthoringHttp(createOwnerContent) -> ContentAuthoringService.create",
         executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: serves all six private Content authoring, review, preview and history operations over built HTTP",
         assertions: ["201 response contract and private headers", "exact cross-instance replay", "401 replay denial after revocation"] },
       { method: "GET", route: "/api/owner/v1/content/{contentId}", operation: "getOwnerContentAggregate",
-        application: "dispatchOwnerContentAuthoringHttp(getOwnerContentAggregate) -> OwnerPublicationService.getAggregate",
+        application: "dispatchOwnerContentAuthoringHttp(getOwnerContentAggregate) -> ContentAuthoringService.getOwnerContentAggregate",
         executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: serves all six private Content authoring, review, preview and history operations over built HTTP",
         assertions: ["200 response contract and private headers", "foreign 403 and revoked 401"] },
       { method: "POST", route: "/api/owner/v1/content/{contentId}/revisions", operation: "saveOwnerContentRevision",
-        application: "dispatchOwnerContentAuthoringHttp(saveOwnerContentRevision) -> OwnerPublicationService.saveRevision",
+        application: "dispatchOwnerContentAuthoringHttp(saveOwnerContentRevision) -> ContentAuthoringService.saveRevision",
         executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: serves all six private Content authoring, review, preview and history operations over built HTTP",
         assertions: ["201 response contract and private headers", "exact cross-instance replay", "changed-key 409", "stale-version 412", "foreign 403 and revoked 401 replay denial"] },
       { method: "GET", route: "/api/owner/v1/content/{contentId}/revisions/{revisionId}/preview", operation: "previewOwnerContentRevision",

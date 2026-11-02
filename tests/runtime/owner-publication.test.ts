@@ -320,8 +320,10 @@ describe("Owner Publication commands (#30)", () => {
   it.each([
     ["malformed JSON", "revisions", { rawBody: "{not-json" }, undefined],
     ["missing Idempotency-Key", "revisions", { idempotencyKey: null, body: REVISION_BODY }, undefined],
+    ["malformed Idempotency-Key", "revisions", { idempotencyKey: "bad key", body: REVISION_BODY }, undefined],
     ["missing If-Match", "commands/publish-language", { ifMatch: null, body: PUBLISH_BODY }, undefined],
     ["invalid If-Match", "commands/hide", { ifMatch: '"0"', body: {} }, undefined],
+    ["malformed If-Match", "revisions", { ifMatch: "not-an-etag", body: REVISION_BODY }, undefined],
     ["invalid contentId", "commands/archive", { body: {} }, "not-a-uuid"],
     ["absent body fields", "revisions", { body: {} }, undefined],
     ["invalid locale enum", "revisions", { body: { ...REVISION_BODY, locale: "xx" } }, undefined],
