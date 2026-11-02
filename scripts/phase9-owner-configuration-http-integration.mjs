@@ -15,7 +15,10 @@ import { safeAssertionDiagnostic } from "./validation-errors.mjs";
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const CLI = join(ROOT, "node_modules/supabase/dist/supabase.js");
 const NEXT = join(ROOT, "node_modules/next/dist/bin/next");
-const REPORT = join(ROOT, "evidence/phase9-owner-configuration-http-294.json");
+const ticket = process.argv.includes("--ticket-295") ? 295 : 294;
+const REPORT = join(ROOT, ticket === 295
+  ? "evidence/phase9-content-authoring-http-295.json"
+  : "evidence/phase9-owner-configuration-http-294.json");
 
 async function availablePorts(count) {
   const servers = [];
@@ -167,20 +170,25 @@ async function main() {
       PHASE9_OWNER_HTTP_URLS: JSON.stringify(appPorts.slice(0, 2).map((port) => `http://127.0.0.1:${port}`)),
       PHASE9_OWNER_HTTP_UNREADY_URL: `http://127.0.0.1:${appPorts[2]}`,
       OWNER_ID: ownerId, PORTFOLIO_ID: portfolioId,
+      ...(ticket === 295 ? { PHASE5_REQUIRE_CONTENT_AUTHORING: "1", PHASE5_CONTENT_AUTHORING_DATABASE_URL: status.DB_URL } : {}),
     };
     stage = "tests";
     // Keep draining the live servers' pipes while tests send HTTP requests.
     // Blocking this event loop can fill a server's stdout pipe on Linux and
     // stall its responses until the test's request deadline expires.
     const test = await new Promise((resolve) => {
+      const suites = [
+        "tests/runtime/owner-configuration-network.integration.test.ts",
+        "tests/runtime/owner-configuration-http-bootstrap.test.ts",
+        "tests/runtime/owner-configuration.test.ts",
+        "tests/phase4/owner-request-security.test.ts",
+        "tests/phase4/owner-session-auth.test.ts",
+        "tests/phase8/operations-observability.test.ts",
+        ...(ticket === 295 ? ["tests/database/content-authoring.integration.test.ts"] : []),
+      ];
       const child = spawn(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), "run",
       "--config", "vitest.owner-configuration-network.config.ts",
-      "tests/runtime/owner-configuration-network.integration.test.ts",
-      "tests/runtime/owner-configuration-http-bootstrap.test.ts",
-      "tests/runtime/owner-configuration.test.ts",
-      "tests/phase4/owner-request-security.test.ts",
-      "tests/phase4/owner-session-auth.test.ts",
-      "tests/phase8/operations-observability.test.ts",
+      ...suites,
       "--reporter=json", "--reporter=verbose", `--outputFile.json=${reportPath}`], {
         cwd: ROOT, env: testEnv, timeout: 240_000, stdio: ["ignore", "pipe", "pipe"], windowsHide: true,
       });
@@ -195,15 +203,19 @@ async function main() {
     const report = JSON.parse(readFileSync(reportPath, "utf8"));
     if (test.error || test.status !== 0 || report.success !== true || report.numPassedTests <= 3 ||
         report.numFailedTests !== 0 || report.numPendingTests !== 0 || report.numTodoTests !== 0 ||
-        report.testResults?.length !== 6 || report.testResults.some((suite) => suite.status !== "passed")) {
+        report.testResults?.length !== (ticket === 295 ? 7 : 6) || report.testResults.some((suite) => suite.status !== "passed")) {
       const failedAssertions = report.testResults?.flatMap((suite) => suite.assertionResults ?? [])
         .filter((assertion) => assertion.status !== "passed")
         .map((assertion) => ({ ...safeAssertionDiagnostic(assertion),
           authCode: assertion.failureMessages?.join("\n").match(/PHASE9_AUTH_DIAGNOSTIC:(SESSION_MALFORMED|UNSUPPORTED_ALGORITHM|UNKNOWN_SIGNING_KEY|INVALID_SIGNATURE|SESSION_EXPIRED|INVALID_CLAIMS|SESSION_REVOKED|AUTH_PROVIDER_UNAVAILABLE|UNTRUSTED_PROVIDER_IDENTITY|NOT_OWNER)/u)?.[1] ?? null,
           httpStatus: assertion.failureMessages?.join("\n").match(/expected (200|400|401|403|409|429|500|503) to be (?:200|400|401|403|409|429|500|503)/u)?.[1] ?? null,
         })) ?? [];
-      const diagnosticCodes = [...new Set((JSON.stringify(report) + test.stdout + test.stderr + logs.join("")).match(/\b(?:PHASE9_[A-Z_]+|OWNER_RATE_LIMIT_[A-Z_]+|INVALID_CLAIMS|INVALID_SIGNATURE|SESSION_REVOKED|AUTH_PROVIDER_UNAVAILABLE|UNKNOWN_SIGNING_KEY)\b/gu) ?? [])];
-      console.error(JSON.stringify({ code: "PHASE9_OWNER_HTTP_ACCEPTANCE_TESTS_FAILED", assertions: failedAssertions, diagnosticCodes }));
+      const diagnosticCodes = [...new Set((JSON.stringify(report) + test.stdout + test.stderr + logs.join("")).match(/\b(?:PHASE9_[A-Z_]+|OWNER_RATE_LIMIT_[A-Z_]+|RATE_LIMIT_UNAVAILABLE|INVALID_CLAIMS|INVALID_SIGNATURE|SESSION_REVOKED|AUTH_PROVIDER_UNAVAILABLE|UNKNOWN_SIGNING_KEY)\b/gu) ?? [])];
+      const contentCreateFailure = (test.stdout + test.stderr + logs.join("")).match(/PHASE9_CONTENT_CREATE_HTTP:(\d{3}):([a-z_]+)/u);
+      const contentLimitFailure = (test.stdout + test.stderr + logs.join("")).match(/PHASE9_CONTENT_RATE_LIMIT_PREFLIGHT:([A-Z0-9_]+)/u);
+      console.error(JSON.stringify({ code: "PHASE9_OWNER_HTTP_ACCEPTANCE_TESTS_FAILED", assertions: failedAssertions, diagnosticCodes,
+        ...(contentCreateFailure ? { contentCreate: { status: Number(contentCreateFailure[1]), code: contentCreateFailure[2] } } : {}),
+        ...(contentLimitFailure ? { contentRateLimit: contentLimitFailure[1] } : {}) }));
       throw new Error("PHASE9_OWNER_HTTP_ACCEPTANCE_TESTS_FAILED");
     }
     executedTests = report.testResults.flatMap((suite) => (suite.assertionResults ?? []).map((assertion) => ({
@@ -260,7 +272,9 @@ async function main() {
   }));
   mkdirSync(join(ROOT, "evidence"), { recursive: true });
   writeFileSync(REPORT, `${JSON.stringify({
-    ticket: 294, scope: "built-next-owner-configuration-http-real-auth-postgresql",
+    ticket, scope: ticket === 295
+      ? "built-next-owner-content-authoring-review-preview-history-http-real-auth-postgresql"
+      : "built-next-owner-configuration-http-real-auth-postgresql",
     runId: randomUUID(), githubRunId: process.env.GITHUB_RUN_ID ?? null, githubRunAttempt: process.env.GITHUB_RUN_ATTEMPT ?? null,
     source: { commit: commit.status === 0 ? commit.stdout.trim() : "unavailable", treeSha256: workingTreeSourceSha256() },
     contractBundles, migrations,
@@ -270,14 +284,24 @@ async function main() {
     fixtures: { owner: "synthetic linked GitHub test identity", portfolio: "synthetic configured test portfolio", session: "temporary Auth sessions" },
     verdict: "passed", namedChecks: ["all-three-configuration-operations", "valid-receipts-private-headers",
       "cross-instance-exact-replay-and-version-conflict", "csrf-origin-forwarded-host-and-non-owner-denials",
-      "revoked-session-denial", "shared-database-rate-limit", "limiter-outage-fails-closed", "log-privacy"],
+      "revoked-session-denial", "shared-database-rate-limit", "limiter-outage-fails-closed", "log-privacy",
+      ...(ticket === 295 ? ["all-six-content-authoring-http-operations", "content-cross-instance-exact-replay-and-conflict",
+        "foreign-and-revoked-content-read-denial", "postgres-content-save-preserves-public-projection"] : [])],
     operationExamples: [
       { operation: "updateOwnerProfileConfiguration", httpStatus: 200, receiptSchemaValid: true, oneLedgerAndOutboxRecord: true },
       { operation: "updateOwnerContactChannels", httpStatus: 200, receiptSchemaValid: true, oneLedgerAndOutboxRecord: true },
       { operation: "updateOwnerGlobalProjectCta", httpStatus: 200, receiptSchemaValid: true, oneLedgerAndOutboxRecord: true },
+      ...(ticket === 295 ? [
+        { operation: "createOwnerContent", httpStatus: 201, responseSchemaValid: true, privateHeaders: true, exactReplayVerified: true },
+        { operation: "getOwnerContentAggregate", httpStatus: 200, responseSchemaValid: true, privateHeaders: true },
+        { operation: "saveOwnerContentRevision", httpStatus: 201, responseSchemaValid: true, privateHeaders: true, exactReplayVerified: true },
+        { operation: "previewOwnerContentRevision", httpStatus: 200, responseSchemaValid: true, privateHeaders: true },
+        { operation: "reviewOwnerContentRevision", httpStatus: 200, responseSchemaValid: true, privateHeaders: true, exactReplayVerified: true },
+        { operation: "getOwnerContentHistory", httpStatus: 200, responseSchemaValid: true, privateHeaders: true },
+      ] : []),
     ],
     passed: passedTestCount, failed: 0, skipped: 0, productionBuild: true, isolatedLoopbackSupabase: true,
-    execution: { command: "npm run phase9:focus:owner-configuration-http", exitCode: 0,
+    execution: { command: ticket === 295 ? "npm run phase9:focus:content-authoring-http" : "npm run phase9:focus:owner-configuration-http", exitCode: 0,
       passed: executedTests.filter(({ status }) => status === "passed").length,
       failed: executedTests.filter(({ status }) => status === "failed").length, skipped: 0, tests: executedTests },
     cleanupVerified: true, credentialsRecorded: false, secretValuesRecorded: false,

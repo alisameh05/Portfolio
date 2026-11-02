@@ -4,12 +4,13 @@ import {
   zCreateOwnerContentResponse,
 } from "../../contracts/http/owner/v1/generated/zod.gen.js";
 import { observeHttpRequest } from "./observe-request.js";
+import { readBoundedJson } from "./read-bounded-json.js";
 
 import type { CreateDraftPayload } from "../../modules/content-publishing/domain/index.js";
 import type { ContentAuthoringService } from "../../modules/content-publishing/application/authoring.js";
 import type { IdempotencyKey, Rejection } from "../../shared/domain/index.js";
 import { createCorrelation, type Logger } from "../ports.js";
-import { guardOwnerRequest, type OwnerRequestSecurity } from "./owner-security.js";
+import { guardOwnerRequest, OWNER_PRIVATE_RESPONSE_HEADERS, type OwnerRequestSecurity } from "./owner-security.js";
 import { internalErrorProblem, rejectionToProblem, transportProblem } from "./problem.js";
 
 export interface OwnerContentAuthoringAdapterDeps {
@@ -20,10 +21,6 @@ export interface OwnerContentAuthoringAdapterDeps {
 
 function instanceOf(request: Request): string {
   try { return new URL(request.url).pathname; } catch { return "/api/owner/v1/content"; }
-}
-
-async function readBody(request: Request): Promise<{ readonly ok: true; readonly value: unknown } | { readonly ok: false }> {
-  try { return { ok: true, value: await request.json() as unknown }; } catch { return { ok: false }; }
 }
 
 function badRequest(logger: Logger | undefined, traceId: string, instance: string, detail: string): Response {
@@ -53,7 +50,7 @@ function rejected(error: Rejection, logger: Logger | undefined, traceId: string,
       "Idempotency-Key": request.headers.get("idempotency-key") ?? undefined,
     });
     if (!headers.success) return badRequest(logger, traceId, instance, "Missing or invalid Idempotency-Key.");
-    const raw = await readBody(request);
+    const raw = await readBoundedJson(request);
     if (!raw.ok) return badRequest(logger, traceId, instance, "Malformed JSON body.");
     const body = zCreateOwnerContentBody.safeParse(raw.value);
     if (!body.success) return badRequest(logger, traceId, instance, "Invalid content creation body.");
@@ -80,5 +77,10 @@ function rejected(error: Rejection, logger: Logger | undefined, traceId: string,
 
 
 export function handleCreateOwnerContent(request: Request, deps: OwnerContentAuthoringAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-content-authoring", () => handleCreateOwnerContentUnobserved(request, deps), deps.logger);
+  return observeHttpRequest("owner-content-authoring", async () => {
+    const response = await handleCreateOwnerContentUnobserved(request, deps);
+    const headers = new Headers(response.headers);
+    for (const [name, value] of Object.entries(OWNER_PRIVATE_RESPONSE_HEADERS)) headers.set(name, value);
+    return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+  }, deps.logger);
 }

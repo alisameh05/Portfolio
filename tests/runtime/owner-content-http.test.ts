@@ -127,6 +127,8 @@ describe("Owner content authoring HTTP adapters", () => {
       { service: fake.service, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(201);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(fake.calls.create).toHaveLength(1);
     expect(fake.calls.create[0]).toMatchObject({ payload: { evidence: { artifacts: [{ mediaAssetId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea4" }] }, externalLinks: [{ destination: "https://example.com/project" }] } });
     expect(await response.json()).toEqual({ contentId: CONTENT_ID, aggregateVersion: 1, revisionId: REVISION_ID, outcome: "content-created" });
@@ -179,6 +181,8 @@ describe("Owner content authoring HTTP adapters", () => {
       { service: publicationFake, contentAuthoring: fake.service, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(save.status).toBe(201);
+    expect(save.headers.get("cache-control")).toBe("private, no-store");
+    expect(save.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(fake.calls.save).toHaveLength(1);
     expect(fake.calls.save[0]).toMatchObject({ expectedVersion: 1, locale: "ar", body: "نص أولي", draftData: { contentType: "project", caseStudy: { outcomes: ["مخرجات"] },
       evidence: { artifacts: [{ mediaAssetId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea4" }] }, externalLinks: [{ destination: "https://example.com/project-ar" }] } });
@@ -252,6 +256,8 @@ describe("Owner content authoring HTTP adapters", () => {
       { service: fake.service, security: ownerTestSecurity(), logger },
     );
     expect(review.status).toBe(200);
+    expect(review.headers.get("cache-control")).toBe("private, no-store");
+    expect(review.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(await review.json()).toMatchObject({ aggregateVersion: 2, outcome: "revision-reviewed" });
     expect(fake.calls.review[0]).toMatchObject({ expectedVersion: 1, locale: "en", snapshotHash: "a".repeat(64), evidenceVersion: 1, decision: "accepted" });
     const malformed = await handleReviewOwnerContentRevision(

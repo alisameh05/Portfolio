@@ -39,6 +39,8 @@
     "test:phase9:routes": "vitest run tests/routes/phase9-route-registration.test.ts",
     "test:phase9:owner-configuration-http": "vitest run tests/runtime/owner-configuration.test.ts tests/phase4/owner-request-security.test.ts",
     "phase9:focus:owner-configuration-http": "node scripts/phase9-owner-configuration-http-integration.mjs",
+    "prephase9:focus:content-authoring-http": "npm run validation:ready",
+    "phase9:focus:content-authoring-http": "node scripts/phase9-owner-configuration-http-integration.mjs --ticket-295",
     "phase9:record-evidence": "node scripts/phase9-route-evidence.mjs --record",
     "runtime:boundary": "node scripts/check-runtime-boundary.mjs",
     "runtime:boundary:foundation": "node scripts/check-runtime-boundary.mjs --mode foundation",
