@@ -834,7 +834,7 @@ export const PHASE_DECLARED_ADDITIVE_MIGRATIONS = Object.freeze([
   }),
   Object.freeze({
     migration: "20261102120000_allow_content_authoring_owner_rate_limits.sql",
-    migrationSha256: "89f6f71344398320f60b24300adf74d40d84f6de6fadb0ba893bab3307739996",
+    migrationSha256: "9e6027ba32334d55b625701b861d2f12c34f99cb55567e34cf0a9bad35939c16",
     ticket: 295,
     capability: "identity_access.content_authoring_owner_rate_limits",
   }),
