@@ -1,5 +1,5 @@
-import { dispatchOwnerContentAuthoringHttp } from "@/runtime/http/owner-content-authoring-http.js";
-import { registerProductRoute } from "@/runtime/http/product-route-registration.js";
+import { dispatchOwnerContentAuthoringHttp } from "../../../../../../../../runtime/http/owner-content-authoring-http.js";
+import { registerProductRoute } from "../../../../../../../../runtime/http/product-route-registration.js";
 
 type RouteContext = { readonly params: Promise<{ readonly contentId: string }> };
 

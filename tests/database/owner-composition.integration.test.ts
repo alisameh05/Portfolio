@@ -775,6 +775,7 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
       .toMatchObject({ ok: true, value: { title: "HTTP publication fixture" } });
 
     const feedbackRuntime = await getFeedbackRuntimeServices();
+    if (!("scope" in feedbackRuntime)) throw new Error("PHASE9_FEEDBACK_RUNTIME_NOT_CONFIGURED");
     const feedbackContext = { scope: feedbackRuntime.scope, correlationId: `phase9-http-${suffix}-feedback` };
     const submittedFeedback = await feedbackRuntime.service.submitFeedback({
       ...feedbackContext,

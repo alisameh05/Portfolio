@@ -136,6 +136,10 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
       const contentLimit = await createPostgresOwnerConfigurationRateLimit(appDatabase.database)
         .check(`owner_session:${ownerId}:createOwnerContent`);
       expect(contentLimit.allowed).toBe(true);
+      const publicationLimit = createPostgresOwnerConfigurationRateLimit(appDatabase.database);
+      for (const operation of ["publishOwnerContentLanguage", "hideOwnerContent", "archiveOwnerContent", "restoreOwnerContent"]) {
+        expect(await publicationLimit.check(`owner_session:${ownerId}:${operation}`)).toMatchObject({ allowed: true });
+      }
     } catch (error) {
       const code = error !== null && typeof error === "object" && "code" in error && typeof error.code === "string"
         ? error.code.match(/^[A-Z0-9_]{5,10}$/u)?.[0] ?? "UNCLASSIFIED"
