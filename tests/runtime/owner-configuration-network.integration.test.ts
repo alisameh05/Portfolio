@@ -572,11 +572,13 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     expect(hideResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(hidden.success).toBe(true);
     if (!hidden.success) throw new Error("PHASE9_LANGUAGE_HIDE_INVALID");
-    const hiddenProjection = await admin.query(
-      "select count(*)::int as count from content.public_project_locales where content_id = $1::uuid",
+    const hiddenState = await admin.query(
+      "select item.lifecycle, array_agg(locale.locale order by locale.locale) as retained_locales " +
+      "from content.items item left join content.public_project_locales locale using (content_id, portfolio_id) " +
+      "where item.content_id = $1::uuid group by item.lifecycle",
       [languageCreated.data.contentId],
     );
-    expect(hiddenProjection.rows[0]?.count).toBe(0);
+    expect(hiddenState.rows[0]).toEqual({ lifecycle: "hidden", retained_locales: ["ar", "en"] });
 
     const archiveKey = `phase9-language-archive-${suffix}`;
     const archive = () => request(`${languageUrl}/commands/archive`, "POST", {}, archiveKey, hidden.data.aggregateVersion);
