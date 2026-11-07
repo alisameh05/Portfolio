@@ -34,7 +34,7 @@ export const REQUIRED_DATABASE_SECURITY_TESTS = Object.freeze([
 export const REQUIRED_REGRESSION_TESTS = Object.freeze([
   "the issue 254 object backup migration declares its protected ledger contract",
   "every committed migration is classified exactly once and matches the declared phase ranges",
-  "the Phase 7 schedule migration stays between its true predecessor prefix and later Phase 8 migrations",
+  "the Phase 7 schedule migration stays between its true predecessor prefix and later migrations",
   "undeclared, duplicate, or unreviewed transformation migrations fail closed",
   "a synthetic future transformation is admitted only through the injected shared registry",
   "the configuration export migration admits only its source-bound outbox policy, insert grant, and unique index",
