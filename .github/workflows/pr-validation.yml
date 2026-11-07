@@ -331,7 +331,7 @@ jobs:
             evidence/phase-5-integrated-scenarios.json
             evidence/phase-5-security-migrations-postgres.json
             evidence/phase-5-owner-composition-postgres.json
-            evidence/phase5-verification-*.json
+            evidence/phase-5-verification-*.json
           if-no-files-found: warn
           retention-days: 14
       - name: Build the portable Linux Docker validation runner
