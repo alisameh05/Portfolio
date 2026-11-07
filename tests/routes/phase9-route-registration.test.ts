@@ -65,9 +65,11 @@ describe("Phase 9 guarded route registration (#293)", () => {
     expect(report.declared.filter((entry: { surface: string }) => entry.surface === "owner")).toHaveLength(48);
     expect(report.registered.map((entry: { operationId: string }) => entry.operationId)).toEqual([
       "archiveOwnerContent",
-      "createOwnerContent", "getOwnerContentAggregate", "getOwnerContentHistory",
+      "changeOwnerProjectPublicSlug", "changeOwnerProjectStatus", "correctOwnerProjectCandidateSlug",
+      "createOwnerContent", "getOwnerContentAggregate", "getOwnerContentHistory", "getOwnerProjectAggregate",
       "hideOwnerContent", "previewOwnerContentRevision", "publishOwnerContentLanguage",
-      "restoreOwnerContent", "reviewOwnerContentRevision", "saveOwnerContentRevision",
+      "relateOwnerProjects", "restoreOwnerContent", "reviewOwnerContentRevision", "saveOwnerContentRevision",
+      "setOwnerProjectFeatured",
       "updateOwnerContactChannels", "updateOwnerGlobalProjectCta", "updateOwnerProfileConfiguration",
     ]);
     const lifecycleOperations = new Set(["archiveOwnerContent", "hideOwnerContent", "publishOwnerContentLanguage", "restoreOwnerContent"]);
@@ -82,7 +84,19 @@ describe("Phase 9 guarded route registration (#293)", () => {
       { method: "POST", path: "/api/owner/v1/content/{contentId}/commands/restore", operationId: "restoreOwnerContent",
         file: "src/app/api/owner/v1/content/[contentId]/commands/restore/route.ts" },
     ]);
-    expect(report.pending).toHaveLength(40);
+    expect(report.pending).toHaveLength(34);
+    expect(report.registered.filter((entry: { operationId: string }) =>
+      ["getOwnerProjectAggregate", "changeOwnerProjectStatus", "setOwnerProjectFeatured", "changeOwnerProjectPublicSlug",
+        "correctOwnerProjectCandidateSlug", "relateOwnerProjects"].includes(entry.operationId)))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ method: "GET", path: "/api/owner/v1/projects/{projectId}", operationId: "getOwnerProjectAggregate",
+          file: "src/app/api/owner/v1/projects/[projectId]/route.ts" }),
+        expect.objectContaining({ method: "POST", path: "/api/owner/v1/projects/{projectId}/commands/change-status", operationId: "changeOwnerProjectStatus" }),
+        expect.objectContaining({ method: "POST", path: "/api/owner/v1/projects/{projectId}/commands/set-featured", operationId: "setOwnerProjectFeatured" }),
+        expect.objectContaining({ method: "POST", path: "/api/owner/v1/projects/{projectId}/commands/change-slug", operationId: "changeOwnerProjectPublicSlug" }),
+        expect.objectContaining({ method: "POST", path: "/api/owner/v1/projects/{projectId}/commands/correct-candidate-slug", operationId: "correctOwnerProjectCandidateSlug" }),
+        expect.objectContaining({ method: "POST", path: "/api/owner/v1/projects/{projectId}/commands/relate-project", operationId: "relateOwnerProjects" }),
+      ]));
     expect(report.developmentPassed).toBe(true);
     expect(report.phase9Complete).toBe(false);
   });
