@@ -3,7 +3,10 @@ import { randomBytes } from "node:crypto";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  getApprovedFeedbackApplicationService,
+  getFeedbackRuntimeServices,
   getOperationsPersistence,
+  getProjectInteractionSummaryApplicationService,
   getPublicDiscoveryApplicationService,
   getPhase5OwnerApplicationServices,
   initializeDatabaseRuntime,
@@ -13,7 +16,14 @@ import { createPortfolioSettingsReader, createPortfolioSettingsService } from ".
 import { createPostgresPortfolioSettingsRepository } from "../../src/modules/portfolio-configuration/adapters/postgres-settings.js";
 import { createStableId, type IdempotencyKey, type StableId } from "../../src/shared/domain/index.js";
 import { getLifecycleCoordinator } from "../../src/runtime/lifecycle.js";
-import { handleGetOwnerContentAggregate } from "../../src/runtime/http/owner-publication.js";
+import {
+  handleArchiveOwnerContent,
+  handleGetOwnerContentAggregate,
+  handleHideOwnerContent,
+  handlePublishOwnerContentLanguage,
+  handleRestoreOwnerContent,
+  handleSaveOwnerContentRevision,
+} from "../../src/runtime/http/owner-publication.js";
 import { handleGetOwnerContentHistory } from "../../src/runtime/http/owner-content-review.js";
 import { handleGetOwnerProjectAggregate } from "../../src/runtime/http/owner-project.js";
 import { ownerTestSecurity, withOwnerTestAuth } from "../runtime/owner-test-auth.js";
@@ -33,6 +43,19 @@ function ownerReadRequest(path: string): Request {
   return new Request(`https://example.com${path}`, {
     method: "GET",
     headers: withOwnerTestAuth({ accept: "application/json" }),
+  });
+}
+
+function ownerMutationRequest(path: string, body: unknown, idempotencyKey: string, expectedVersion: number): Request {
+  return new Request(`https://example.com${path}`, {
+    method: "POST",
+    headers: withOwnerTestAuth({
+      "content-type": "application/json",
+      "idempotency-key": idempotencyKey,
+      "if-match": `"${expectedVersion}"`,
+      "x-request-id": `${idempotencyKey}-trace`,
+    }),
+    body: JSON.stringify(body),
   });
 }
 
@@ -127,6 +150,7 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
         externalLinks: [],
       },
     });
+
     expect(created.ok).toBe(true);
     if (!created.ok) return;
 
@@ -609,5 +633,223 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
       .toMatchObject({ ok: true, value: { type: "redirect", toSlug: "runtime-assembled-project-revised" } });
     expect(await services.contentAuthoring.getPublicProject({ slug: "runtime-assembled-project-revised", locale: "en" })).toMatchObject({ ok: true });
     expect(await services.contentAuthoring.getPublicProject({ slug: "runtime-assembled-project-revised", locale: "ar" })).toMatchObject({ ok: false });
+  }, 60_000);
+  it("executes publication and lifecycle HTTP against PostgreSQL without replacing retained public state", async () => {
+    const suffix = `${process.pid}-${randomBytes(3).toString("hex")}`;
+    const slug = `phase9-http-${suffix}`;
+    const artifactId = createStableId("SupportingArtifact");
+    const caseStudy = {
+      problem: "Transport must preserve the last valid public Language version.",
+      ownerRole: "Verified the Owner command boundary.",
+      contributions: ["Connected publication and lifecycle HTTP."],
+      outcomes: ["The previous accepted Revision remains public."],
+      lessons: "Save and publication remain separate decisions.",
+    };
+    const evidence = {
+      claims: [{ claimId: createStableId("EvidenceClaim"), text: "The workflow uses PostgreSQL.", artifactIds: [artifactId] }],
+      artifacts: [{ id: artifactId, title: "HTTP workflow evidence", destinationUrl: "https://example.com/evidence" }],
+    };
+    const arabicTitle = "\u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u0646\u0634\u0631";
+    const created = await services.contentAuthoring.createContent({
+      actor,
+      idempotencyKey: key(`phase9-http-${suffix}-create`),
+      correlationId: `phase9-http-${suffix}-create`,
+      payload: {
+        contentType: "project",
+        locale: "en",
+        title: "HTTP publication fixture",
+        summary: "A real Owner HTTP publication and lifecycle flow.",
+        body: "The request adapters dispatch into the configured PostgreSQL Content application service.",
+        candidateSlug: slug,
+        caseStudy,
+        evidence,
+        externalLinks: [],
+      },
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const preview = await services.contentAuthoring.previewRevision({ actor, contentId: created.value.contentId, revisionId: created.value.revisionId });
+    expect(preview.ok).toBe(true);
+    if (!preview.ok) return;
+    const reviewed = await services.contentAuthoring.reviewRevision({
+      actor, contentId: created.value.contentId, revisionId: created.value.revisionId,
+      expectedVersion: created.value.aggregateVersion, idempotencyKey: key(`phase9-http-${suffix}-review`),
+      correlationId: `phase9-http-${suffix}-review`, locale: "en", snapshotHash: preview.value.snapshotHash,
+      evidenceVersion: preview.value.evidenceVersion, decision: "accepted", findings: [],
+    });
+    expect(reviewed.ok).toBe(true);
+    if (!reviewed.ok) return;
+
+    const dependencies = { service: services.publication, contentAuthoring: services.contentAuthoring, security: ownerTestSecurity() };
+    const publishKey = `phase9-http-${suffix}-publish`;
+    const published = await handlePublishOwnerContentLanguage(
+      ownerMutationRequest(`/api/owner/v1/content/${created.value.contentId}/commands/publish-language`,
+        { locale: "en", revisionId: created.value.revisionId }, publishKey, reviewed.value.aggregateVersion),
+      { contentId: created.value.contentId }, dependencies,
+    );
+    expect(published.status).toBe(200);
+    expect(published.headers.get("cache-control")).toBe("private, no-store");
+    expect(published.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    const publishedReceipt = await published.json() as { aggregateVersion: number; outcome: string };
+    expect(publishedReceipt.outcome).toBe("language-published");
+    expect(await services.contentAuthoring.getPublicProject({ slug, locale: "en" }))
+      .toMatchObject({ ok: true, value: { title: "HTTP publication fixture" } });
+
+    const arabicDraft = await handleSaveOwnerContentRevision(
+      ownerMutationRequest(`/api/owner/v1/content/${created.value.contentId}/revisions`, {
+        locale: "ar", title: arabicTitle, summary: "\u0645\u0644\u062e\u0635 \u0639\u0631\u0628\u064a", body: "\u0645\u062d\u062a\u0648\u0649 \u0639\u0631\u0628\u064a.",
+        draftData: { contentType: "project", caseStudy, evidence, externalLinks: [] },
+      }, `phase9-http-${suffix}-save-ar`, publishedReceipt.aggregateVersion),
+      { contentId: created.value.contentId }, dependencies,
+    );
+    expect(arabicDraft.status).toBe(201);
+    const arabicDraftReceipt = await arabicDraft.json() as { aggregateVersion: number; revisionId: string };
+    const aggregateResponse = await handleGetOwnerContentAggregate(
+      ownerReadRequest(`/api/owner/v1/content/${created.value.contentId}`),
+      { contentId: created.value.contentId }, dependencies,
+    );
+    expect(aggregateResponse.status).toBe(200);
+    expect(await aggregateResponse.json()).toMatchObject({ localizedStreams: {
+      en: { currentPublishedRevisionId: created.value.revisionId },
+      ar: { revisionCount: 1, currentPublishedRevisionId: null },
+    } });
+    expect(await services.contentAuthoring.getPublicProject({ slug, locale: "ar" }))
+      .toMatchObject({ ok: false, error: { kind: "not_found", code: "PUBLIC_CONTENT_NOT_FOUND" } });
+
+    const arabicPreview = await services.contentAuthoring.previewRevision({ actor, contentId: created.value.contentId,
+      revisionId: arabicDraftReceipt.revisionId as StableId<"Revision"> });
+    expect(arabicPreview.ok).toBe(true);
+    if (!arabicPreview.ok) return;
+    const arabicReview = await services.contentAuthoring.reviewRevision({
+      actor, contentId: created.value.contentId, revisionId: arabicDraftReceipt.revisionId as StableId<"Revision">,
+      expectedVersion: arabicDraftReceipt.aggregateVersion, idempotencyKey: key(`phase9-http-${suffix}-review-ar`),
+      correlationId: `phase9-http-${suffix}-review-ar`, locale: "ar", snapshotHash: arabicPreview.value.snapshotHash,
+      evidenceVersion: arabicPreview.value.evidenceVersion, decision: "accepted", findings: [],
+    });
+    expect(arabicReview.ok).toBe(true);
+    if (!arabicReview.ok) return;
+    const arabicPublished = await handlePublishOwnerContentLanguage(
+      ownerMutationRequest(`/api/owner/v1/content/${created.value.contentId}/commands/publish-language`,
+        { locale: "ar", revisionId: arabicDraftReceipt.revisionId }, `phase9-http-${suffix}-publish-ar`, arabicReview.value.aggregateVersion),
+      { contentId: created.value.contentId }, dependencies,
+    );
+    expect(arabicPublished.status).toBe(200);
+    expect(await services.contentAuthoring.getPublicProject({ slug, locale: "ar" }))
+      .toMatchObject({ ok: true, value: { title: arabicTitle } });
+    const arabicPublishedReceipt = await arabicPublished.json() as { aggregateVersion: number };
+    const publicConfiguration = createPortfolioSettingsReader({
+      repository: createPostgresPortfolioSettingsRepository(),
+      transactions: getOperationsPersistence().transactions,
+      scope,
+      capabilityReader: { async getFacts() {
+        return { currentCv: "available", externalLinks: "available", globalProjectCta: "available" };
+      } },
+    });
+    const englishCapabilities = await publicConfiguration.getPublicConfiguration({ locale: "en" });
+    const arabicCapabilities = await publicConfiguration.getPublicConfiguration({ locale: "ar" });
+    expect(englishCapabilities).toMatchObject({ ok: true, value: { capabilities: {
+      currentCvAvailable: true, externalLinksAvailable: true,
+    } } });
+    expect(arabicCapabilities).toMatchObject({ ok: true, value: { capabilities: {
+      currentCvAvailable: false, externalLinksAvailable: false,
+    } } });
+
+    const saved = await handleSaveOwnerContentRevision(
+      ownerMutationRequest(`/api/owner/v1/content/${created.value.contentId}/revisions`, {
+        locale: "en", title: "Unreviewed replacement", summary: "Still a Draft.", body: "Must not replace public content.",
+      }, `phase9-http-${suffix}-save`, arabicPublishedReceipt.aggregateVersion),
+      { contentId: created.value.contentId }, dependencies,
+    );
+    expect(saved.status).toBe(201);
+    const savedReceipt = await saved.json() as { aggregateVersion: number; revisionId: string };
+    const rejectedPublication = await handlePublishOwnerContentLanguage(
+      ownerMutationRequest(`/api/owner/v1/content/${created.value.contentId}/commands/publish-language`,
+        { locale: "en", revisionId: savedReceipt.revisionId }, `phase9-http-${suffix}-publish-unreviewed`, savedReceipt.aggregateVersion),
+      { contentId: created.value.contentId }, dependencies,
+    );
+    expect(rejectedPublication.status).toBe(422);
+    expect(rejectedPublication.headers.get("cache-control")).toBe("private, no-store");
+    expect(rejectedPublication.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(await services.contentAuthoring.getPublicProject({ slug, locale: "en" }))
+      .toMatchObject({ ok: true, value: { title: "HTTP publication fixture" } });
+
+    const feedbackRuntime = await getFeedbackRuntimeServices();
+    if (!("scope" in feedbackRuntime)) throw new Error("PHASE9_FEEDBACK_RUNTIME_NOT_CONFIGURED");
+    const feedbackContext = { scope: feedbackRuntime.scope, correlationId: `phase9-http-${suffix}-feedback` };
+    const submittedFeedback = await feedbackRuntime.service.submitFeedback({
+      ...feedbackContext,
+      actor: { kind: "visitor", consent: "unknown" },
+      idempotencyKey: key(`phase9-http-${suffix}-feedback`),
+      projectId: created.value.contentId as StableId<"Project">,
+      authorName: "Synthetic visitor",
+      comment: "Private moderation fixture.",
+      locale: "en",
+    });
+    expect(submittedFeedback.ok).toBe(true);
+    if (!submittedFeedback.ok) return;
+    const moderation = getApprovedFeedbackApplicationService();
+    const moderationView = await moderation.getOwnerFeedbackModeration({
+      ...feedbackContext, actor, feedbackId: submittedFeedback.value.id,
+    });
+    expect(moderationView.ok).toBe(true);
+    if (!moderationView.ok) return;
+    const approvedFeedback = await moderation.approveOwnerFeedback({
+      ...feedbackContext, actor, idempotencyKey: key(`phase9-http-${suffix}-feedback-approve`),
+      expectedVersion: moderationView.value.aggregateVersion, feedbackId: submittedFeedback.value.id,
+      reason: "Synthetic approval for lifecycle eligibility coverage.",
+    });
+    expect(approvedFeedback.ok).toBe(true);
+    const interactionQuery = {
+      scope: feedbackRuntime.scope, portfolioId: scope.portfolioId,
+      projectId: created.value.contentId as StableId<"Project">, locale: "en" as const,
+      correlationId: `phase9-http-${suffix}-summary`,
+    };
+    expect(await moderation.getApprovedFeedback({ ...interactionQuery, limit: 10 }))
+      .toMatchObject({ ok: true, value: { items: [expect.objectContaining({ feedbackId: submittedFeedback.value.id })] } });
+    expect(await getProjectInteractionSummaryApplicationService().getProjectAggregate(interactionQuery))
+      .toMatchObject({ ok: true, value: { approvedFeedbackCount: 1 } });
+    const hidden = await handleHideOwnerContent(
+      ownerMutationRequest(`/api/owner/v1/content/${created.value.contentId}/commands/hide`, {},
+        `phase9-http-${suffix}-hide`, savedReceipt.aggregateVersion),
+      { contentId: created.value.contentId }, dependencies,
+    );
+    expect(hidden.status).toBe(200);
+    expect(await services.contentAuthoring.getPublicProject({ slug, locale: "en" }))
+      .toMatchObject({ ok: false, error: { kind: "not_found" } });
+    expect(await moderation.getApprovedFeedback({ ...interactionQuery, limit: 10 }))
+      .toMatchObject({ ok: false, error: { kind: "not_found", code: "PROJECT_UNAVAILABLE" } });
+    expect(await getProjectInteractionSummaryApplicationService().getProjectAggregate(interactionQuery))
+      .toMatchObject({ ok: false, error: { kind: "not_found", code: "PROJECT_UNAVAILABLE" } });
+
+    const hiddenReceipt = await hidden.json() as { aggregateVersion: number };
+    const archiveKey = `phase9-http-${suffix}-archive`;
+    const archiveRequest = () => ownerMutationRequest(`/api/owner/v1/content/${created.value.contentId}/commands/archive`, {}, archiveKey, hiddenReceipt.aggregateVersion);
+    const archived = await handleArchiveOwnerContent(archiveRequest(), { contentId: created.value.contentId }, dependencies);
+    expect(archived.status).toBe(200);
+    const archivedBody = await archived.json();
+    const replay = await handleArchiveOwnerContent(archiveRequest(), { contentId: created.value.contentId }, dependencies);
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual(archivedBody);
+    const lifecycleFacts = await admin.query(
+      "select count(*)::int as count from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'content.content_archived.v1'",
+      [created.value.contentId],
+    );
+    expect(lifecycleFacts.rows[0]?.count).toBe(1);
+
+    const archivedReceipt = archivedBody as { aggregateVersion: number };
+    const restored = await handleRestoreOwnerContent(
+      ownerMutationRequest(`/api/owner/v1/content/${created.value.contentId}/commands/restore`, {},
+        `phase9-http-${suffix}-restore`, archivedReceipt.aggregateVersion),
+      { contentId: created.value.contentId }, dependencies,
+    );
+    expect(restored.status).toBe(200);
+    expect(await services.contentAuthoring.getPublicProject({ slug, locale: "en" }))
+      .toMatchObject({ ok: true, value: { title: "HTTP publication fixture" } });
+    const retained = await services.contentAuthoring.getOwnerContentAggregate({ actor, contentId: created.value.contentId });
+    expect(retained).toMatchObject({ ok: true, value: { lifecycle: "published", publicationHistory: expect.arrayContaining([
+      expect.objectContaining({ revisionId: created.value.revisionId, locale: "en" }),
+      expect.objectContaining({ revisionId: arabicDraftReceipt.revisionId, locale: "ar" }),
+    ]) } });
   }, 60_000);
 });

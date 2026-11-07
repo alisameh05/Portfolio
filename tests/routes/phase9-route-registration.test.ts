@@ -64,11 +64,25 @@ describe("Phase 9 guarded route registration (#293)", () => {
     expect(report.declared.filter((entry: { surface: string }) => entry.surface === "public")).toHaveLength(5);
     expect(report.declared.filter((entry: { surface: string }) => entry.surface === "owner")).toHaveLength(48);
     expect(report.registered.map((entry: { operationId: string }) => entry.operationId)).toEqual([
+      "archiveOwnerContent",
       "createOwnerContent", "getOwnerContentAggregate", "getOwnerContentHistory",
-      "previewOwnerContentRevision", "reviewOwnerContentRevision", "saveOwnerContentRevision",
+      "hideOwnerContent", "previewOwnerContentRevision", "publishOwnerContentLanguage",
+      "restoreOwnerContent", "reviewOwnerContentRevision", "saveOwnerContentRevision",
       "updateOwnerContactChannels", "updateOwnerGlobalProjectCta", "updateOwnerProfileConfiguration",
     ]);
-    expect(report.pending).toHaveLength(44);
+    const lifecycleOperations = new Set(["archiveOwnerContent", "hideOwnerContent", "publishOwnerContentLanguage", "restoreOwnerContent"]);
+    expect(report.registered.filter((entry: { operationId: string }) => lifecycleOperations.has(entry.operationId)).map((entry: { method: string; path: string; operationId: string; file: string }) =>
+      ({ method: entry.method, path: entry.path, operationId: entry.operationId, file: entry.file }))).toEqual([
+      { method: "POST", path: "/api/owner/v1/content/{contentId}/commands/archive", operationId: "archiveOwnerContent",
+        file: "src/app/api/owner/v1/content/[contentId]/commands/archive/route.ts" },
+      { method: "POST", path: "/api/owner/v1/content/{contentId}/commands/hide", operationId: "hideOwnerContent",
+        file: "src/app/api/owner/v1/content/[contentId]/commands/hide/route.ts" },
+      { method: "POST", path: "/api/owner/v1/content/{contentId}/commands/publish-language", operationId: "publishOwnerContentLanguage",
+        file: "src/app/api/owner/v1/content/[contentId]/commands/publish-language/route.ts" },
+      { method: "POST", path: "/api/owner/v1/content/{contentId}/commands/restore", operationId: "restoreOwnerContent",
+        file: "src/app/api/owner/v1/content/[contentId]/commands/restore/route.ts" },
+    ]);
+    expect(report.pending).toHaveLength(40);
     expect(report.developmentPassed).toBe(true);
     expect(report.phase9Complete).toBe(false);
   });

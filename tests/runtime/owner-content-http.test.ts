@@ -9,8 +9,10 @@ import {
 } from "../../src/runtime/http/owner-content-authoring.js";
 import {
   handleGetOwnerContentAggregate,
+  handleArchiveOwnerContent,
   handleHideOwnerContent,
   handlePublishOwnerContentLanguage,
+  handleRestoreOwnerContent,
   handleSaveOwnerContentRevision,
 } from "../../src/runtime/http/owner-publication.js";
 import {
@@ -217,6 +219,37 @@ describe("Owner content authoring HTTP adapters", () => {
     expect(await response.json()).toEqual({ aggregateId: CONTENT_ID, aggregateVersion: 3, outcome: "language-published" });
     expect(fake.calls.publish).toMatchObject([{ contentId: CONTENT_ID, expectedVersion: 2, locale: "en", revisionId: REVISION_ID }]);
     expect(publicationFake.calls.publishOwnerContentLanguage).toHaveLength(0);
+  });
+
+  it("keeps publication and lifecycle success and failure responses private", async () => {
+    const operations = [
+      (service: ReturnType<typeof createOwnerPublicationTestFake>) => handlePublishOwnerContentLanguage(
+        request("POST", { locale: "en", revisionId: REVISION_ID }, { "idempotency-key": "publish-private", "if-match": '"2"' }),
+        { contentId: CONTENT_ID }, { service, security: ownerTestSecurity(), logger: createTestLogger() }),
+      (service: ReturnType<typeof createOwnerPublicationTestFake>) => handleHideOwnerContent(
+        request("POST", {}, { "idempotency-key": "hide-private", "if-match": '"3"' }),
+        { contentId: CONTENT_ID }, { service, security: ownerTestSecurity(), logger: createTestLogger() }),
+      (service: ReturnType<typeof createOwnerPublicationTestFake>) => handleArchiveOwnerContent(
+        request("POST", {}, { "idempotency-key": "archive-private", "if-match": '"4"' }),
+        { contentId: CONTENT_ID }, { service, security: ownerTestSecurity(), logger: createTestLogger() }),
+      (service: ReturnType<typeof createOwnerPublicationTestFake>) => handleRestoreOwnerContent(
+        request("POST", {}, { "idempotency-key": "restore-private", "if-match": '"5"' }),
+        { contentId: CONTENT_ID }, { service, security: ownerTestSecurity(), logger: createTestLogger() }),
+    ];
+
+    for (const operation of operations) {
+      const success = await operation(createOwnerPublicationTestFake({ type: "success" }));
+      expect(success.status).toBe(200);
+      expect(success.headers.get("cache-control")).toBe("private, no-store");
+      expect(success.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+
+      const failure = await operation(createOwnerPublicationTestFake({
+        type: "rejection", rejection: { kind: "validation", code: "PUBLICATION_REJECTED" },
+      }));
+      expect(failure.status).toBe(422);
+      expect(failure.headers.get("cache-control")).toBe("private, no-store");
+      expect(failure.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    }
   });
 
   it("passes the server trace ID to lifecycle events separately from the idempotency key", async () => {

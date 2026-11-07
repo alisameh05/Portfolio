@@ -6,8 +6,12 @@ import {
   zCreateOwnerContentResponse,
   zGetOwnerContentAggregateResponse,
   zGetOwnerContentHistoryResponse,
+  zArchiveOwnerContentResponse,
+  zHideOwnerContentResponse,
+  zPublishOwnerContentLanguageResponse,
   zPreviewOwnerContentRevisionResponse,
   zReviewOwnerContentRevisionResponse,
+  zRestoreOwnerContentResponse,
   zSaveOwnerContentRevisionResponse,
   zProblem,
   zUpdateOwnerContactChannelsResponse,
@@ -18,6 +22,7 @@ import { createPostgresPortfolioSettingsRepository } from "../../src/modules/por
 import { createPortfolioSettingsService } from "../../src/modules/portfolio-configuration/application/settings-service.js";
 import { createPostgresRuntimeDatabase } from "../../src/shared/adapters/postgres/runtime.js";
 import type { StableId } from "../../src/shared/domain/index.js";
+import { createStableId } from "../../src/shared/domain/index.js";
 import { createSupabaseOwnerSessionProvider } from "../../src/modules/identity-access/adapters/supabase-owner-session-provider.js";
 import { createPostgresOwnerConfigurationRateLimit } from "../../src/modules/identity-access/adapters/postgres-owner-configuration-rate-limit.js";
 
@@ -131,6 +136,10 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
       const contentLimit = await createPostgresOwnerConfigurationRateLimit(appDatabase.database)
         .check(`owner_session:${ownerId}:createOwnerContent`);
       expect(contentLimit.allowed).toBe(true);
+      const publicationLimit = createPostgresOwnerConfigurationRateLimit(appDatabase.database);
+      for (const operation of ["publishOwnerContentLanguage", "hideOwnerContent", "archiveOwnerContent", "restoreOwnerContent"]) {
+        expect(await publicationLimit.check(`owner_session:${ownerId}:${operation}`)).toMatchObject({ allowed: true });
+      }
     } catch (error) {
       const code = error !== null && typeof error === "object" && "code" in error && typeof error.code === "string"
         ? error.code.match(/^[A-Z0-9_]{5,10}$/u)?.[0] ?? "UNCLASSIFIED"
@@ -428,6 +437,211 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
       cookie: `sw_owner_session=${foreignOwner.token}`, "idempotency-key": reviewKey,
     }, body: JSON.stringify(reviewBody), signal: AbortSignal.timeout(15_000) });
     await expectPrivateProblem(foreignReviewReplay, 403);
+
+  }, 90_000);
+
+  it("serves language publication and lifecycle commands over built HTTP", async () => {
+    const origin = new URL(urls[0]!).origin;
+    const request = (url: string, method: string, body?: unknown, key?: string, version?: number) => fetch(url, {
+      method,
+      headers: {
+        "content-type": "application/json", origin,
+        cookie: `sw_owner_session=${owner.token}`, "x-csrf-token": csrf,
+        ...(key === undefined ? {} : { "idempotency-key": key }),
+        ...(version === undefined ? {} : { "if-match": `"${version}"` }),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const contentPath = `${urls[0]}/api/owner/v1/content`;
+    const suffix = randomUUID();
+    const artifactId = createStableId("SupportingArtifact");
+    const caseStudy = { problem: "Keep publication explicit.", ownerRole: "Reviewed the language workflow.",
+      contributions: ["Connected lifecycle commands."], outcomes: ["The last valid public state remains recoverable."], lessons: "Save does not publish." };
+    const evidence = {
+      claims: [{ claimId: createStableId("EvidenceClaim"), text: "The transport preserves reviewed content.", artifactIds: [artifactId] }],
+      artifacts: [{ id: artifactId, title: "Publication workflow evidence", destinationUrl: "https://example.test/publication-evidence" }],
+    };
+    const languageCreate = await request(contentPath, "POST", {
+      contentType: "project", locale: "en", title: "Language publication fixture", summary: "English first.",
+      body: "The English revision is the initial public language.", candidateSlug: `language-http-${suffix.slice(0, 12)}`,
+      caseStudy, evidence, externalLinks: [],
+    }, `phase9-language-create-${suffix}`);
+    expect(languageCreate.status).toBe(201);
+    expect(languageCreate.headers.get("cache-control")).toBe("private, no-store");
+    const languageCreated = zCreateOwnerContentResponse.safeParse(await languageCreate.json() as unknown);
+    expect(languageCreated.success).toBe(true);
+    if (!languageCreated.success) throw new Error("PHASE9_LANGUAGE_CREATE_RESPONSE_INVALID");
+    const languageUrl = `${contentPath}/${languageCreated.data.contentId}`;
+    const languageRevisionId = languageCreated.data.revisionId;
+    const englishPreviewResponse = await request(`${languageUrl}/revisions/${languageRevisionId}/preview`, "GET");
+    const englishPreview = zPreviewOwnerContentRevisionResponse.safeParse(await englishPreviewResponse.json() as unknown);
+    expect(englishPreviewResponse.status).toBe(200);
+    expect(englishPreview.success).toBe(true);
+    if (!englishPreview.success) throw new Error("PHASE9_LANGUAGE_ENGLISH_PREVIEW_INVALID");
+    const englishReviewResponse = await request(`${languageUrl}/revisions/${languageRevisionId}/review`, "POST", {
+      locale: "en", snapshotHash: englishPreview.data.snapshotHash, evidenceVersion: englishPreview.data.evidenceVersion,
+      decision: "accepted", findings: [],
+    }, `phase9-language-review-en-${suffix}`, languageCreated.data.aggregateVersion);
+    const englishReview = zReviewOwnerContentRevisionResponse.safeParse(await englishReviewResponse.json() as unknown);
+    expect(englishReviewResponse.status).toBe(200);
+    expect(englishReview.success).toBe(true);
+    if (!englishReview.success) throw new Error("PHASE9_LANGUAGE_ENGLISH_REVIEW_INVALID");
+    const englishPublishResponse = await request(`${languageUrl}/commands/publish-language`, "POST",
+      { locale: "en", revisionId: languageRevisionId }, `phase9-language-publish-en-${suffix}`, englishReview.data.aggregateVersion);
+    const englishPublish = zPublishOwnerContentLanguageResponse.safeParse(await englishPublishResponse.json() as unknown);
+    expect(englishPublishResponse.status).toBe(200);
+    expect(englishPublishResponse.headers.get("cache-control")).toBe("private, no-store");
+    expect(englishPublishResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(englishPublish.success).toBe(true);
+    if (!englishPublish.success) throw new Error("PHASE9_LANGUAGE_ENGLISH_PUBLISH_INVALID");
+    expect(englishPublishResponse.headers.get("etag")).toBe(`"${englishPublish.data.aggregateVersion}"`);
+
+    const arabicBody = { locale: "ar", title: "\u0646\u0633\u062e\u0629 \u0639\u0631\u0628\u064a\u0629",
+      summary: "\u0645\u0644\u062e\u0635 \u0639\u0631\u0628\u064a", body: "\u0645\u062d\u062a\u0648\u0649 \u0639\u0631\u0628\u064a",
+      draftData: { contentType: "project", caseStudy, evidence, externalLinks: [] } };
+    const arabicSaveResponse = await request(`${languageUrl}/revisions`, "POST", arabicBody,
+      `phase9-language-save-ar-${suffix}`, englishPublish.data.aggregateVersion);
+    expect(arabicSaveResponse.status).toBe(201);
+    const arabicSave = zSaveOwnerContentRevisionResponse.safeParse(await arabicSaveResponse.json() as unknown);
+    expect(arabicSave.success).toBe(true);
+    if (!arabicSave.success) throw new Error("PHASE9_LANGUAGE_ARABIC_SAVE_INVALID");
+    const languageAggregateResponse = await request(languageUrl, "GET");
+    const languageAggregate = zGetOwnerContentAggregateResponse.safeParse(await languageAggregateResponse.json() as unknown);
+    expect(languageAggregate.success).toBe(true);
+    if (!languageAggregate.success) throw new Error("PHASE9_LANGUAGE_AGGREGATE_INVALID");
+    expect(languageAggregate.data.localizedStreams).toMatchObject({
+      en: { currentPublishedRevisionId: languageRevisionId },
+      ar: { revisionCount: 1, currentPublishedRevisionId: null },
+    });
+    const arabicBeforePublish = await admin.query(
+      "select count(*)::int as count from content.public_project_locales where content_id = $1::uuid and locale = 'ar'",
+      [languageCreated.data.contentId],
+    );
+    expect(arabicBeforePublish.rows[0]?.count).toBe(0);
+
+    const arabicPreviewResponse = await request(`${languageUrl}/revisions/${arabicSave.data.revisionId}/preview`, "GET");
+    const arabicPreview = zPreviewOwnerContentRevisionResponse.safeParse(await arabicPreviewResponse.json() as unknown);
+    expect(arabicPreviewResponse.status).toBe(200);
+    expect(arabicPreview.success).toBe(true);
+    if (!arabicPreview.success) throw new Error("PHASE9_LANGUAGE_ARABIC_PREVIEW_INVALID");
+    const arabicReviewResponse = await request(`${languageUrl}/revisions/${arabicSave.data.revisionId}/review`, "POST", {
+      locale: "ar", snapshotHash: arabicPreview.data.snapshotHash, evidenceVersion: arabicPreview.data.evidenceVersion,
+      decision: "accepted", findings: [],
+    }, `phase9-language-review-ar-${suffix}`, arabicSave.data.aggregateVersion);
+    const arabicReview = zReviewOwnerContentRevisionResponse.safeParse(await arabicReviewResponse.json() as unknown);
+    expect(arabicReviewResponse.status).toBe(200);
+    expect(arabicReview.success).toBe(true);
+    if (!arabicReview.success) throw new Error("PHASE9_LANGUAGE_ARABIC_REVIEW_INVALID");
+    const arabicPublishResponse = await request(`${languageUrl}/commands/publish-language`, "POST",
+      { locale: "ar", revisionId: arabicSave.data.revisionId }, `phase9-language-publish-ar-${suffix}`, arabicReview.data.aggregateVersion);
+    const arabicPublish = zPublishOwnerContentLanguageResponse.safeParse(await arabicPublishResponse.json() as unknown);
+    expect(arabicPublishResponse.status).toBe(200);
+    expect(arabicPublishResponse.headers.get("cache-control")).toBe("private, no-store");
+    expect(arabicPublishResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(arabicPublish.success).toBe(true);
+    if (!arabicPublish.success) throw new Error("PHASE9_LANGUAGE_ARABIC_PUBLISH_INVALID");
+    const arabicProjection = await admin.query(
+      "select title from content.public_project_locales where content_id = $1::uuid and locale = 'ar'",
+      [languageCreated.data.contentId],
+    );
+    expect(arabicProjection.rows[0]?.title).toBe(arabicBody.title);
+
+    const englishDraftResponse = await request(`${languageUrl}/revisions`, "POST", {
+      locale: "en", title: "Unreviewed English edit", summary: "A new Draft.", body: "This edit must remain private.",
+      draftData: { contentType: "project", caseStudy, evidence, externalLinks: [] },
+    }, `phase9-language-save-en-unreviewed-${suffix}`, arabicPublish.data.aggregateVersion);
+    expect(englishDraftResponse.status).toBe(201);
+    const englishDraft = zSaveOwnerContentRevisionResponse.safeParse(await englishDraftResponse.json() as unknown);
+    expect(englishDraft.success).toBe(true);
+    if (!englishDraft.success) throw new Error("PHASE9_LANGUAGE_ENGLISH_DRAFT_INVALID");
+    const invalidPublish = await request(`${languageUrl}/commands/publish-language`, "POST",
+      { locale: "en", revisionId: englishDraft.data.revisionId }, `phase9-language-invalid-publish-${suffix}`, englishDraft.data.aggregateVersion);
+    await expectPrivateProblem(invalidPublish, 422);
+    const englishProjection = await admin.query(
+      "select title from content.public_project_locales where content_id = $1::uuid and locale = 'en'",
+      [languageCreated.data.contentId],
+    );
+    expect(englishProjection.rows[0]?.title).toBe("Language publication fixture");
+
+    const hideKey = `phase9-language-hide-${suffix}`;
+    const hideResponse = await request(`${languageUrl}/commands/hide`, "POST", {}, hideKey, englishDraft.data.aggregateVersion);
+    const hidden = zHideOwnerContentResponse.safeParse(await hideResponse.json() as unknown);
+    expect(hideResponse.status).toBe(200);
+    expect(hideResponse.headers.get("cache-control")).toBe("private, no-store");
+    expect(hideResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(hidden.success).toBe(true);
+    if (!hidden.success) throw new Error("PHASE9_LANGUAGE_HIDE_INVALID");
+    const hiddenState = await admin.query(
+      "select item.lifecycle, array_agg(locale.locale order by locale.locale) as retained_locales " +
+      "from content.items item left join content.public_project_locales locale using (content_id, portfolio_id) " +
+      "where item.content_id = $1::uuid group by item.lifecycle",
+      [languageCreated.data.contentId],
+    );
+    expect(hiddenState.rows[0]).toEqual({ lifecycle: "hidden", retained_locales: ["ar", "en"] });
+
+    const archiveKey = `phase9-language-archive-${suffix}`;
+    const archive = () => request(`${languageUrl}/commands/archive`, "POST", {}, archiveKey, hidden.data.aggregateVersion);
+    const archiveResponse = await archive();
+    const archived = zArchiveOwnerContentResponse.safeParse(await archiveResponse.json() as unknown);
+    expect(archiveResponse.status).toBe(200);
+    expect(archiveResponse.headers.get("cache-control")).toBe("private, no-store");
+    expect(archiveResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(archived.success).toBe(true);
+    if (!archived.success) throw new Error("PHASE9_LANGUAGE_ARCHIVE_INVALID");
+    const archiveReplay = await archive();
+    expect(archiveReplay.status).toBe(200);
+    expect(await archiveReplay.json()).toEqual(archived.data);
+    const archivedEvents = await admin.query(
+      "select count(*)::int as count from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'content.content_archived.v1'",
+      [languageCreated.data.contentId],
+    );
+    expect(archivedEvents.rows[0]?.count).toBe(1);
+
+    const restoreResponse = await request(`${languageUrl}/commands/restore`, "POST", {},
+      `phase9-language-restore-${suffix}`, archived.data.aggregateVersion);
+    const restored = zRestoreOwnerContentResponse.safeParse(await restoreResponse.json() as unknown);
+    expect(restoreResponse.status).toBe(200);
+    expect(restoreResponse.headers.get("cache-control")).toBe("private, no-store");
+    expect(restoreResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(restored.success).toBe(true);
+    if (!restored.success) throw new Error("PHASE9_LANGUAGE_RESTORE_INVALID");
+    const retainedHistory = await request(`${languageUrl}/history?locale=en&limit=25`, "GET");
+    const retained = zGetOwnerContentHistoryResponse.safeParse(await retainedHistory.json() as unknown);
+    expect(retainedHistory.status).toBe(200);
+    expect(retained.success).toBe(true);
+    if (!retained.success) throw new Error("PHASE9_LANGUAGE_HISTORY_INVALID");
+    expect(retained.data.entries.map((entry) => entry.revisionId)).toContain(languageRevisionId);
+
+    const neverPublishedResponse = await request(contentPath, "POST", {
+      contentType: "project", locale: "en", title: "Never published fixture", summary: "Restore must fail.",
+      body: "No public Revision has ever existed.", candidateSlug: `never-published-${suffix.slice(0, 12)}`,
+    }, `phase9-never-published-create-${suffix}`);
+    const neverPublished = zCreateOwnerContentResponse.safeParse(await neverPublishedResponse.json() as unknown);
+    expect(neverPublishedResponse.status).toBe(201);
+    expect(neverPublished.success).toBe(true);
+    if (!neverPublished.success) throw new Error("PHASE9_NEVER_PUBLISHED_CREATE_INVALID");
+    const neverPublishedUrl = `${contentPath}/${neverPublished.data.contentId}`;
+    const archiveUnpublishedResponse = await request(`${neverPublishedUrl}/commands/archive`, "POST", {},
+      `phase9-never-published-archive-${suffix}`, neverPublished.data.aggregateVersion);
+    const unpublishedArchive = zArchiveOwnerContentResponse.safeParse(await archiveUnpublishedResponse.json() as unknown);
+    expect(archiveUnpublishedResponse.status).toBe(200);
+    expect(unpublishedArchive.success).toBe(true);
+    if (!unpublishedArchive.success) throw new Error("PHASE9_NEVER_PUBLISHED_ARCHIVE_INVALID");
+    const invalidRestore = await request(`${neverPublishedUrl}/commands/restore`, "POST", {},
+      `phase9-never-published-restore-${suffix}`, unpublishedArchive.data.aggregateVersion);
+    await expectPrivateProblem(invalidRestore, 422);
+    const neverPublishedStateResponse = await request(neverPublishedUrl, "GET");
+    const neverPublishedState = zGetOwnerContentAggregateResponse.safeParse(await neverPublishedStateResponse.json() as unknown);
+    expect(neverPublishedState.success).toBe(true);
+    if (!neverPublishedState.success) throw new Error("PHASE9_NEVER_PUBLISHED_STATE_INVALID");
+    expect(neverPublishedState.data.lifecycle).toBe("archived");
+    expect(neverPublishedState.data.publicationHistory).toHaveLength(0);
+    const noPartialProjection = await admin.query(
+      "select count(*)::int as count from content.public_project_locales where content_id = $1::uuid",
+      [neverPublished.data.contentId],
+    );
+    expect(noPartialProjection.rows[0]?.count).toBe(0);
   }, 90_000);
 
   it("enforces the shared database limit across independent built instances and fails closed on limiter outage", async () => {

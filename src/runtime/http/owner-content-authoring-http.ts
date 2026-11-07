@@ -6,6 +6,10 @@ import {
 import { handleCreateOwnerContent } from "./owner-content-authoring.js";
 import {
   handleGetOwnerContentAggregate,
+  handleArchiveOwnerContent,
+  handleHideOwnerContent,
+  handlePublishOwnerContentLanguage,
+  handleRestoreOwnerContent,
   handleSaveOwnerContentRevision,
 } from "./owner-publication.js";
 import {
@@ -22,7 +26,11 @@ export type OwnerContentAuthoringOperation =
   | "saveOwnerContentRevision"
   | "previewOwnerContentRevision"
   | "reviewOwnerContentRevision"
-  | "getOwnerContentHistory";
+  | "getOwnerContentHistory"
+  | "publishOwnerContentLanguage"
+  | "hideOwnerContent"
+  | "archiveOwnerContent"
+  | "restoreOwnerContent";
 
 type ContentParams = { readonly contentId: string };
 type RevisionParams = ContentParams & { readonly revisionId: string };
@@ -74,6 +82,10 @@ export async function dispatchOwnerContentAuthoringHttp(
       case "previewOwnerContentRevision": return await handlePreviewOwnerContentRevision(request, params as RevisionParams, { service: deps.contentAuthoring, security: deps.security });
       case "reviewOwnerContentRevision": return await handleReviewOwnerContentRevision(request, params as RevisionParams, { service: deps.contentAuthoring, security: deps.security });
       case "getOwnerContentHistory": return await handleGetOwnerContentHistory(request, params as ContentParams, { service: deps.contentAuthoring, security: deps.security });
+      case "publishOwnerContentLanguage": return await handlePublishOwnerContentLanguage(request, params as ContentParams, { service: deps.publication, contentAuthoring: deps.contentAuthoring, security: deps.security });
+      case "hideOwnerContent": return await handleHideOwnerContent(request, params as ContentParams, { service: deps.publication, contentAuthoring: deps.contentAuthoring, security: deps.security });
+      case "archiveOwnerContent": return await handleArchiveOwnerContent(request, params as ContentParams, { service: deps.publication, contentAuthoring: deps.contentAuthoring, security: deps.security });
+      case "restoreOwnerContent": return await handleRestoreOwnerContent(request, params as ContentParams, { service: deps.publication, contentAuthoring: deps.contentAuthoring, security: deps.security });
     }
   } catch (error) {
     const safeCode = error instanceof Error && /^[A-Z][A-Z0-9_]{1,80}$/u.test(error.message)

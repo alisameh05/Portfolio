@@ -18,11 +18,11 @@
  * The Owner actor is resolved through the shared Phase 4 verified-actor
  * boundary (`./owner-security.js`): every operation requires a verified
  * Owner session, owner-scoped authorization, and (for mutations) exact
- * origin plus CSRF proof before dispatch. Unauthenticated and forbidden
- * translation is exercised through fakes. Language-version publication,
- * lifecycle decisions, Taxonomy evolution, evidence review, and public route
- * changes remain later provider-neutral application behavior. Draft creation
- * and Revision saves use the Phase 5 Content authoring facade when available.
+ * origin plus CSRF proof before dispatch. Publication and lifecycle mutations
+ * use the Content authoring facade in production, keeping evidence, locale,
+ * retention, projection, and outbox decisions inside the existing transaction
+ * boundary. Draft creation and Revision saves use the same facade; the older
+ * application service remains an injectable adapter seam for transport tests.
  *
  * Generated transport types and validators remain confined to this HTTP
  * layer. Commands, queries, results, and rejections crossing the application
@@ -698,17 +698,17 @@ async function privateResponse(responsePromise: Promise<Response>): Promise<Resp
 }
 
 export function handlePublishOwnerContentLanguage(request: Request, params: { contentId: string }, deps: OwnerPublicationAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-publication", () => handlePublishOwnerContentLanguageUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-publication", () => privateResponse(handlePublishOwnerContentLanguageUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleHideOwnerContent(request: Request, params: { contentId: string }, deps: OwnerPublicationAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-publication", () => handleHideOwnerContentUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-publication", () => privateResponse(handleHideOwnerContentUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleArchiveOwnerContent(request: Request, params: { contentId: string }, deps: OwnerPublicationAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-publication", () => handleArchiveOwnerContentUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-publication", () => privateResponse(handleArchiveOwnerContentUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleRestoreOwnerContent(request: Request, params: { contentId: string }, deps: OwnerPublicationAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-publication", () => handleRestoreOwnerContentUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-publication", () => privateResponse(handleRestoreOwnerContentUnobserved(request, params, deps)), deps.logger);
 }

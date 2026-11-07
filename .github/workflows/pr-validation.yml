@@ -319,6 +319,21 @@ jobs:
       # Phase 6 verifies Phase 5 report/context hashes against this source tree.
       - name: Require fresh Phase 5 predecessor evidence for this source
         run: npm run phase5:gate
+      - name: Publish sanitized Phase 5 predecessor diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase5-predecessor-diagnostics
+          path: |
+            evidence/phase-5-gate-report.json
+            evidence/phase-5-gate-checks/*.log
+            evidence/phase-5-context.json
+            evidence/phase-5-integrated-scenarios.json
+            evidence/phase-5-security-migrations-postgres.json
+            evidence/phase-5-owner-composition-postgres.json
+            evidence/phase-5-verification-*.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Build the portable Linux Docker validation runner
         run: docker compose -p portfolio-validation -f compose.validation.yaml build validation
       - name: Require the complete fail-closed Phase 6 gate
