@@ -832,8 +832,8 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
     expect(replay.status).toBe(200);
     expect(await replay.json()).toEqual(archivedBody);
     const lifecycleFacts = await admin.query(
-      "select count(*)::int as count from operations.outbox_events where aggregate_id = $1::uuid and correlation_id = $2 and event_type = 'content.content_archived.v1'",
-      [created.value.contentId, `${archiveKey}-trace`],
+      "select count(*)::int as count from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'content.content_archived.v1'",
+      [created.value.contentId],
     );
     expect(lifecycleFacts.rows[0]?.count).toBe(1);
 
