@@ -847,6 +847,9 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
     expect(await services.contentAuthoring.getPublicProject({ slug, locale: "en" }))
       .toMatchObject({ ok: true, value: { title: "HTTP publication fixture" } });
     const retained = await services.contentAuthoring.getOwnerContentAggregate({ actor, contentId: created.value.contentId });
-    expect(retained).toMatchObject({ ok: true, value: { lifecycle: "published", publicationHistory: [expect.objectContaining({ revisionId: created.value.revisionId, locale: "en" })] } });
+    expect(retained).toMatchObject({ ok: true, value: { lifecycle: "published", publicationHistory: expect.arrayContaining([
+      expect.objectContaining({ revisionId: created.value.revisionId, locale: "en" }),
+      expect.objectContaining({ revisionId: arabicDraftReceipt.revisionId, locale: "ar" }),
+    ]) } });
   }, 60_000);
 });
