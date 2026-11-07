@@ -25,7 +25,8 @@ export function setupCiNativePostgres({ platform = process.platform, env = proce
   checked("sudo", ["apt-get", "update"]);
   checked("sudo", ["apt-get", "install", "-y", "curl", "ca-certificates"]);
   checked("sudo", ["install", "-d", "/usr/share/postgresql-common/pgdg"]);
-  checked("sudo", ["curl", "--fail", "--silent", "--show-error", "--location", "-o",
+  checked("sudo", ["curl", "--fail", "--silent", "--show-error", "--location",
+    "--retry", "5", "--retry-all-errors", "--retry-delay", "2", "-o",
     "/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc", "https://www.postgresql.org/media/keys/ACCC4CF8.asc"]);
   checked("sudo", ["tee", "/etc/apt/sources.list.d/pgdg.sources"], { input:
     `Types: deb\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: noble-pgdg\nArchitectures: ${architecture}\nComponents: main\nSigned-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc\n` });
