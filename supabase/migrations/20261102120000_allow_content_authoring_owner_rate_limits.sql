@@ -1,3 +1,5 @@
+set lock_timeout = '5s';
+
 begin;
 
 set local role shipwithali_migration;
