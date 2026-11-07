@@ -127,6 +127,8 @@ describe("Owner content authoring HTTP adapters", () => {
       { service: fake.service, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(201);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(fake.calls.create).toHaveLength(1);
     expect(fake.calls.create[0]).toMatchObject({ payload: { evidence: { artifacts: [{ mediaAssetId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea4" }] }, externalLinks: [{ destination: "https://example.com/project" }] } });
     expect(await response.json()).toEqual({ contentId: CONTENT_ID, aggregateVersion: 1, revisionId: REVISION_ID, outcome: "content-created" });
@@ -157,6 +159,22 @@ describe("Owner content authoring HTTP adapters", () => {
     expect(fake.calls.create).toHaveLength(0);
   });
 
+  it.each([
+    ["missing Idempotency-Key", undefined],
+    ["malformed Idempotency-Key", "bad key"],
+  ])("rejects create with %s before dispatch", async (_case, idempotencyKey) => {
+    const fake = createService();
+    const headers = idempotencyKey === undefined ? {} : { "idempotency-key": idempotencyKey };
+    const response = await handleCreateOwnerContent(
+      request("POST", { contentType: "project", locale: "en", title: "Atlas", summary: "Draft.", body: "Draft body.", candidateSlug: "atlas" }, headers),
+      { service: fake.service, security: ownerTestSecurity(), logger: createTestLogger() },
+    );
+    expect(response.status).toBe(400);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(fake.calls.create).toHaveLength(0);
+  });
+
   it("inspects a scoped aggregate and saves a Revision using the declared precondition headers", async () => {
     const fake = createService();
     const publicationFake = createOwnerPublicationTestFake({ type: "success" });
@@ -179,6 +197,8 @@ describe("Owner content authoring HTTP adapters", () => {
       { service: publicationFake, contentAuthoring: fake.service, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(save.status).toBe(201);
+    expect(save.headers.get("cache-control")).toBe("private, no-store");
+    expect(save.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(fake.calls.save).toHaveLength(1);
     expect(fake.calls.save[0]).toMatchObject({ expectedVersion: 1, locale: "ar", body: "نص أولي", draftData: { contentType: "project", caseStudy: { outcomes: ["مخرجات"] },
       evidence: { artifacts: [{ mediaAssetId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea4" }] }, externalLinks: [{ destination: "https://example.com/project-ar" }] } });
@@ -252,6 +272,8 @@ describe("Owner content authoring HTTP adapters", () => {
       { service: fake.service, security: ownerTestSecurity(), logger },
     );
     expect(review.status).toBe(200);
+    expect(review.headers.get("cache-control")).toBe("private, no-store");
+    expect(review.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(await review.json()).toMatchObject({ aggregateVersion: 2, outcome: "revision-reviewed" });
     expect(fake.calls.review[0]).toMatchObject({ expectedVersion: 1, locale: "en", snapshotHash: "a".repeat(64), evidenceVersion: 1, decision: "accepted" });
     const malformed = await handleReviewOwnerContentRevision(
@@ -262,5 +284,39 @@ describe("Owner content authoring HTTP adapters", () => {
     expect(malformed.status).toBe(400);
     expect(fake.calls.review).toHaveLength(1);
     expect(JSON.stringify(logger.records)).not.toContain("Keep review notes private.");
+  });
+
+  it.each([
+    ["missing Idempotency-Key", undefined, '"1"'],
+    ["malformed Idempotency-Key", "bad key", '"1"'],
+    ["missing If-Match", "review-transport", undefined],
+    ["malformed If-Match", "review-transport", "not-an-etag"],
+  ])("rejects review with %s before dispatch", async (_case, idempotencyKey, ifMatch) => {
+    const fake = createService();
+    const headers = {
+      ...(idempotencyKey === undefined ? {} : { "idempotency-key": idempotencyKey }),
+      ...(ifMatch === undefined ? {} : { "if-match": ifMatch }),
+    };
+    const response = await handleReviewOwnerContentRevision(
+      request("POST", { locale: "en", snapshotHash: "a".repeat(64), evidenceVersion: 1, decision: "accepted", findings: [] }, headers),
+      { contentId: CONTENT_ID, revisionId: REVISION_ID },
+      { service: fake.service, security: ownerTestSecurity(), logger: createTestLogger() },
+    );
+    expect(response.status).toBe(400);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(fake.calls.review).toHaveLength(0);
+  });
+
+  it("rejects an invalid review path before dispatch", async () => {
+    const fake = createService();
+    const response = await handleReviewOwnerContentRevision(
+      request("POST", { locale: "en", snapshotHash: "a".repeat(64), evidenceVersion: 1, decision: "accepted", findings: [] },
+        { "idempotency-key": "review-invalid-path", "if-match": '"1"' }),
+      { contentId: "not-a-uuid", revisionId: REVISION_ID },
+      { service: fake.service, security: ownerTestSecurity(), logger: createTestLogger() },
+    );
+    expect(response.status).toBe(400);
+    expect(fake.calls.review).toHaveLength(0);
   });
 });

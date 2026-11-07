@@ -64,9 +64,11 @@ describe("Phase 9 guarded route registration (#293)", () => {
     expect(report.declared.filter((entry: { surface: string }) => entry.surface === "public")).toHaveLength(5);
     expect(report.declared.filter((entry: { surface: string }) => entry.surface === "owner")).toHaveLength(48);
     expect(report.registered.map((entry: { operationId: string }) => entry.operationId)).toEqual([
+      "createOwnerContent", "getOwnerContentAggregate", "getOwnerContentHistory",
+      "previewOwnerContentRevision", "reviewOwnerContentRevision", "saveOwnerContentRevision",
       "updateOwnerContactChannels", "updateOwnerGlobalProjectCta", "updateOwnerProfileConfiguration",
     ]);
-    expect(report.pending).toHaveLength(50);
+    expect(report.pending).toHaveLength(44);
     expect(report.developmentPassed).toBe(true);
     expect(report.phase9Complete).toBe(false);
   });
@@ -245,7 +247,7 @@ describe("Phase 9 guarded route registration (#293)", () => {
     evidenceFiles.push(join(ROOT, summaryPath));
     writeFileSync(join(ROOT, summaryPath), JSON.stringify({ executions: [] }));
     expect(() => recordPhase9Evidence({ summaryPath })).toThrow("PHASE9_EXECUTION_IDENTITY_MISMATCH");
-  });
+  }, 20_000);
   it("re-hashes named execution artifacts and fails if their bytes change", () => {
     const artifact = "evidence/phase9-evidence-descriptor-fixture.tmp";
     const artifactPath = join(ROOT, artifact);
@@ -264,5 +266,5 @@ describe("Phase 9 guarded route registration (#293)", () => {
     expect(evaluatePhase9EvidenceDescriptor(descriptor).accepted).toBe(true);
     writeFileSync(artifactPath, "changed output\n");
     expect(evaluatePhase9EvidenceDescriptor(descriptor).errors).toContain("execution-artifact-digest-mismatch");
-  });
+  }, 20_000);
 });

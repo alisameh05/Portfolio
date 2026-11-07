@@ -10,6 +10,7 @@ import {
   zReviewOwnerContentRevisionResponse,
 } from "../../contracts/http/owner/v1/generated/zod.gen.js";
 import { observeHttpRequest } from "./observe-request.js";
+import { readBoundedJson } from "./read-bounded-json.js";
 
 import type { ContentAuthoringService } from "../../modules/content-publishing/application/authoring.js";
 import type { IdempotencyKey, Rejection, StableId } from "../../shared/domain/index.js";
@@ -91,9 +92,9 @@ function versionFromHeader(value: string): number | null {
       "If-Match": request.headers.get("if-match") ?? undefined,
     });
     if (!headers.success) return badRequest(logger, traceId, instance, "Missing or invalid concurrency headers.");
-    let bodyValue: unknown;
-    try { bodyValue = await request.json() as unknown; } catch { return badRequest(logger, traceId, instance, "Malformed JSON body."); }
-    const body = zReviewOwnerContentRevisionBody.safeParse(bodyValue);
+    const bodyValue = await readBoundedJson(request);
+    if (!bodyValue.ok) return badRequest(logger, traceId, instance, "Malformed or oversized JSON body.");
+    const body = zReviewOwnerContentRevisionBody.safeParse(bodyValue.value);
     if (!body.success) return badRequest(logger, traceId, instance, "Invalid Revision review body.");
     const expectedVersion = versionFromHeader(headers.data["If-Match"]);
     if (expectedVersion === null) return badRequest(logger, traceId, instance, "Missing or invalid concurrency headers.");
@@ -160,13 +161,20 @@ function versionFromHeader(value: string): number | null {
 
 
 export function handlePreviewOwnerContentRevision(request: Request, params: { readonly contentId: string; readonly revisionId: string }, deps: OwnerContentReviewAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-content-review", () => handlePreviewOwnerContentRevisionUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-content-review", () => privateResponse(handlePreviewOwnerContentRevisionUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleReviewOwnerContentRevision(request: Request, params: { readonly contentId: string; readonly revisionId: string }, deps: OwnerContentReviewAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-content-review", () => handleReviewOwnerContentRevisionUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-content-review", () => privateResponse(handleReviewOwnerContentRevisionUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleGetOwnerContentHistory(request: Request, params: { readonly contentId: string }, deps: OwnerContentReviewAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-content-review", () => handleGetOwnerContentHistoryUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-content-review", () => privateResponse(handleGetOwnerContentHistoryUnobserved(request, params, deps)), deps.logger);
+}
+
+async function privateResponse(responsePromise: Promise<Response>): Promise<Response> {
+  const response = await responsePromise;
+  const headers = new Headers(response.headers);
+  for (const [name, value] of Object.entries(OWNER_PRIVATE_RESPONSE_HEADERS)) headers.set(name, value);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }

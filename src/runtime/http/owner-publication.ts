@@ -55,6 +55,7 @@ import {
   zSaveOwnerContentRevisionResponse,
 } from "../../contracts/http/owner/v1/generated/zod.gen.js";
 import { observeHttpRequest } from "./observe-request.js";
+import { readBoundedJson } from "./read-bounded-json.js";
 
 import type {
   ActorContext,
@@ -226,11 +227,7 @@ async function readJsonBody(request: Request): Promise<
   | { readonly ok: true; readonly value: unknown }
   | { readonly ok: false }
 > {
-  try {
-    return { ok: true, value: (await request.json()) as unknown };
-  } catch {
-    return { ok: false };
-  }
+  return await readBoundedJson(request);
 }
 
 function reject(
@@ -686,11 +683,18 @@ async function runOwnerLifecycleCommand(
 
 
 export function handleGetOwnerContentAggregate(request: Request, params: { contentId: string }, deps: OwnerPublicationAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-publication", () => handleGetOwnerContentAggregateUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-publication", () => privateResponse(handleGetOwnerContentAggregateUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleSaveOwnerContentRevision(request: Request, params: { contentId: string }, deps: OwnerPublicationAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-publication", () => handleSaveOwnerContentRevisionUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-publication", () => privateResponse(handleSaveOwnerContentRevisionUnobserved(request, params, deps)), deps.logger);
+}
+
+async function privateResponse(responsePromise: Promise<Response>): Promise<Response> {
+  const response = await responsePromise;
+  const headers = new Headers(response.headers);
+  for (const [name, value] of Object.entries(OWNER_PRIVATE_RESPONSE_HEADERS)) headers.set(name, value);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
 export function handlePublishOwnerContentLanguage(request: Request, params: { contentId: string }, deps: OwnerPublicationAdapterDeps): Promise<Response> {

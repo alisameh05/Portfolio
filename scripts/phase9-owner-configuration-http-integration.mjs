@@ -15,7 +15,10 @@ import { safeAssertionDiagnostic } from "./validation-errors.mjs";
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const CLI = join(ROOT, "node_modules/supabase/dist/supabase.js");
 const NEXT = join(ROOT, "node_modules/next/dist/bin/next");
-const REPORT = join(ROOT, "evidence/phase9-owner-configuration-http-294.json");
+const ticket = process.argv.includes("--ticket-295") ? 295 : 294;
+const REPORT = join(ROOT, ticket === 295
+  ? "evidence/phase9-content-authoring-http-295.json"
+  : "evidence/phase9-owner-configuration-http-294.json");
 
 async function availablePorts(count) {
   const servers = [];
@@ -167,20 +170,26 @@ async function main() {
       PHASE9_OWNER_HTTP_URLS: JSON.stringify(appPorts.slice(0, 2).map((port) => `http://127.0.0.1:${port}`)),
       PHASE9_OWNER_HTTP_UNREADY_URL: `http://127.0.0.1:${appPorts[2]}`,
       OWNER_ID: ownerId, PORTFOLIO_ID: portfolioId,
+      ...(ticket === 295 ? { PHASE5_REQUIRE_CONTENT_AUTHORING: "1", PHASE5_CONTENT_AUTHORING_DATABASE_URL: status.DB_URL } : {}),
     };
     stage = "tests";
     // Keep draining the live servers' pipes while tests send HTTP requests.
     // Blocking this event loop can fill a server's stdout pipe on Linux and
     // stall its responses until the test's request deadline expires.
     const test = await new Promise((resolve) => {
+      const suites = [
+        "tests/runtime/owner-configuration-network.integration.test.ts",
+        ...(ticket === 295 ? ["tests/runtime/owner-content-http.test.ts", "tests/runtime/owner-publication.test.ts"] : []),
+        "tests/runtime/owner-configuration-http-bootstrap.test.ts",
+        "tests/runtime/owner-configuration.test.ts",
+        "tests/phase4/owner-request-security.test.ts",
+        "tests/phase4/owner-session-auth.test.ts",
+        "tests/phase8/operations-observability.test.ts",
+        ...(ticket === 295 ? ["tests/database/content-authoring.integration.test.ts"] : []),
+      ];
       const child = spawn(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), "run",
       "--config", "vitest.owner-configuration-network.config.ts",
-      "tests/runtime/owner-configuration-network.integration.test.ts",
-      "tests/runtime/owner-configuration-http-bootstrap.test.ts",
-      "tests/runtime/owner-configuration.test.ts",
-      "tests/phase4/owner-request-security.test.ts",
-      "tests/phase4/owner-session-auth.test.ts",
-      "tests/phase8/operations-observability.test.ts",
+      ...suites,
       "--reporter=json", "--reporter=verbose", `--outputFile.json=${reportPath}`], {
         cwd: ROOT, env: testEnv, timeout: 240_000, stdio: ["ignore", "pipe", "pipe"], windowsHide: true,
       });
@@ -195,15 +204,19 @@ async function main() {
     const report = JSON.parse(readFileSync(reportPath, "utf8"));
     if (test.error || test.status !== 0 || report.success !== true || report.numPassedTests <= 3 ||
         report.numFailedTests !== 0 || report.numPendingTests !== 0 || report.numTodoTests !== 0 ||
-        report.testResults?.length !== 6 || report.testResults.some((suite) => suite.status !== "passed")) {
+        report.testResults?.length !== (ticket === 295 ? 9 : 6) || report.testResults.some((suite) => suite.status !== "passed")) {
       const failedAssertions = report.testResults?.flatMap((suite) => suite.assertionResults ?? [])
         .filter((assertion) => assertion.status !== "passed")
         .map((assertion) => ({ ...safeAssertionDiagnostic(assertion),
           authCode: assertion.failureMessages?.join("\n").match(/PHASE9_AUTH_DIAGNOSTIC:(SESSION_MALFORMED|UNSUPPORTED_ALGORITHM|UNKNOWN_SIGNING_KEY|INVALID_SIGNATURE|SESSION_EXPIRED|INVALID_CLAIMS|SESSION_REVOKED|AUTH_PROVIDER_UNAVAILABLE|UNTRUSTED_PROVIDER_IDENTITY|NOT_OWNER)/u)?.[1] ?? null,
           httpStatus: assertion.failureMessages?.join("\n").match(/expected (200|400|401|403|409|429|500|503) to be (?:200|400|401|403|409|429|500|503)/u)?.[1] ?? null,
         })) ?? [];
-      const diagnosticCodes = [...new Set((JSON.stringify(report) + test.stdout + test.stderr + logs.join("")).match(/\b(?:PHASE9_[A-Z_]+|OWNER_RATE_LIMIT_[A-Z_]+|INVALID_CLAIMS|INVALID_SIGNATURE|SESSION_REVOKED|AUTH_PROVIDER_UNAVAILABLE|UNKNOWN_SIGNING_KEY)\b/gu) ?? [])];
-      console.error(JSON.stringify({ code: "PHASE9_OWNER_HTTP_ACCEPTANCE_TESTS_FAILED", assertions: failedAssertions, diagnosticCodes }));
+      const diagnosticCodes = [...new Set((JSON.stringify(report) + test.stdout + test.stderr + logs.join("")).match(/\b(?:PHASE9_[A-Z_]+|OWNER_RATE_LIMIT_[A-Z_]+|RATE_LIMIT_UNAVAILABLE|INVALID_CLAIMS|INVALID_SIGNATURE|SESSION_REVOKED|AUTH_PROVIDER_UNAVAILABLE|UNKNOWN_SIGNING_KEY)\b/gu) ?? [])];
+      const contentCreateFailure = (test.stdout + test.stderr + logs.join("")).match(/PHASE9_CONTENT_CREATE_HTTP:(\d{3}):([a-z_]+)/u);
+      const contentLimitFailure = (test.stdout + test.stderr + logs.join("")).match(/PHASE9_CONTENT_RATE_LIMIT_PREFLIGHT:([A-Z0-9_]+)/u);
+      console.error(JSON.stringify({ code: "PHASE9_OWNER_HTTP_ACCEPTANCE_TESTS_FAILED", assertions: failedAssertions, diagnosticCodes,
+        ...(contentCreateFailure ? { contentCreate: { status: Number(contentCreateFailure[1]), code: contentCreateFailure[2] } } : {}),
+        ...(contentLimitFailure ? { contentRateLimit: contentLimitFailure[1] } : {}) }));
       throw new Error("PHASE9_OWNER_HTTP_ACCEPTANCE_TESTS_FAILED");
     }
     executedTests = report.testResults.flatMap((suite) => (suite.assertionResults ?? []).map((assertion) => ({
@@ -260,7 +273,9 @@ async function main() {
   }));
   mkdirSync(join(ROOT, "evidence"), { recursive: true });
   writeFileSync(REPORT, `${JSON.stringify({
-    ticket: 294, scope: "built-next-owner-configuration-http-real-auth-postgresql",
+    ticket, scope: ticket === 295
+      ? "built-next-owner-content-authoring-review-preview-history-http-real-auth-postgresql"
+      : "built-next-owner-configuration-http-real-auth-postgresql",
     runId: randomUUID(), githubRunId: process.env.GITHUB_RUN_ID ?? null, githubRunAttempt: process.env.GITHUB_RUN_ATTEMPT ?? null,
     source: { commit: commit.status === 0 ? commit.stdout.trim() : "unavailable", treeSha256: workingTreeSourceSha256() },
     contractBundles, migrations,
@@ -270,14 +285,79 @@ async function main() {
     fixtures: { owner: "synthetic linked GitHub test identity", portfolio: "synthetic configured test portfolio", session: "temporary Auth sessions" },
     verdict: "passed", namedChecks: ["all-three-configuration-operations", "valid-receipts-private-headers",
       "cross-instance-exact-replay-and-version-conflict", "csrf-origin-forwarded-host-and-non-owner-denials",
-      "revoked-session-denial", "shared-database-rate-limit", "limiter-outage-fails-closed", "log-privacy"],
+      "revoked-session-denial", "shared-database-rate-limit", "limiter-outage-fails-closed", "log-privacy",
+      ...(ticket === 295 ? ["all-six-content-authoring-http-operations", "content-cross-instance-exact-replay-and-conflict",
+        "foreign-and-revoked-content-read-and-replay-denial", "strict-content-transport-validation-before-effects",
+        "postgres-content-save-preserves-public-projection"] : [])],
+    ...(ticket === 295 ? { acceptanceCriteria: {
+      AC01: ["tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all six private Content authoring, review, preview and history operations over built HTTP"],
+      AC02: ["tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all six private Content authoring, review, preview and history operations over built HTTP",
+        "tests/database/content-authoring.integration.test.ts :: Content authoring production PostgreSQL invariants / serializes same-key and stale-version races and preserves the original replay receipt",
+        "tests/database/content-authoring.integration.test.ts :: Content authoring production PostgreSQL invariants / persists immutable exact-snapshot reviews atomically and does not transfer them to later Revisions"],
+      AC03: ["tests/database/content-authoring.integration.test.ts :: Content authoring production PostgreSQL invariants / publishes reviewed Achievements with internal or public evidence into a locale-specific ordered Timeline"],
+      AC04: ["tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all six private Content authoring, review, preview and history operations over built HTTP"],
+      AC05: ["tests/runtime/owner-content-http.test.ts :: Owner content authoring HTTP adapters / rejects unknown draft fields before dispatch",
+        "tests/runtime/owner-content-http.test.ts :: Owner content authoring HTTP adapters / records an exact-snapshot review through strict contract and concurrency validation",
+        "tests/runtime/owner-content-http.test.ts :: Owner content authoring HTTP adapters / rejects create with missing Idempotency-Key before dispatch",
+        "tests/runtime/owner-content-http.test.ts :: Owner content authoring HTTP adapters / rejects create with malformed Idempotency-Key before dispatch",
+        "tests/runtime/owner-content-http.test.ts :: Owner content authoring HTTP adapters / rejects review with missing Idempotency-Key before dispatch",
+        "tests/runtime/owner-content-http.test.ts :: Owner content authoring HTTP adapters / rejects review with malformed Idempotency-Key before dispatch",
+        "tests/runtime/owner-content-http.test.ts :: Owner content authoring HTTP adapters / rejects review with missing If-Match before dispatch",
+        "tests/runtime/owner-content-http.test.ts :: Owner content authoring HTTP adapters / rejects review with malformed If-Match before dispatch",
+        "tests/runtime/owner-content-http.test.ts :: Owner content authoring HTTP adapters / rejects an invalid review path before dispatch",
+        "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command malformed JSON revisions as 400 before dispatch",
+        "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command missing Idempotency-Key revisions as 400 before dispatch",
+        "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command malformed Idempotency-Key revisions as 400 before dispatch",
+        "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command missing If-Match commands/publish-language as 400 before dispatch",
+        "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command invalid If-Match commands/hide as 400 before dispatch",
+        "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command malformed If-Match revisions as 400 before dispatch",
+        "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command invalid contentId commands/archive as 400 before dispatch",
+        "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command absent body fields revisions as 400 before dispatch",
+        "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command unknown closed-shape property commands/publish-language as 400 before dispatch",
+        "tests/runtime/owner-publication.test.ts :: Owner Publication commands (#30) / rejects command out-of-shape body commands/restore as 400 before dispatch"],
+      AC06: "traceability",
+    } } : {}),
+    ...(ticket === 295 ? { traceability: [
+      { method: "POST", route: "/api/owner/v1/content", operation: "createOwnerContent",
+        application: "dispatchOwnerContentAuthoringHttp(createOwnerContent) -> ContentAuthoringService.create",
+        executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all six private Content authoring, review, preview and history operations over built HTTP",
+        assertions: ["201 response contract and private headers", "exact cross-instance replay", "403 replay denial for foreign session", "401 replay denial after revocation"] },
+      { method: "GET", route: "/api/owner/v1/content/{contentId}", operation: "getOwnerContentAggregate",
+        application: "dispatchOwnerContentAuthoringHttp(getOwnerContentAggregate) -> ContentAuthoringService.getOwnerContentAggregate",
+        executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all six private Content authoring, review, preview and history operations over built HTTP",
+        assertions: ["200 response contract and private headers", "foreign 403 and revoked 401"] },
+      { method: "POST", route: "/api/owner/v1/content/{contentId}/revisions", operation: "saveOwnerContentRevision",
+        application: "dispatchOwnerContentAuthoringHttp(saveOwnerContentRevision) -> ContentAuthoringService.saveRevision",
+        executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all six private Content authoring, review, preview and history operations over built HTTP",
+        assertions: ["201 response contract and private headers", "exact cross-instance replay", "changed-key 409", "stale-version 412", "foreign 403 and revoked 401 replay denial"] },
+      { method: "GET", route: "/api/owner/v1/content/{contentId}/revisions/{revisionId}/preview", operation: "previewOwnerContentRevision",
+        application: "dispatchOwnerContentAuthoringHttp(previewOwnerContentRevision) -> ContentAuthoringService.preview",
+        executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all six private Content authoring, review, preview and history operations over built HTTP",
+        assertions: ["200 response contract and private non-indexable/no-store headers", "foreign 403 and revoked 401"] },
+      { method: "POST", route: "/api/owner/v1/content/{contentId}/revisions/{revisionId}/review", operation: "reviewOwnerContentRevision",
+        application: "dispatchOwnerContentAuthoringHttp(reviewOwnerContentRevision) -> ContentAuthoringService.review",
+        executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all six private Content authoring, review, preview and history operations over built HTTP",
+        assertions: ["200 response contract and private headers", "exact cross-instance replay", "foreign 403 and revoked 401 replay denial"] },
+      { method: "GET", route: "/api/owner/v1/content/{contentId}/history", operation: "getOwnerContentHistory",
+        application: "dispatchOwnerContentAuthoringHttp(getOwnerContentHistory) -> ContentAuthoringService.history",
+        executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all six private Content authoring, review, preview and history operations over built HTTP",
+        assertions: ["200 response contract and private headers", "ordered retained revisions", "foreign 403 and revoked 401"] },
+    ] } : {}),
     operationExamples: [
       { operation: "updateOwnerProfileConfiguration", httpStatus: 200, receiptSchemaValid: true, oneLedgerAndOutboxRecord: true },
       { operation: "updateOwnerContactChannels", httpStatus: 200, receiptSchemaValid: true, oneLedgerAndOutboxRecord: true },
       { operation: "updateOwnerGlobalProjectCta", httpStatus: 200, receiptSchemaValid: true, oneLedgerAndOutboxRecord: true },
+      ...(ticket === 295 ? [
+        { operation: "createOwnerContent", httpStatus: 201, responseSchemaValid: true, privateHeaders: true, exactReplayVerified: true },
+        { operation: "getOwnerContentAggregate", httpStatus: 200, responseSchemaValid: true, privateHeaders: true },
+        { operation: "saveOwnerContentRevision", httpStatus: 201, responseSchemaValid: true, privateHeaders: true, exactReplayVerified: true },
+        { operation: "previewOwnerContentRevision", httpStatus: 200, responseSchemaValid: true, privateHeaders: true },
+        { operation: "reviewOwnerContentRevision", httpStatus: 200, responseSchemaValid: true, privateHeaders: true, exactReplayVerified: true },
+        { operation: "getOwnerContentHistory", httpStatus: 200, responseSchemaValid: true, privateHeaders: true },
+      ] : []),
     ],
     passed: passedTestCount, failed: 0, skipped: 0, productionBuild: true, isolatedLoopbackSupabase: true,
-    execution: { command: "npm run phase9:focus:owner-configuration-http", exitCode: 0,
+    execution: { command: ticket === 295 ? "npm run phase9:focus:content-authoring-http" : "npm run phase9:focus:owner-configuration-http", exitCode: 0,
       passed: executedTests.filter(({ status }) => status === "passed").length,
       failed: executedTests.filter(({ status }) => status === "failed").length, skipped: 0, tests: executedTests },
     cleanupVerified: true, credentialsRecorded: false, secretValuesRecorded: false,

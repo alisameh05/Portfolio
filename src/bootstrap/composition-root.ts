@@ -1121,6 +1121,19 @@ export function getOwnerConfigurationHttpDependencies(): OwnerConfigurationAdapt
   return { service: currentOwnerConfiguration, security: currentOwnerRequestSecurity };
 }
 
+/** Content authoring uses the configured PostgreSQL facade and verified Owner boundary. */
+export async function getOwnerContentAuthoringHttpDependencies() {
+  if (currentContentAuthoring === undefined || currentOwnerRequestSecurity === undefined) {
+    throw new Error("OWNER_CONTENT_AUTHORING_HTTP_NOT_CONFIGURED");
+  }
+  const { createProductionOwnerPublicationService } = await import("../runtime/fakes/owner-publication.js");
+  return {
+    publication: createProductionOwnerPublicationService(),
+    contentAuthoring: currentContentAuthoring,
+    security: currentOwnerRequestSecurity,
+  };
+}
+
 /** Only the configured PostgreSQL application assembly can activate content authoring. */
 export async function getContentAuthoringApplicationService(): Promise<ContentAuthoringService> {
   if (currentContentAuthoring !== undefined) return currentContentAuthoring;

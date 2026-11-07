@@ -3,6 +3,12 @@ import { request as httpRequest } from "node:http";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  zCreateOwnerContentResponse,
+  zGetOwnerContentAggregateResponse,
+  zGetOwnerContentHistoryResponse,
+  zPreviewOwnerContentRevisionResponse,
+  zReviewOwnerContentRevisionResponse,
+  zSaveOwnerContentRevisionResponse,
   zProblem,
   zUpdateOwnerContactChannelsResponse,
   zUpdateOwnerGlobalProjectCtaResponse,
@@ -121,6 +127,17 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     const limit = await createPostgresOwnerConfigurationRateLimit(appDatabase.database)
       .check(`owner_session:${ownerId}:updateOwnerProfileConfiguration`);
     expect(limit.allowed).toBe(true);
+    try {
+      const contentLimit = await createPostgresOwnerConfigurationRateLimit(appDatabase.database)
+        .check(`owner_session:${ownerId}:createOwnerContent`);
+      expect(contentLimit.allowed).toBe(true);
+    } catch (error) {
+      const code = error !== null && typeof error === "object" && "code" in error && typeof error.code === "string"
+        ? error.code.match(/^[A-Z0-9_]{5,10}$/u)?.[0] ?? "UNCLASSIFIED"
+        : "UNCLASSIFIED";
+      console.error(`PHASE9_CONTENT_RATE_LIMIT_PREFLIGHT:${code}`);
+      throw error;
+    }
   }, 60_000);
 
   afterAll(async () => {
@@ -264,6 +281,154 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     );
     expect(deniedLedger.rows[0]?.count).toBe(0);
   }, 120_000);
+
+  it("serves all six private Content authoring, review, preview and history operations over built HTTP", async () => {
+    const origin = new URL(urls[0]!).origin;
+    const request = (url: string, method: string, body?: unknown, key?: string, version?: number) => fetch(url, {
+      method,
+      headers: {
+        "content-type": "application/json", origin,
+        cookie: `sw_owner_session=${owner.token}`, "x-csrf-token": csrf,
+        ...(key === undefined ? {} : { "idempotency-key": key }),
+        ...(version === undefined ? {} : { "if-match": `"${version}"` }),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const contentPath = `${urls[0]}/api/owner/v1/content`;
+    const createKey = `phase9-content-create-${randomUUID()}`;
+    const createBody = {
+      contentType: "project", locale: "en", title: "Private HTTP draft",
+      summary: "Synthetic authoring acceptance fixture.", body: "A private draft body.", candidateSlug: "private-http-draft",
+    };
+    const createdResponse = await request(contentPath, "POST", createBody, createKey);
+    if (createdResponse.status !== 201) {
+      const problem = zProblem.safeParse(await createdResponse.clone().json().catch(() => null));
+      console.error(`PHASE9_CONTENT_CREATE_HTTP:${createdResponse.status}:${problem.success ? problem.data.code : "non_problem"}`);
+    }
+    expect(createdResponse.status).toBe(201);
+    expect(createdResponse.headers.get("cache-control")).toBe("private, no-store");
+    expect(createdResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    const created = zCreateOwnerContentResponse.safeParse(await createdResponse.json() as unknown);
+    expect(created.success).toBe(true);
+    if (!created.success) throw new Error("PHASE9_CONTENT_CREATE_RESPONSE_INVALID");
+    const createReplay = await request(`${urls[1]}/api/owner/v1/content`, "POST", createBody, createKey);
+    expect(createReplay.status).toBe(201);
+    expect(await createReplay.json()).toEqual(created.data);
+    const contentId = created.data.contentId;
+
+    const contentUrl = `${contentPath}/${contentId}`;
+    const aggregateResponse = await request(contentUrl, "GET");
+    expect(aggregateResponse.status).toBe(200);
+    expect(aggregateResponse.headers.get("cache-control")).toBe("private, no-store");
+    const aggregate = zGetOwnerContentAggregateResponse.safeParse(await aggregateResponse.json() as unknown);
+    expect(aggregate.success).toBe(true);
+    if (!aggregate.success) throw new Error("PHASE9_CONTENT_AGGREGATE_INVALID");
+    const initialRevision = aggregate.data.revisions[0]?.revisionId;
+    if (!initialRevision) throw new Error("PHASE9_CONTENT_INITIAL_REVISION_MISSING");
+
+    const saveKey = `phase9-content-save-${randomUUID()}`;
+    const saveBody = {
+      locale: "en", title: "Private HTTP draft, revised", summary: "Saved immutable version.", body: "Updated private draft body.",
+    };
+    const savedResponse = await request(`${contentUrl}/revisions`, "POST", saveBody, saveKey, created.data.aggregateVersion);
+    expect(savedResponse.status).toBe(201);
+    expect(savedResponse.headers.get("cache-control")).toBe("private, no-store");
+    const saved = zSaveOwnerContentRevisionResponse.safeParse(await savedResponse.json() as unknown);
+    expect(saved.success).toBe(true);
+    if (!saved.success) throw new Error("PHASE9_CONTENT_SAVE_RESPONSE_INVALID");
+    const saveReplay = await request(`${urls[1]}/api/owner/v1/content/${contentId}/revisions`, "POST", saveBody, saveKey, created.data.aggregateVersion);
+    expect(saveReplay.status).toBe(201);
+    expect(await saveReplay.json()).toEqual(saved.data);
+    await expectPrivateProblem(await request(`${urls[1]}/api/owner/v1/content/${contentId}/revisions`, "POST",
+      { ...saveBody, title: "Changed idempotency input" }, saveKey, created.data.aggregateVersion), 409);
+    await expectPrivateProblem(await request(`${urls[1]}/api/owner/v1/content/${contentId}/revisions`, "POST",
+      { ...saveBody, title: "Stale update" }, `phase9-content-stale-${randomUUID()}`, created.data.aggregateVersion), 412);
+    const revisionId = saved.data.revisionId;
+
+    const previewResponse = await request(`${contentUrl}/revisions/${revisionId}/preview`, "GET");
+    expect(previewResponse.status).toBe(200);
+    expect(previewResponse.headers.get("cache-control")).toBe("private, no-store");
+    expect(previewResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    const preview = zPreviewOwnerContentRevisionResponse.safeParse(await previewResponse.json() as unknown);
+    expect(preview.success).toBe(true);
+    if (!preview.success) throw new Error("PHASE9_CONTENT_PREVIEW_INVALID");
+
+    const reviewKey = `phase9-content-review-${randomUUID()}`;
+    const reviewBody = {
+      locale: "en", snapshotHash: preview.data.snapshotHash, evidenceVersion: preview.data.evidenceVersion,
+      decision: "accepted", findings: [],
+    };
+    const reviewResponse = await request(`${contentUrl}/revisions/${revisionId}/review`, "POST", reviewBody, reviewKey, saved.data.aggregateVersion);
+    expect(reviewResponse.status).toBe(200);
+    expect(reviewResponse.headers.get("cache-control")).toBe("private, no-store");
+    const reviewed = zReviewOwnerContentRevisionResponse.safeParse(await reviewResponse.json() as unknown);
+    expect(reviewed.success).toBe(true);
+    const reviewReplay = await request(`${urls[1]}/api/owner/v1/content/${contentId}/revisions/${revisionId}/review`, "POST",
+      reviewBody, reviewKey, saved.data.aggregateVersion);
+    expect(reviewReplay.status).toBe(200);
+
+    const historyResponse = await request(`${contentUrl}/history?locale=en&limit=25`, "GET");
+    expect(historyResponse.status).toBe(200);
+    expect(historyResponse.headers.get("cache-control")).toBe("private, no-store");
+    const history = zGetOwnerContentHistoryResponse.safeParse(await historyResponse.json() as unknown);
+    expect(history.success).toBe(true);
+    if (!history.success) throw new Error("PHASE9_CONTENT_HISTORY_INVALID");
+    expect(history.data.entries.map((entry) => entry.revisionId)).toEqual([initialRevision, revisionId]);
+    expect(JSON.stringify([created.data, aggregate.data, saved.data, preview.data, reviewed.data, history.data])).not.toContain(owner.token);
+    const privateReadUrls = [
+      `${urls[1]}/api/owner/v1/content/${contentId}`,
+      `${urls[1]}/api/owner/v1/content/${contentId}/revisions/${revisionId}/preview`,
+      `${urls[1]}/api/owner/v1/content/${contentId}/history`,
+    ];
+    for (const url of privateReadUrls) {
+      const denied = await fetch(url, { method: "GET", headers: {
+        host: new URL(urls[0]!).host, cookie: `sw_owner_session=${foreignOwner.token}`,
+      }, signal: AbortSignal.timeout(15_000) });
+      await expectPrivateProblem(denied, 403);
+    }
+    const createReplayByForeignOwner = await fetch(`${urls[1]}/api/owner/v1/content`, { method: "POST", headers: {
+      host: new URL(urls[0]!).host, "content-type": "application/json", origin,
+      cookie: `sw_owner_session=${foreignOwner.token}`, "idempotency-key": createKey,
+    }, body: JSON.stringify(createBody), signal: AbortSignal.timeout(15_000) });
+    await expectPrivateProblem(createReplayByForeignOwner, 403);
+    await admin.query("delete from auth.sessions where id = $1::uuid", [ownerSecondSession.sessionId]);
+    for (const url of privateReadUrls) {
+      const revoked = await fetch(url, { method: "GET", headers: {
+        host: new URL(urls[0]!).host, cookie: `sw_owner_session=${ownerSecondSession.token}`,
+      }, signal: AbortSignal.timeout(15_000) });
+      await expectPrivateProblem(revoked, 401);
+    }
+    const replayAfterRevocation = await fetch(`${urls[1]}/api/owner/v1/content`, { method: "POST", headers: {
+      host: new URL(urls[0]!).host, "content-type": "application/json", origin,
+      cookie: `sw_owner_session=${ownerSecondSession.token}`, "x-csrf-token": secondCsrf,
+      "idempotency-key": createKey,
+    }, body: JSON.stringify(createBody), signal: AbortSignal.timeout(15_000) });
+    await expectPrivateProblem(replayAfterRevocation, 401);
+    const saveReplayAfterRevocation = await fetch(`${urls[1]}/api/owner/v1/content/${contentId}/revisions`, { method: "POST", headers: {
+      host: new URL(urls[0]!).host, "content-type": "application/json", origin,
+      cookie: `sw_owner_session=${ownerSecondSession.token}`, "x-csrf-token": secondCsrf,
+      "idempotency-key": saveKey, "if-match": `\"${created.data.aggregateVersion}\"`,
+    }, body: JSON.stringify(saveBody), signal: AbortSignal.timeout(15_000) });
+    await expectPrivateProblem(saveReplayAfterRevocation, 401);
+    const reviewReplayAfterRevocation = await fetch(`${urls[1]}/api/owner/v1/content/${contentId}/revisions/${revisionId}/review`, { method: "POST", headers: {
+      host: new URL(urls[0]!).host, "content-type": "application/json", origin,
+      cookie: `sw_owner_session=${ownerSecondSession.token}`, "x-csrf-token": secondCsrf,
+      "idempotency-key": reviewKey, "if-match": `\"${saved.data.aggregateVersion}\"`,
+    }, body: JSON.stringify(reviewBody), signal: AbortSignal.timeout(15_000) });
+    await expectPrivateProblem(reviewReplayAfterRevocation, 401);
+    const foreignSaveReplay = await fetch(`${urls[1]}/api/owner/v1/content/${contentId}/revisions`, { method: "POST", headers: {
+      host: new URL(urls[0]!).host, "content-type": "application/json", origin,
+      cookie: `sw_owner_session=${foreignOwner.token}`, "idempotency-key": saveKey,
+      "if-match": `\"${created.data.aggregateVersion}\"`,
+    }, body: JSON.stringify(saveBody), signal: AbortSignal.timeout(15_000) });
+    await expectPrivateProblem(foreignSaveReplay, 403);
+    const foreignReviewReplay = await fetch(`${urls[1]}/api/owner/v1/content/${contentId}/revisions/${revisionId}/review`, { method: "POST", headers: {
+      host: new URL(urls[0]!).host, "content-type": "application/json", origin,
+      cookie: `sw_owner_session=${foreignOwner.token}`, "idempotency-key": reviewKey,
+    }, body: JSON.stringify(reviewBody), signal: AbortSignal.timeout(15_000) });
+    await expectPrivateProblem(foreignReviewReplay, 403);
+  }, 90_000);
 
   it("enforces the shared database limit across independent built instances and fails closed on limiter outage", async () => {
     const path = "/api/owner/v1/configuration/contact-channels";
