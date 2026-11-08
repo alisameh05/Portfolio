@@ -66,10 +66,10 @@ describe("Phase 9 guarded route registration (#293)", () => {
     expect(report.registered.map((entry: { operationId: string }) => entry.operationId)).toEqual([
       "archiveOwnerContent",
       "changeOwnerProjectPublicSlug", "changeOwnerProjectStatus", "correctOwnerProjectCandidateSlug",
-      "createOwnerContent", "getOwnerContentAggregate", "getOwnerContentHistory", "getOwnerProjectAggregate",
+      "createOwnerContent", "createOwnerProjectStatusValue", "getOwnerContentAggregate", "getOwnerContentHistory", "getOwnerProjectAggregate",
       "hideOwnerContent", "previewOwnerContentRevision", "publishOwnerContentLanguage",
       "relateOwnerProjects", "restoreOwnerContent", "reviewOwnerContentRevision", "saveOwnerContentRevision",
-      "setOwnerProjectFeatured",
+      "setOwnerProjectFeatured", "listOwnerProjectStatusValues", "renameOwnerProjectStatusValue", "retireOwnerProjectStatusValue",
       "updateOwnerContactChannels", "updateOwnerGlobalProjectCta", "updateOwnerProfileConfiguration",
     ]);
     const lifecycleOperations = new Set(["archiveOwnerContent", "hideOwnerContent", "publishOwnerContentLanguage", "restoreOwnerContent"]);
@@ -84,7 +84,7 @@ describe("Phase 9 guarded route registration (#293)", () => {
       { method: "POST", path: "/api/owner/v1/content/{contentId}/commands/restore", operationId: "restoreOwnerContent",
         file: "src/app/api/owner/v1/content/[contentId]/commands/restore/route.ts" },
     ]);
-    expect(report.pending).toHaveLength(34);
+    expect(report.pending).toHaveLength(30);
     expect(report.registered.filter((entry: { operationId: string }) =>
       ["getOwnerProjectAggregate", "changeOwnerProjectStatus", "setOwnerProjectFeatured", "changeOwnerProjectPublicSlug",
         "correctOwnerProjectCandidateSlug", "relateOwnerProjects"].includes(entry.operationId)))

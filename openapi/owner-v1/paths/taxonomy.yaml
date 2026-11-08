@@ -9,6 +9,12 @@ projectStatusValues:
         content:
           application/json:
             schema: { $ref: ../components/taxonomy.yaml#/schemas/ProjectStatusValueList }
+            examples:
+              catalogue:
+                value:
+                  values:
+                    - { valueId: 0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea2, label: Shipped, state: active }
+                    - { valueId: 0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea3, label: Research, state: retired }
       '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
       '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
       '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
@@ -33,6 +39,9 @@ projectStatusValues:
         content:
           application/json:
             schema: { $ref: ../components/taxonomy.yaml#/schemas/ProjectStatusValueReceipt }
+            examples:
+              created:
+                value: { valueId: 0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea2, label: Shipped, state: active, aggregateVersion: 1, outcome: project-status-value-created }
       '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
       '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
       '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
@@ -56,12 +65,18 @@ renameProjectStatusValue:
       content:
         application/json:
           schema: { $ref: ../components/taxonomy.yaml#/schemas/RenameProjectStatusValueCommand }
+          examples:
+            rename:
+              value: { label: In Progress }
     responses:
       '200':
         description: Status label changed without changing status identity or lifecycle.
         content:
           application/json:
             schema: { $ref: ../components/taxonomy.yaml#/schemas/ProjectStatusValueReceipt }
+            examples:
+              renamed:
+                value: { valueId: 0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea2, label: In Progress, state: active, aggregateVersion: 2, outcome: project-status-value-renamed }
       '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
       '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
       '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
@@ -88,12 +103,18 @@ retireProjectStatusValue:
       content:
         application/json:
           schema: { $ref: ../components/taxonomy.yaml#/schemas/RetireProjectStatusValueCommand }
+          examples:
+            retire:
+              value: {}
     responses:
       '200':
         description: Status value retired with history retained.
         content:
           application/json:
             schema: { $ref: ../components/taxonomy.yaml#/schemas/ProjectStatusValueReceipt }
+            examples:
+              retired:
+                value: { valueId: 0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea2, label: Shipped, state: retired, aggregateVersion: 2, outcome: project-status-value-retired }
       '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
       '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
       '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }

@@ -1960,6 +1960,24 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProjectStatusValueList"
+                },
+                "examples": {
+                  "catalogue": {
+                    "value": {
+                      "values": [
+                        {
+                          "valueId": "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea2",
+                          "label": "Shipped",
+                          "state": "active"
+                        },
+                        {
+                          "valueId": "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea3",
+                          "label": "Research",
+                          "state": "retired"
+                        }
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -2016,6 +2034,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProjectStatusValueReceipt"
+                },
+                "examples": {
+                  "created": {
+                    "value": {
+                      "valueId": "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea2",
+                      "label": "Shipped",
+                      "state": "active",
+                      "aggregateVersion": 1,
+                      "outcome": "project-status-value-created"
+                    }
+                  }
                 }
               }
             }
@@ -2070,6 +2099,13 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/RenameProjectStatusValueCommand"
+              },
+              "examples": {
+                "rename": {
+                  "value": {
+                    "label": "In Progress"
+                  }
+                }
               }
             }
           }
@@ -2081,6 +2117,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProjectStatusValueReceipt"
+                },
+                "examples": {
+                  "renamed": {
+                    "value": {
+                      "valueId": "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea2",
+                      "label": "In Progress",
+                      "state": "active",
+                      "aggregateVersion": 2,
+                      "outcome": "project-status-value-renamed"
+                    }
+                  }
                 }
               }
             }
@@ -2142,6 +2189,11 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/RetireProjectStatusValueCommand"
+              },
+              "examples": {
+                "retire": {
+                  "value": {}
+                }
               }
             }
           }
@@ -2153,6 +2205,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProjectStatusValueReceipt"
+                },
+                "examples": {
+                  "retired": {
+                    "value": {
+                      "valueId": "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea2",
+                      "label": "Shipped",
+                      "state": "retired",
+                      "aggregateVersion": 2,
+                      "outcome": "project-status-value-retired"
+                    }
+                  }
                 }
               }
             }
