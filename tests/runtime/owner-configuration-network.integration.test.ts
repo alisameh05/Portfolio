@@ -4,12 +4,16 @@ import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   zCreateOwnerContentResponse,
+  zCreateOwnerProjectStatusValueResponse,
   zGetOwnerContentAggregateResponse,
   zGetOwnerContentHistoryResponse,
   zArchiveOwnerContentResponse,
   zHideOwnerContentResponse,
   zPublishOwnerContentLanguageResponse,
+  zListOwnerProjectStatusValuesResponse,
   zPreviewOwnerContentRevisionResponse,
+  zRenameOwnerProjectStatusValueResponse,
+  zRetireOwnerProjectStatusValueResponse,
   zReviewOwnerContentRevisionResponse,
   zRestoreOwnerContentResponse,
   zSaveOwnerContentRevisionResponse,
@@ -869,6 +873,111 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     );
     expect(noPartialProjection.rows[0]?.count).toBe(0);
   }, 90_000);
+
+  it("serves all four Project status catalogue operations over built HTTP with exact replay and private contracts", async () => {
+    const origin = new URL(urls[0]!).origin;
+    const path = "/api/owner/v1/project-status-values";
+    const request = (url: string, method: string, body?: unknown, key?: string, version?: number, session: Login = owner) => fetch(url, {
+      method,
+      headers: {
+        "content-type": "application/json", origin,
+        cookie: `sw_owner_session=${session.token}`, "x-csrf-token": session === ownerSecondSession ? secondCsrf : csrf,
+        ...(key === undefined ? {} : { "idempotency-key": key }),
+        ...(version === undefined ? {} : { "if-match": `"${version}"` }),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const privateResponse = (response: Response) => {
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
+      expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    };
+
+    const initialList = await request(`${urls[0]}${path}`, "GET");
+    expect(initialList.status).toBe(200);
+    privateResponse(initialList);
+    expect(zListOwnerProjectStatusValuesResponse.safeParse(await initialList.json()).success).toBe(true);
+
+    const invalidLabel = await request(`${urls[0]}${path}`, "POST", { label: "   " }, `phase9-status-invalid-label-${randomUUID()}`);
+    await expectPrivateProblem(invalidLabel, 422);
+    const missingCreateKey = await request(`${urls[0]}${path}`, "POST", { label: `Missing key ${randomUUID()}` });
+    await expectPrivateProblem(missingCreateKey, 400);
+
+    const createKey = `phase9-status-create-${randomUUID()}`;
+    const createBody = { label: `Research ${randomUUID().slice(0, 8)}` };
+    const [createdResponse, createReplay] = await Promise.all([
+      request(`${urls[0]}${path}`, "POST", createBody, createKey),
+      request(`${urls[1]}${path}`, "POST", createBody, createKey, undefined, ownerSecondSession),
+    ]);
+    expect(createdResponse.status).toBe(201);
+    expect(createReplay.status).toBe(201);
+    privateResponse(createdResponse);
+    privateResponse(createReplay);
+    const created = zCreateOwnerProjectStatusValueResponse.safeParse(await createdResponse.json());
+    expect(created.success).toBe(true);
+    if (!created.success) throw new Error("PHASE9_PROJECT_STATUS_CREATE_RESPONSE_INVALID");
+    expect(await createReplay.json()).toEqual(created.data);
+    await expectPrivateProblem(await request(`${urls[1]}${path}`, "POST", { label: `${createBody.label} changed` }, createKey), 409);
+
+    const valuePath = `${path}/${created.data.valueId}/commands`;
+    await expectPrivateProblem(await request(`${urls[0]}${valuePath}/rename`, "POST", { label: "Missing key" }, undefined, 1), 400);
+    await expectPrivateProblem(await request(`${urls[0]}${valuePath}/rename`, "POST", { label: "Missing version" },
+      `phase9-status-missing-version-${randomUUID()}`), 400);
+    await expectPrivateProblem(await request(`${urls[0]}${valuePath}/retire`, "POST", {}, undefined, 1), 400);
+    await expectPrivateProblem(await request(`${urls[0]}${valuePath}/retire`, "POST", {},
+      `phase9-status-retire-missing-version-${randomUUID()}`), 400);
+    const renameKey = `phase9-status-rename-${randomUUID()}`;
+    const renameBody = { label: `${createBody.label} renamed` };
+    const [renamedResponse, renameReplay] = await Promise.all([
+      request(`${urls[0]}${valuePath}/rename`, "POST", renameBody, renameKey, created.data.aggregateVersion),
+      request(`${urls[1]}${valuePath}/rename`, "POST", renameBody, renameKey, created.data.aggregateVersion, ownerSecondSession),
+    ]);
+    expect(renamedResponse.status).toBe(200);
+    expect(renameReplay.status).toBe(200);
+    privateResponse(renamedResponse);
+    privateResponse(renameReplay);
+    const renamed = zRenameOwnerProjectStatusValueResponse.safeParse(await renamedResponse.json());
+    expect(renamed.success).toBe(true);
+    if (!renamed.success) throw new Error("PHASE9_PROJECT_STATUS_RENAME_RESPONSE_INVALID");
+    expect(renamed.data.valueId).toBe(created.data.valueId);
+    expect(await renameReplay.json()).toEqual(renamed.data);
+    await expectPrivateProblem(await request(`${urls[1]}${valuePath}/rename`, "POST", renameBody,
+      `phase9-status-stale-${randomUUID()}`, created.data.aggregateVersion), 412);
+
+    const retireKey = `phase9-status-retire-${randomUUID()}`;
+    const [retiredResponse, retireReplay] = await Promise.all([
+      request(`${urls[0]}${valuePath}/retire`, "POST", {}, retireKey, renamed.data.aggregateVersion),
+      request(`${urls[1]}${valuePath}/retire`, "POST", {}, retireKey, renamed.data.aggregateVersion, ownerSecondSession),
+    ]);
+    expect(retiredResponse.status).toBe(200);
+    expect(retireReplay.status).toBe(200);
+    privateResponse(retiredResponse);
+    privateResponse(retireReplay);
+    const retired = zRetireOwnerProjectStatusValueResponse.safeParse(await retiredResponse.json());
+    expect(retired.success).toBe(true);
+    if (!retired.success) throw new Error("PHASE9_PROJECT_STATUS_RETIRE_RESPONSE_INVALID");
+    expect(retired.data).toMatchObject({ valueId: created.data.valueId, label: renameBody.label, state: "retired" });
+    expect(await retireReplay.json()).toEqual(retired.data);
+
+    const finalList = await request(`${urls[1]}${path}`, "GET");
+    expect(finalList.status).toBe(200);
+    privateResponse(finalList);
+    const listed = zListOwnerProjectStatusValuesResponse.safeParse(await finalList.json());
+    expect(listed.success).toBe(true);
+    expect(listed.success && listed.data.values).toContainEqual({ valueId: created.data.valueId, label: renameBody.label, state: "retired" });
+    if (listed.success) {
+      expect(listed.data.values.some(({ label }) => label.startsWith("Missing key "))).toBe(false);
+      expect(listed.data.values.some(({ label }) => label.startsWith("Foreign "))).toBe(false);
+    }
+
+    const invalidId = await request(`${urls[0]}${path}/not-a-uuid/commands/retire`, "POST", {},
+      `phase9-status-invalid-${randomUUID()}`, 1);
+    await expectPrivateProblem(invalidId, 400);
+    const foreignLabel = `Foreign ${randomUUID()}`;
+    const foreign = await request(`${urls[1]}${path}`, "POST", { label: foreignLabel },
+      `phase9-status-foreign-${randomUUID()}`, undefined, foreignOwner);
+    await expectPrivateProblem(foreign, 403);
+  }, 120_000);
 
   it("enforces the shared database limit across independent built instances and fails closed on limiter outage", async () => {
     const path = "/api/owner/v1/configuration/contact-channels";

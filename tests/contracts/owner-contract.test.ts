@@ -9,11 +9,15 @@ type Parameter = Reference | {
   schema: Record<string, unknown>;
 };
 type Response = Reference | {
-  content?: Record<string, { schema: Reference | Record<string, unknown> }>;
+  content?: Record<string, {
+    schema: Reference | Record<string, unknown>;
+    examples?: Record<string, { value: unknown }>;
+  }>;
 };
 type Operation = {
   operationId: string;
   parameters?: Parameter[];
+  requestBody?: { content?: Record<string, { examples?: Record<string, { value: unknown }> }> };
   responses: Record<string, Response>;
   security?: Array<Record<string, string[]>>;
 };
@@ -113,6 +117,28 @@ describe("Owner v1 contract", () => {
 
     expect(actual.sort()).toEqual([...expectedOperations].sort());
     expect(JSON.stringify(document.paths).replaceAll('"lab-entries"', "")).not.toMatch(/\blab\b|\/patch|generic/i);
+  });
+
+  it("documents examples for all four Project status catalogue operations", () => {
+    const operations = [
+      { path: "/api/owner/v1/project-status-values", method: "get", operationId: "listOwnerProjectStatusValues", status: "200" },
+      { path: "/api/owner/v1/project-status-values", method: "post", operationId: "createOwnerProjectStatusValue", status: "201" },
+      { path: "/api/owner/v1/project-status-values/{valueId}/commands/rename", method: "post", operationId: "renameOwnerProjectStatusValue", status: "200" },
+      { path: "/api/owner/v1/project-status-values/{valueId}/commands/retire", method: "post", operationId: "retireOwnerProjectStatusValue", status: "200" },
+    ];
+    for (const entry of operations) {
+      const operation = document.paths[entry.path]?.[entry.method];
+      expect(operation?.operationId).toBe(entry.operationId);
+      const response = operation?.responses[entry.status];
+      expect(response && "$ref" in response ? undefined : response?.content?.["application/json"]?.examples).toBeDefined();
+      if (entry.method === "post") {
+        expect(operation?.requestBody?.content?.["application/json"]?.examples).toBeDefined();
+      }
+    }
+    const list = document.paths["/api/owner/v1/project-status-values"]?.["get"];
+    const listParameters = list?.parameters?.map(resolveParameter) ?? [];
+    expect(listParameters.map((parameter) => parameter?.name)).not.toContain("Idempotency-Key");
+    expect(listParameters.map((parameter) => parameter?.name)).not.toContain("If-Match");
   });
 
   it("requires the Owner session globally and distinguishes 401 from 403", () => {
