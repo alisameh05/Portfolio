@@ -67,9 +67,9 @@ describe("Phase 9 guarded route registration (#293)", () => {
       "archiveOwnerContent",
       "changeOwnerProjectPublicSlug", "changeOwnerProjectStatus", "correctOwnerProjectCandidateSlug",
       "createOwnerContent", "createOwnerProjectStatusValue", "getOwnerContentAggregate", "getOwnerContentHistory", "getOwnerProjectAggregate",
-      "hideOwnerContent", "previewOwnerContentRevision", "publishOwnerContentLanguage",
-      "relateOwnerProjects", "restoreOwnerContent", "reviewOwnerContentRevision", "saveOwnerContentRevision",
-      "setOwnerProjectFeatured", "listOwnerProjectStatusValues", "renameOwnerProjectStatusValue", "retireOwnerProjectStatusValue",
+      "hideOwnerContent", "listOwnerProjectStatusValues", "previewOwnerContentRevision", "publishOwnerContentLanguage",
+      "relateOwnerProjects", "renameOwnerProjectStatusValue", "restoreOwnerContent", "retireOwnerProjectStatusValue", "reviewOwnerContentRevision", "saveOwnerContentRevision",
+      "setOwnerProjectFeatured",
       "updateOwnerContactChannels", "updateOwnerGlobalProjectCta", "updateOwnerProfileConfiguration",
     ]);
     const lifecycleOperations = new Set(["archiveOwnerContent", "hideOwnerContent", "publishOwnerContentLanguage", "restoreOwnerContent"]);

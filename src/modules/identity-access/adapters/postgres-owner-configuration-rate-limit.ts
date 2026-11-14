@@ -23,6 +23,10 @@ const OWNER_CONFIGURATION_OPERATIONS = new Set([
   "changeOwnerProjectPublicSlug",
   "correctOwnerProjectCandidateSlug",
   "relateOwnerProjects",
+  "listOwnerProjectStatusValues",
+  "createOwnerProjectStatusValue",
+  "renameOwnerProjectStatusValue",
+  "retireOwnerProjectStatusValue",
 ]);
 const OWNER_SCOPE_PATTERN = /^owner_session:([0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}):([A-Za-z]+)$/i;
 
