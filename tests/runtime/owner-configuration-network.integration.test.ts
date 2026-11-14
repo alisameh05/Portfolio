@@ -78,7 +78,7 @@ function fetch(input: string, init?: RequestInit): Promise<Response> {
 async function expectPrivateProblem(response: Response, status: number): Promise<void> {
   if (response.status !== status) {
     const statusName = (value: number) => ({
-      400: "BAD_REQUEST", 401: "UNAUTHENTICATED", 403: "FORBIDDEN", 404: "NOT_FOUND",
+      200: "SUCCESS", 201: "CREATED", 400: "BAD_REQUEST", 401: "UNAUTHENTICATED", 403: "FORBIDDEN", 404: "NOT_FOUND",
       409: "CONFLICT", 412: "PRECONDITION_FAILED", 422: "UNPROCESSABLE", 429: "RATE_LIMITED", 503: "UNAVAILABLE",
     } as Record<number, string>)[value] ?? "OTHER";
     console.error(`PHASE9_PRIVATE_PROBLEM_EXPECTED_${statusName(status)}_ACTUAL_${statusName(response.status)}`);
