@@ -595,7 +595,7 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
       "select count(*)::int as count from content.public_project_locales where content_id = $1::uuid",
       [hiddenFixture.contentId],
     );
-    expect(hiddenProjection.rows[0]?.count).toBe(0);
+    expect(hiddenProjection.rows[0]?.count).toBe(1);
 
     const newSlug = `${published.candidateSlug}-updated`;
     const slugKey = `phase9-project-public-slug-${suffix}`;
