@@ -76,6 +76,9 @@ function fetch(input: string, init?: RequestInit): Promise<Response> {
 }
 
 async function expectPrivateProblem(response: Response, status: number): Promise<void> {
+  if (response.status !== status) {
+    console.error(`PHASE9_PRIVATE_PROBLEM_EXPECTED_${status}_ACTUAL_${response.status}`);
+  }
   expect(response.status).toBe(status);
   expect(response.headers.get("cache-control")).toBe("private, no-store");
   expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
