@@ -55,6 +55,14 @@ export const OWNER_PRIVATE_RESPONSE_HEADERS = {
   "Cache-Control": "private, no-store",
   "X-Robots-Tag": "noindex, nofollow",
 } as const;
+
+/** Applies the required privacy headers to every Owner success and error response. */
+export async function withOwnerPrivateResponseHeaders(responsePromise: Promise<Response>): Promise<Response> {
+  const response = await responsePromise;
+  const headers = new Headers(response.headers);
+  for (const [name, value] of Object.entries(OWNER_PRIVATE_RESPONSE_HEADERS)) headers.set(name, value);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
 import {
   decideAuthorization,
   requiredPermissionForOwnerOperation,

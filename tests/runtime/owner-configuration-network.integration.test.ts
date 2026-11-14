@@ -17,6 +17,12 @@ import {
   zUpdateOwnerContactChannelsResponse,
   zUpdateOwnerGlobalProjectCtaResponse,
   zUpdateOwnerProfileConfigurationResponse,
+  zGetOwnerProjectAggregateResponse,
+  zChangeOwnerProjectStatusResponse,
+  zSetOwnerProjectFeaturedResponse,
+  zChangeOwnerProjectPublicSlugResponse,
+  zCorrectOwnerProjectCandidateSlugResponse,
+  zRelateOwnerProjectsResponse,
 } from "../../src/contracts/http/owner/v1/generated/zod.gen.js";
 import { createPostgresPortfolioSettingsRepository } from "../../src/modules/portfolio-configuration/adapters/postgres-settings.js";
 import { createPortfolioSettingsService } from "../../src/modules/portfolio-configuration/application/settings-service.js";
@@ -70,6 +76,13 @@ function fetch(input: string, init?: RequestInit): Promise<Response> {
 }
 
 async function expectPrivateProblem(response: Response, status: number): Promise<void> {
+  if (response.status !== status) {
+    const statusName = (value: number) => ({
+      200: "SUCCESS", 201: "CREATED", 400: "BAD_REQUEST", 401: "UNAUTHENTICATED", 403: "FORBIDDEN", 404: "NOT_FOUND",
+      409: "CONFLICT", 412: "PRECONDITION_FAILED", 422: "UNPROCESSABLE", 429: "RATE_LIMITED", 503: "UNAVAILABLE",
+    } as Record<number, string>)[value] ?? "OTHER";
+    console.error(`PHASE9_PRIVATE_PROBLEM_EXPECTED_${statusName(status)}_ACTUAL_${statusName(response.status)}`);
+  }
   expect(response.status).toBe(status);
   expect(response.headers.get("cache-control")).toBe("private, no-store");
   expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
@@ -439,6 +452,219 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     await expectPrivateProblem(foreignReviewReplay, 403);
 
   }, 90_000);
+
+  it("serves all six Project identity and editorial operations over built HTTP with durable, private results", async () => {
+    const origin = new URL(urls[0]!).origin;
+    const suffix = randomUUID();
+    const request = (url: string, method: string, body?: unknown, key?: string, version?: number) => fetch(url, {
+      method,
+      headers: {
+        "content-type": "application/json", origin,
+        cookie: `sw_owner_session=${owner.token}`, "x-csrf-token": csrf,
+        ...(key === undefined ? {} : { "idempotency-key": key }),
+        ...(version === undefined ? {} : { "if-match": `\"${version}\"` }),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const contentPath = `${urls[0]}/api/owner/v1/content`;
+    const artifactId = createStableId("SupportingArtifact");
+    const caseStudy = { problem: "Preserve project identity.", ownerRole: "Built the transport.",
+      contributions: ["Connected the Owner boundary."], outcomes: ["Route history remains durable."], lessons: "Metadata does not publish content." };
+    const evidence = {
+      claims: [{ claimId: createStableId("EvidenceClaim"), text: "The Project workflow preserves durable identity.", artifactIds: [artifactId] }],
+      artifacts: [{ id: artifactId, title: "Project identity evidence", destinationUrl: "https://example.test/project-identity" }],
+    };
+    const makeProject = async (name: string, publish: boolean) => {
+      const fixtureName = name.toLowerCase().replaceAll(/[^a-z0-9]+/gu, "-").replaceAll(/^-|-$/gu, "");
+      const candidateSlug = `${fixtureName}-${suffix.slice(0, 10)}`;
+      const createdResponse = await request(contentPath, "POST", {
+        contentType: "project", locale: "en", title: name, summary: "Synthetic Project HTTP fixture.",
+        body: "Only the explicit publication command makes this Project public.", candidateSlug, caseStudy, evidence, externalLinks: [],
+      }, `phase9-project-create-${fixtureName}-${suffix}`);
+      expect(createdResponse.status).toBe(201);
+      expect(createdResponse.headers.get("cache-control")).toBe("private, no-store");
+      const created = zCreateOwnerContentResponse.safeParse(await createdResponse.json() as unknown);
+      expect(created.success).toBe(true);
+      if (!created.success) throw new Error("PHASE9_PROJECT_CREATE_RESPONSE_INVALID");
+      if (!publish) return { ...created.data, candidateSlug };
+      const projectPath = `${contentPath}/${created.data.contentId}`;
+      const previewResponse = await request(`${projectPath}/revisions/${created.data.revisionId}/preview`, "GET");
+      const preview = zPreviewOwnerContentRevisionResponse.safeParse(await previewResponse.json() as unknown);
+      expect(previewResponse.status).toBe(200);
+      expect(preview.success).toBe(true);
+      if (!preview.success) throw new Error("PHASE9_PROJECT_PREVIEW_INVALID");
+      const reviewResponse = await request(`${projectPath}/revisions/${created.data.revisionId}/review`, "POST", {
+        locale: "en", snapshotHash: preview.data.snapshotHash, evidenceVersion: preview.data.evidenceVersion,
+        decision: "accepted", findings: [],
+      }, `phase9-project-review-${fixtureName}-${suffix}`, created.data.aggregateVersion);
+      const reviewed = zReviewOwnerContentRevisionResponse.safeParse(await reviewResponse.json() as unknown);
+      expect(reviewResponse.status).toBe(200);
+      expect(reviewed.success).toBe(true);
+      if (!reviewed.success) throw new Error("PHASE9_PROJECT_REVIEW_INVALID");
+      const publishResponse = await request(`${projectPath}/commands/publish-language`, "POST",
+        { locale: "en", revisionId: created.data.revisionId }, `phase9-project-publish-${fixtureName}-${suffix}`, reviewed.data.aggregateVersion);
+      const published = zPublishOwnerContentLanguageResponse.safeParse(await publishResponse.json() as unknown);
+      expect(publishResponse.status).toBe(200);
+      expect(published.success).toBe(true);
+      if (!published.success) throw new Error("PHASE9_PROJECT_PUBLISH_INVALID");
+      return { ...created.data, aggregateVersion: published.data.aggregateVersion, candidateSlug };
+    };
+
+    const published = await makeProject("Project HTTP identity", true);
+    const draft = await makeProject("Project HTTP draft", false);
+    const hiddenFixture = await makeProject("Project HTTP hidden", true);
+    const hiddenPath = `${contentPath}/${hiddenFixture.contentId}`;
+    const hiddenLifecycleResponse = await request(`${hiddenPath}/commands/hide`, "POST", {},
+      `phase9-project-hide-${suffix}`, hiddenFixture.aggregateVersion);
+    const hiddenLifecycle = zHideOwnerContentResponse.safeParse(await hiddenLifecycleResponse.json() as unknown);
+    expect(hiddenLifecycleResponse.status).toBe(200);
+    expect(hiddenLifecycle.success).toBe(true);
+    if (!hiddenLifecycle.success) throw new Error("PHASE9_PROJECT_HIDE_INVALID");
+    const statusId = createStableId("ProjectStatusValue");
+    const statusLabel = `HTTP Active ${suffix.slice(0, 10)}`;
+    await admin.query(
+      "insert into content.project_status_values (value_id, portfolio_id, label) values ($1::uuid, $2::uuid, $3)",
+      [statusId, portfolioId, statusLabel],
+    );
+    await admin.query(
+      "insert into content.project_status_value_history (value_id, portfolio_id, transition_sequence, operation, previous_label, label, state, aggregate_version) " +
+      "values ($1::uuid, $2::uuid, 1, 'created', null, $3, 'active', 1)",
+      [statusId, portfolioId, statusLabel],
+    );
+
+    const aggregateUrl = `${urls[0]}/api/owner/v1/projects/${published.contentId}`;
+    const aggregateResponse = await request(aggregateUrl, "GET");
+    expect(aggregateResponse.status).toBe(200);
+    expect(aggregateResponse.headers.get("cache-control")).toBe("private, no-store");
+    expect(aggregateResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    const aggregate = zGetOwnerProjectAggregateResponse.safeParse(await aggregateResponse.json() as unknown);
+    expect(aggregate.success).toBe(true);
+    if (!aggregate.success) throw new Error("PHASE9_PROJECT_AGGREGATE_INVALID");
+    if (aggregate.data.publicRoute === null) throw new Error("PHASE9_PROJECT_PUBLIC_ROUTE_MISSING");
+
+    const draftUrl = `${urls[1]}/api/owner/v1/projects/${draft.contentId}`;
+    const correctedSlug = `${draft.candidateSlug}-corrected`;
+    const candidateKey = `phase9-project-candidate-${suffix}`;
+    const candidateResponse = await request(`${draftUrl}/commands/correct-candidate-slug`, "POST",
+      { candidateSlug: correctedSlug }, candidateKey, draft.aggregateVersion);
+    const candidate = zCorrectOwnerProjectCandidateSlugResponse.safeParse(await candidateResponse.json() as unknown);
+    expect(candidateResponse.status).toBe(200);
+    expect(candidateResponse.headers.get("cache-control")).toBe("private, no-store");
+    expect(candidateResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(candidate.success).toBe(true);
+    if (!candidate.success) throw new Error("PHASE9_PROJECT_CANDIDATE_SLUG_INVALID");
+
+    const statusKey = `phase9-project-status-${suffix}`;
+    const statusResponse = await request(`${draftUrl}/commands/change-status`, "POST", { statusValueId: statusId }, statusKey, candidate.data.aggregateVersion);
+    const status = zChangeOwnerProjectStatusResponse.safeParse(await statusResponse.json() as unknown);
+    expect(statusResponse.status).toBe(200);
+    expect(statusResponse.headers.get("cache-control")).toBe("private, no-store");
+    expect(statusResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(status.success).toBe(true);
+    if (!status.success) throw new Error("PHASE9_PROJECT_STATUS_INVALID");
+    const featuredKey = `phase9-project-featured-${suffix}`;
+    const featuredResponse = await request(`${draftUrl}/commands/set-featured`, "POST", { featured: true }, featuredKey, status.data.aggregateVersion);
+    const featured = zSetOwnerProjectFeaturedResponse.safeParse(await featuredResponse.json() as unknown);
+    expect(featuredResponse.status).toBe(200);
+    expect(featuredResponse.headers.get("cache-control")).toBe("private, no-store");
+    expect(featuredResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(featured.success).toBe(true);
+    if (!featured.success) throw new Error("PHASE9_PROJECT_FEATURED_INVALID");
+    const hiddenProjectView = await request(draftUrl, "GET");
+    const hiddenProject = zGetOwnerProjectAggregateResponse.safeParse(await hiddenProjectView.json() as unknown);
+    expect(hiddenProject.success).toBe(true);
+    expect(hiddenProject).toMatchObject({ success: true, data: { featured: true, statusValueId: statusId, publicRoute: null } });
+    const noDraftProjection = await admin.query(
+      "select count(*)::int as count from content.public_project_locales where content_id = $1::uuid",
+      [draft.contentId],
+    );
+    expect(noDraftProjection.rows[0]?.count).toBe(0);
+
+    const hiddenProjectUrl = `${urls[1]}/api/owner/v1/projects/${hiddenFixture.contentId}`;
+    const hiddenProjectBefore = await request(hiddenProjectUrl, "GET");
+    const hiddenView = zGetOwnerProjectAggregateResponse.safeParse(await hiddenProjectBefore.json() as unknown);
+    expect(hiddenView.success).toBe(true);
+    if (!hiddenView.success) throw new Error("PHASE9_HIDDEN_PROJECT_VIEW_INVALID");
+    const hiddenStatusResponse = await request(`${hiddenProjectUrl}/commands/change-status`, "POST",
+      { statusValueId: statusId }, `phase9-project-hidden-status-${suffix}`, hiddenView.data.aggregateVersion);
+    const hiddenStatus = zChangeOwnerProjectStatusResponse.safeParse(await hiddenStatusResponse.json() as unknown);
+    expect(hiddenStatusResponse.status).toBe(200);
+    expect(hiddenStatus.success).toBe(true);
+    if (!hiddenStatus.success) throw new Error("PHASE9_HIDDEN_PROJECT_STATUS_INVALID");
+    const hiddenFeaturedResponse = await request(`${hiddenProjectUrl}/commands/set-featured`, "POST",
+      { featured: true }, `phase9-project-hidden-featured-${suffix}`, hiddenStatus.data.aggregateVersion);
+    const hiddenFeatured = zSetOwnerProjectFeaturedResponse.safeParse(await hiddenFeaturedResponse.json() as unknown);
+    expect(hiddenFeaturedResponse.status).toBe(200);
+    expect(hiddenFeatured.success).toBe(true);
+    if (!hiddenFeatured.success) throw new Error("PHASE9_HIDDEN_PROJECT_FEATURED_INVALID");
+    const hiddenProjection = await admin.query(
+      "select count(*)::int as count from content.public_project_locales where content_id = $1::uuid",
+      [hiddenFixture.contentId],
+    );
+    expect(hiddenProjection.rows[0]?.count).toBe(1);
+
+    const newSlug = `${published.candidateSlug}-updated`;
+    const slugKey = `phase9-project-public-slug-${suffix}`;
+    const slugResponse = await request(`${aggregateUrl}/commands/change-slug`, "POST", { slug: newSlug }, slugKey, aggregate.data.aggregateVersion);
+    const slug = zChangeOwnerProjectPublicSlugResponse.safeParse(await slugResponse.json() as unknown);
+    expect(slugResponse.status).toBe(200);
+    expect(slugResponse.headers.get("cache-control")).toBe("private, no-store");
+    expect(slugResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(slug.success).toBe(true);
+    if (!slug.success) throw new Error("PHASE9_PROJECT_PUBLIC_SLUG_INVALID");
+    const routeHistoryResponse = await request(aggregateUrl, "GET");
+    const routeHistory = zGetOwnerProjectAggregateResponse.safeParse(await routeHistoryResponse.json() as unknown);
+    expect(routeHistoryResponse.status).toBe(200);
+    expect(routeHistory.success).toBe(true);
+    expect(routeHistory).toMatchObject({ success: true, data: { projectId: published.contentId,
+      publicRoute: { identity: expect.any(String), canonicalSlug: newSlug,
+        history: [expect.objectContaining({ fromSlug: published.candidateSlug, toSlug: newSlug })] } } });
+    if (!routeHistory.success || routeHistory.data.publicRoute === null) throw new Error("PHASE9_PROJECT_ROUTE_HISTORY_INVALID");
+    expect(routeHistory.data.publicRoute.identity).toBe(aggregate.data.publicRoute.identity);
+
+    const slugCollision = await request(`${aggregateUrl}/commands/change-slug`, "POST",
+      { slug: hiddenFixture.candidateSlug }, `phase9-project-slug-collision-${suffix}`, routeHistory.data.aggregateVersion);
+    await expectPrivateProblem(slugCollision, 409);
+    const afterSlugCollisionResponse = await request(aggregateUrl, "GET");
+    const afterSlugCollision = zGetOwnerProjectAggregateResponse.safeParse(await afterSlugCollisionResponse.json() as unknown);
+    expect(afterSlugCollision).toMatchObject({ success: true, data: { publicRoute: { canonicalSlug: newSlug } } });
+
+    const relationKey = `phase9-project-relation-${suffix}`;
+    const relateUrl = `${aggregateUrl}/commands/relate-project`;
+    const relationBody = { relatedProjectId: draft.contentId };
+    const relationResponse = await request(relateUrl, "POST", relationBody, relationKey, slug.data.aggregateVersion);
+    const relation = zRelateOwnerProjectsResponse.safeParse(await relationResponse.json() as unknown);
+    expect(relationResponse.status).toBe(200);
+    expect(relationResponse.headers.get("cache-control")).toBe("private, no-store");
+    expect(relationResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(relation.success).toBe(true);
+    if (!relation.success) throw new Error("PHASE9_PROJECT_RELATION_INVALID");
+    const relatedVersion = relation.data.aggregateVersion;
+    const replay = await request(relateUrl, "POST", relationBody, relationKey, slug.data.aggregateVersion);
+    expect(replay.status).toBe(200);
+    expect(replay.headers.get("cache-control")).toBe("private, no-store");
+    expect(replay.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(await replay.json()).toEqual(relation.data);
+    await expectPrivateProblem(await request(relateUrl, "POST", { relatedProjectId: hiddenFixture.contentId }, relationKey, relatedVersion), 409);
+    await expectPrivateProblem(await request(relateUrl, "POST", relationBody, `phase9-project-stale-${suffix}`, relatedVersion - 1), 412);
+    const missingProjectId = createStableId("Project");
+    await expectPrivateProblem(await request(relateUrl, "POST", { relatedProjectId: missingProjectId },
+      `phase9-project-missing-related-${suffix}`, relatedVersion), 422);
+
+    const [leftView, rightView] = await Promise.all([request(aggregateUrl, "GET"), request(draftUrl, "GET")]);
+    const left = zGetOwnerProjectAggregateResponse.safeParse(await leftView.json() as unknown);
+    const right = zGetOwnerProjectAggregateResponse.safeParse(await rightView.json() as unknown);
+    expect(left.success).toBe(true);
+    expect(right.success).toBe(true);
+    expect(left).toMatchObject({ success: true, data: { relatedProjectIds: [draft.contentId] } });
+    expect(right).toMatchObject({ success: true, data: { relatedProjectIds: [published.contentId] } });
+    const relationshipEvents = await admin.query<{ count: number }>(
+      "select count(*)::int as count from content.project_relationship_history where portfolio_id = $1::uuid and initiating_project_id = $2::uuid and related_project_id = $3::uuid",
+      [portfolioId, published.contentId, draft.contentId],
+    );
+    expect(relationshipEvents.rows[0]?.count).toBe(1);
+  }, 120_000);
 
   it("serves language publication and lifecycle commands over built HTTP", async () => {
     const origin = new URL(urls[0]!).origin;

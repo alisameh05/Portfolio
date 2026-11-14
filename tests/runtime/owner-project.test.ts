@@ -58,6 +58,11 @@ const STATUS_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7e92";
 const IDEMPOTENCY_KEY = "test-key-123";
 const IF_MATCH = '"2"';
 
+function expectPrivateHeaders(response: Response): void {
+  expect(response.headers.get("cache-control")).toBe("private, no-store");
+  expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+}
+
 function getRequest(projectId: string = PROJECT_ID, inboundTrace?: string): Request {
   const headers: Record<string, string> = withOwnerTestAuth({});
   if (inboundTrace !== undefined) {
@@ -220,6 +225,7 @@ describe("Owner Project commands (#29)", () => {
       { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(200);
+    expectPrivateHeaders(response);
     expect(fake.calls.changeOwnerProjectStatus).toHaveLength(1);
     const command = fake.calls.changeOwnerProjectStatus[0] as {
       projectId: string;
@@ -248,6 +254,7 @@ describe("Owner Project commands (#29)", () => {
       { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(200);
+    expectPrivateHeaders(response);
     expect(fake.calls.setOwnerProjectFeatured).toHaveLength(1);
     const body = (await response.json()) as unknown;
     expect(zSetOwnerProjectFeaturedResponse.safeParse(body).success).toBe(true);
@@ -266,6 +273,7 @@ describe("Owner Project commands (#29)", () => {
       { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(200);
+    expectPrivateHeaders(response);
     expect(fake.calls.changeOwnerProjectPublicSlug).toHaveLength(1);
     const body = (await response.json()) as unknown;
     expect(zChangeOwnerProjectPublicSlugResponse.safeParse(body).success).toBe(true);
@@ -284,6 +292,7 @@ describe("Owner Project commands (#29)", () => {
       { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(200);
+    expectPrivateHeaders(response);
     expect(fake.calls.correctOwnerProjectCandidateSlug).toHaveLength(1);
     expect(fake.calls.correctOwnerProjectCandidateSlug[0]).toMatchObject({ projectId: PROJECT_ID, candidateSlug: "corrected-project", expectedVersion: 2 });
     expect(zCorrectOwnerProjectCandidateSlugResponse.safeParse(await response.json()).success).toBe(true);
@@ -297,6 +306,7 @@ describe("Owner Project commands (#29)", () => {
       { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(200);
+    expectPrivateHeaders(response);
     expect(fake.calls.relateOwnerProjects).toHaveLength(1);
     expect(fake.calls.relateOwnerProjects[0]).toMatchObject({ projectId: PROJECT_ID, relatedProjectId: RELATED_ID, expectedVersion: 2 });
     const body = (await response.json()) as unknown;
@@ -377,6 +387,7 @@ describe("Owner Project commands (#29)", () => {
         { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
       );
       expect(response.status).toBe(400);
+      expectPrivateHeaders(response);
       const totalCalls =
         fake.calls.changeOwnerProjectStatus.length +
         fake.calls.setOwnerProjectFeatured.length +
@@ -418,6 +429,7 @@ describe("Owner Project commands (#29)", () => {
         { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
       );
       expect(response.status).toBe(status);
+      expectPrivateHeaders(response);
       expect(fake.calls.changeOwnerProjectStatus).toHaveLength(1);
       const body = (await response.json()) as Record<string, unknown>;
       expect(zProblem.safeParse(body).success).toBe(true);

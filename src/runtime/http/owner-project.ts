@@ -69,6 +69,7 @@ import {
   guardOwnerRequest,
   OWNER_PRIVATE_RESPONSE_HEADERS,
   type OwnerRequestSecurity,
+  withOwnerPrivateResponseHeaders,
 } from "./owner-security.js";
 import {
   internalErrorProblem,
@@ -617,29 +618,29 @@ async function handleProjectCommand(
 
 
 export function handleGetOwnerProjectAggregate(request: Request, params: { projectId: string }, deps: OwnerProjectAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-project", () => handleGetOwnerProjectAggregateUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-project", () => withOwnerPrivateResponseHeaders(handleGetOwnerProjectAggregateUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleChangeOwnerProjectStatus(request: Request, params: { projectId: string }, deps: OwnerProjectAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-project", () => handleChangeOwnerProjectStatusUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-project", () => withOwnerPrivateResponseHeaders(handleChangeOwnerProjectStatusUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleSetOwnerProjectFeatured(request: Request, params: { projectId: string }, deps: OwnerProjectAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-project", () => handleSetOwnerProjectFeaturedUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-project", () => withOwnerPrivateResponseHeaders(handleSetOwnerProjectFeaturedUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleChangeOwnerProjectPublicSlug(request: Request, params: { projectId: string }, deps: OwnerProjectAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-project", () => handleChangeOwnerProjectPublicSlugUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-project", () => withOwnerPrivateResponseHeaders(handleChangeOwnerProjectPublicSlugUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleCorrectOwnerProjectCandidateSlug(request: Request, params: { projectId: string }, deps: OwnerProjectAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-project", () => handleCorrectOwnerProjectCandidateSlugUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-project", () => withOwnerPrivateResponseHeaders(handleCorrectOwnerProjectCandidateSlugUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleRelateOwnerProjects(request: Request, params: { projectId: string }, deps: OwnerProjectAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-project", () => handleRelateOwnerProjectsUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-project", () => withOwnerPrivateResponseHeaders(handleRelateOwnerProjectsUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleAssignOwnerProjectTaxonomyValue(request: Request, params: { projectId: string }, deps: OwnerProjectAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-project", () => handleAssignOwnerProjectTaxonomyValueUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-project", () => withOwnerPrivateResponseHeaders(handleAssignOwnerProjectTaxonomyValueUnobserved(request, params, deps)), deps.logger);
 }

@@ -240,7 +240,9 @@ describe.runIf(Boolean(workerUrl && appUrl && adminUrl))("Measurement retention 
   });
 
   it("cleans withdrawn subjects while preserving the bounded revocation proof and rejecting the old signed token", async () => {
-    now = "2026-10-14T12:00:00.000Z";
+    // Idempotency expiry is checked against PostgreSQL's real transaction time.
+    const withdrawalTime = new Date(Date.now() - 86_400_000).toISOString();
+    now = withdrawalTime;
     const cryptoConfig = {
       functional: { active: { version: 1, secret: Buffer.alloc(32, 11).toString("base64url") }, previous: [] },
       measurement: { active: { version: 1, secret: Buffer.alloc(32, 22).toString("base64url") }, previous: [] },
@@ -278,7 +280,9 @@ describe.runIf(Boolean(workerUrl && appUrl && adminUrl))("Measurement retention 
       measurement: checked.value, idempotencyKey: keyResult.value,
       event: { action: "page-viewed", context: { occurredAt: now, locale: "en", pageRouteIdentity: routeId, consentVersion: "2026-10", journeyContext: [routeId] } } as never };
     const intake = events.ingestEvent(eventCommand);
-    await insertStarted;
+    await Promise.race([insertStarted, intake.then(result => {
+      throw new Error(`RETENTION_TEST_INTAKE_COMPLETED_BEFORE_INSERT:${JSON.stringify(result)}`);
+    })]);
     const revokedPromise = consentService.recordConsent({ scope, correlationId: "retention-withdrawal", consentId: granted.value.consentId,
       expectedRevision: 1, consent: "denied", noticeVersion: "2026-10" });
     releaseInsert();
@@ -291,7 +295,7 @@ describe.runIf(Boolean(workerUrl && appUrl && adminUrl))("Measurement retention 
     const cleaned = await drain(input => retention.cleanWithdrawnConsent(input), "withdrawal", now);
     expect(cleaned.results.every(result => result.processedCount <= 25)).toBe(true);
     expect((await admin.query(`select incomplete,retention_sealed from measurement.daily_aggregate_checkpoints
-      where portfolio_id=$1 and utc_day='2026-10-14'`, [portfolioId])).rows[0])
+      where portfolio_id=$1 and utc_day=$2::date`, [portfolioId, withdrawalTime.slice(0, 10)])).rows[0])
       .toEqual({ incomplete: true, retention_sealed: true });
     expect((await admin.query("select 1 from measurement.public_events where event_id=$1", [retainedEventId])).rows).toHaveLength(0);
     expect((await admin.query("select 1 from measurement.goal_conversion_contributions where portfolio_id=$1 and measurement_subject=$2", [portfolioId, checked.value.subject])).rows).toHaveLength(0);
@@ -304,11 +308,11 @@ describe.runIf(Boolean(workerUrl && appUrl && adminUrl))("Measurement retention 
       .toMatchObject({ state: "denied", subject: checked.value.subject });
     const safeJob = await admin.query("select payload from operations.jobs where payload->>'eventId'=$1", [retainedEventId]);
     expect(JSON.stringify(safeJob.rows)).not.toContain(checked.value.subject);
-    now = baseNow;
+    now = new Date(Date.parse(withdrawalTime) + 86_400_000).toISOString();
     await drain(input => retention.expireDetail(input), "retention", now);
     expect((await admin.query("select 1 from measurement.consents where portfolio_id=$1 and consent_id=$2", [portfolioId, granted.value.consentId])).rows).toHaveLength(0);
     expect((await admin.query("select 1 from measurement.consent_history where portfolio_id=$1 and consent_id=$2", [portfolioId, granted.value.consentId])).rows).toHaveLength(0);
-  });
+  }, 30_000);
 
   it("does not grant cross-Portfolio delete access to the Worker or delete access to the application role", async () => {
     const foreignPortfolio = nextId("Portfolio"), foreignSubject = nextId("MeasurementVisitor");

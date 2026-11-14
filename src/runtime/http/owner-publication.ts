@@ -71,6 +71,7 @@ import {
   guardOwnerRequest,
   OWNER_PRIVATE_RESPONSE_HEADERS,
   type OwnerRequestSecurity,
+  withOwnerPrivateResponseHeaders,
 } from "./owner-security.js";
 import {
   internalErrorProblem,
@@ -683,32 +684,25 @@ async function runOwnerLifecycleCommand(
 
 
 export function handleGetOwnerContentAggregate(request: Request, params: { contentId: string }, deps: OwnerPublicationAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-publication", () => privateResponse(handleGetOwnerContentAggregateUnobserved(request, params, deps)), deps.logger);
+  return observeHttpRequest("owner-publication", () => withOwnerPrivateResponseHeaders(handleGetOwnerContentAggregateUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleSaveOwnerContentRevision(request: Request, params: { contentId: string }, deps: OwnerPublicationAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-publication", () => privateResponse(handleSaveOwnerContentRevisionUnobserved(request, params, deps)), deps.logger);
-}
-
-async function privateResponse(responsePromise: Promise<Response>): Promise<Response> {
-  const response = await responsePromise;
-  const headers = new Headers(response.headers);
-  for (const [name, value] of Object.entries(OWNER_PRIVATE_RESPONSE_HEADERS)) headers.set(name, value);
-  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+  return observeHttpRequest("owner-publication", () => withOwnerPrivateResponseHeaders(handleSaveOwnerContentRevisionUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handlePublishOwnerContentLanguage(request: Request, params: { contentId: string }, deps: OwnerPublicationAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-publication", () => privateResponse(handlePublishOwnerContentLanguageUnobserved(request, params, deps)), deps.logger);
+  return observeHttpRequest("owner-publication", () => withOwnerPrivateResponseHeaders(handlePublishOwnerContentLanguageUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleHideOwnerContent(request: Request, params: { contentId: string }, deps: OwnerPublicationAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-publication", () => privateResponse(handleHideOwnerContentUnobserved(request, params, deps)), deps.logger);
+  return observeHttpRequest("owner-publication", () => withOwnerPrivateResponseHeaders(handleHideOwnerContentUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleArchiveOwnerContent(request: Request, params: { contentId: string }, deps: OwnerPublicationAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-publication", () => privateResponse(handleArchiveOwnerContentUnobserved(request, params, deps)), deps.logger);
+  return observeHttpRequest("owner-publication", () => withOwnerPrivateResponseHeaders(handleArchiveOwnerContentUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleRestoreOwnerContent(request: Request, params: { contentId: string }, deps: OwnerPublicationAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-publication", () => privateResponse(handleRestoreOwnerContentUnobserved(request, params, deps)), deps.logger);
+  return observeHttpRequest("owner-publication", () => withOwnerPrivateResponseHeaders(handleRestoreOwnerContentUnobserved(request, params, deps)), deps.logger);
 }
