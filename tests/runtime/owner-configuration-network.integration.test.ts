@@ -490,13 +490,13 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
       const reviewResponse = await request(`${projectPath}/revisions/${created.data.revisionId}/review`, "POST", {
         locale: "en", snapshotHash: preview.data.snapshotHash, evidenceVersion: preview.data.evidenceVersion,
         decision: "accepted", findings: [],
-      }, `phase9-project-review-${name}-${suffix}`, created.data.aggregateVersion);
+      }, `phase9-project-review-${fixtureName}-${suffix}`, created.data.aggregateVersion);
       const reviewed = zReviewOwnerContentRevisionResponse.safeParse(await reviewResponse.json() as unknown);
       expect(reviewResponse.status).toBe(200);
       expect(reviewed.success).toBe(true);
       if (!reviewed.success) throw new Error("PHASE9_PROJECT_REVIEW_INVALID");
       const publishResponse = await request(`${projectPath}/commands/publish-language`, "POST",
-        { locale: "en", revisionId: created.data.revisionId }, `phase9-project-publish-${name}-${suffix}`, reviewed.data.aggregateVersion);
+        { locale: "en", revisionId: created.data.revisionId }, `phase9-project-publish-${fixtureName}-${suffix}`, reviewed.data.aggregateVersion);
       const published = zPublishOwnerContentLanguageResponse.safeParse(await publishResponse.json() as unknown);
       expect(publishResponse.status).toBe(200);
       expect(published.success).toBe(true);
