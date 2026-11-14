@@ -650,7 +650,7 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     await expectPrivateProblem(await request(relateUrl, "POST", relationBody, `phase9-project-stale-${suffix}`, relatedVersion - 1), 412);
     const missingProjectId = createStableId("Project");
     await expectPrivateProblem(await request(relateUrl, "POST", { relatedProjectId: missingProjectId },
-      `phase9-project-missing-related-${suffix}`, relatedVersion), 404);
+      `phase9-project-missing-related-${suffix}`, relatedVersion), 422);
 
     const [leftView, rightView] = await Promise.all([request(aggregateUrl, "GET"), request(draftUrl, "GET")]);
     const left = zGetOwnerProjectAggregateResponse.safeParse(await leftView.json() as unknown);
