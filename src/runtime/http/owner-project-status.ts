@@ -64,6 +64,12 @@ function valueReceipt(value: ContentProjectStatusValue, outcome: "project-status
   return { ...valueView(value), aggregateVersion: value.aggregateVersion, outcome };
 }
 
+function privateResponse(response: Response): Response {
+  const headers = new Headers(response.headers);
+  for (const [name, value] of Object.entries(OWNER_PRIVATE_RESPONSE_HEADERS)) headers.set(name, value);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
  async function handleListOwnerProjectStatusValuesUnobserved(request: Request, deps: OwnerProjectStatusAdapterDeps): Promise<Response> {
   const { traceId, instance } = context(request);
   try {
@@ -156,17 +162,17 @@ async function handleStatusValueCommand(
 
 
 export function handleListOwnerProjectStatusValues(request: Request, deps: OwnerProjectStatusAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-project-status", () => handleListOwnerProjectStatusValuesUnobserved(request, deps), deps.logger);
+  return observeHttpRequest("owner-project-status", () => handleListOwnerProjectStatusValuesUnobserved(request, deps), deps.logger).then(privateResponse);
 }
 
 export function handleCreateOwnerProjectStatusValue(request: Request, deps: OwnerProjectStatusAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-project-status", () => handleCreateOwnerProjectStatusValueUnobserved(request, deps), deps.logger);
+  return observeHttpRequest("owner-project-status", () => handleCreateOwnerProjectStatusValueUnobserved(request, deps), deps.logger).then(privateResponse);
 }
 
 export function handleRenameOwnerProjectStatusValue(request: Request, params: { readonly valueId: string }, deps: OwnerProjectStatusAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-project-status", () => handleRenameOwnerProjectStatusValueUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-project-status", () => handleRenameOwnerProjectStatusValueUnobserved(request, params, deps), deps.logger).then(privateResponse);
 }
 
 export function handleRetireOwnerProjectStatusValue(request: Request, params: { readonly valueId: string }, deps: OwnerProjectStatusAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-project-status", () => handleRetireOwnerProjectStatusValueUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-project-status", () => handleRetireOwnerProjectStatusValueUnobserved(request, params, deps), deps.logger).then(privateResponse);
 }

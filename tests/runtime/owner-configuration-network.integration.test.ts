@@ -4,12 +4,16 @@ import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   zCreateOwnerContentResponse,
+  zCreateOwnerProjectStatusValueResponse,
   zGetOwnerContentAggregateResponse,
   zGetOwnerContentHistoryResponse,
   zArchiveOwnerContentResponse,
   zHideOwnerContentResponse,
   zPublishOwnerContentLanguageResponse,
+  zListOwnerProjectStatusValuesResponse,
   zPreviewOwnerContentRevisionResponse,
+  zRenameOwnerProjectStatusValueResponse,
+  zRetireOwnerProjectStatusValueResponse,
   zReviewOwnerContentRevisionResponse,
   zRestoreOwnerContentResponse,
   zSaveOwnerContentRevisionResponse,
@@ -43,6 +47,7 @@ const ownerId = process.env["OWNER_ID"];
 const portfolioId = process.env["PORTFOLIO_ID"];
 const githubSubject = "910294";
 const secondGithubSubject = "910296";
+const catalogueGithubSubject = "910298";
 const foreignGithubSubject = "910295";
 const sentinel = "SHOULD_NEVER_APPEAR_PHASE9_SECRET_7d0b0a";
 const urls = JSON.parse(process.env["PHASE9_OWNER_HTTP_URLS"] ?? "[]") as string[];
@@ -151,6 +156,9 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
       expect(contentLimit.allowed).toBe(true);
       const publicationLimit = createPostgresOwnerConfigurationRateLimit(appDatabase.database);
       for (const operation of ["publishOwnerContentLanguage", "hideOwnerContent", "archiveOwnerContent", "restoreOwnerContent"]) {
+        expect(await publicationLimit.check(`owner_session:${ownerId}:${operation}`)).toMatchObject({ allowed: true });
+      }
+      for (const operation of ["listOwnerProjectStatusValues", "createOwnerProjectStatusValue", "renameOwnerProjectStatusValue", "retireOwnerProjectStatusValue"]) {
         expect(await publicationLimit.check(`owner_session:${ownerId}:${operation}`)).toMatchObject({ allowed: true });
       }
     } catch (error) {
@@ -870,6 +878,115 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     expect(noPartialProjection.rows[0]?.count).toBe(0);
   }, 90_000);
 
+  it("serves all four Project status catalogue operations over built HTTP with exact replay and private contracts", async () => {
+    // Use a distinct Auth account linked to the same Owner. The earlier content
+    // scenario revokes ownerSecondSession; reissuing its magic link also couples
+    // this scenario to Auth's repeated-link behavior.
+    const catalogueSecondSession = await createLogin("phase9-catalogue-owner@example.test", catalogueGithubSubject, ownerId!);
+    const origin = new URL(urls[0]!).origin;
+    const path = "/api/owner/v1/project-status-values";
+    const request = (url: string, method: string, body?: unknown, key?: string, version?: number, session: Login = owner) => fetch(url, {
+      method,
+      headers: {
+        "content-type": "application/json", origin,
+        cookie: `sw_owner_session=${session.token}`, "x-csrf-token": session === catalogueSecondSession ? secondCsrf : csrf,
+        ...(key === undefined ? {} : { "idempotency-key": key }),
+        ...(version === undefined ? {} : { "if-match": `"${version}"` }),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const privateResponse = (response: Response) => {
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
+      expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    };
+
+    const initialList = await request(`${urls[0]}${path}`, "GET");
+    expect(initialList.status).toBe(200);
+    privateResponse(initialList);
+    expect(zListOwnerProjectStatusValuesResponse.safeParse(await initialList.json()).success).toBe(true);
+
+    const invalidLabel = await request(`${urls[0]}${path}`, "POST", { label: "   " }, `phase9-status-invalid-label-${randomUUID()}`);
+    await expectPrivateProblem(invalidLabel, 422);
+    const missingCreateKey = await request(`${urls[0]}${path}`, "POST", { label: `Missing key ${randomUUID()}` });
+    await expectPrivateProblem(missingCreateKey, 400);
+
+    const createKey = `phase9-status-create-${randomUUID()}`;
+    const createBody = { label: `Research ${randomUUID().slice(0, 8)}` };
+    const [createdResponse, createReplay] = await Promise.all([
+      request(`${urls[0]}${path}`, "POST", createBody, createKey),
+      request(`${urls[1]}${path}`, "POST", createBody, createKey, undefined, catalogueSecondSession),
+    ]);
+    expect(createdResponse.status).toBe(201);
+    expect(createReplay.status).toBe(201);
+    privateResponse(createdResponse);
+    privateResponse(createReplay);
+    const created = zCreateOwnerProjectStatusValueResponse.safeParse(await createdResponse.json());
+    expect(created.success).toBe(true);
+    if (!created.success) throw new Error("PHASE9_PROJECT_STATUS_CREATE_RESPONSE_INVALID");
+    expect(await createReplay.json()).toEqual(created.data);
+    await expectPrivateProblem(await request(`${urls[1]}${path}`, "POST", { label: `${createBody.label} changed` }, createKey), 409);
+
+    const valuePath = `${path}/${created.data.valueId}/commands`;
+    await expectPrivateProblem(await request(`${urls[0]}${valuePath}/rename`, "POST", { label: "Missing key" }, undefined, 1), 400);
+    await expectPrivateProblem(await request(`${urls[0]}${valuePath}/rename`, "POST", { label: "Missing version" },
+      `phase9-status-missing-version-${randomUUID()}`), 400);
+    await expectPrivateProblem(await request(`${urls[0]}${valuePath}/retire`, "POST", {}, undefined, 1), 400);
+    await expectPrivateProblem(await request(`${urls[0]}${valuePath}/retire`, "POST", {},
+      `phase9-status-retire-missing-version-${randomUUID()}`), 400);
+    const renameKey = `phase9-status-rename-${randomUUID()}`;
+    const renameBody = { label: `${createBody.label} renamed` };
+    const [renamedResponse, renameReplay] = await Promise.all([
+      request(`${urls[0]}${valuePath}/rename`, "POST", renameBody, renameKey, created.data.aggregateVersion),
+      request(`${urls[1]}${valuePath}/rename`, "POST", renameBody, renameKey, created.data.aggregateVersion, catalogueSecondSession),
+    ]);
+    expect(renamedResponse.status).toBe(200);
+    expect(renameReplay.status).toBe(200);
+    privateResponse(renamedResponse);
+    privateResponse(renameReplay);
+    const renamed = zRenameOwnerProjectStatusValueResponse.safeParse(await renamedResponse.json());
+    expect(renamed.success).toBe(true);
+    if (!renamed.success) throw new Error("PHASE9_PROJECT_STATUS_RENAME_RESPONSE_INVALID");
+    expect(renamed.data.valueId).toBe(created.data.valueId);
+    expect(await renameReplay.json()).toEqual(renamed.data);
+    await expectPrivateProblem(await request(`${urls[1]}${valuePath}/rename`, "POST", renameBody,
+      `phase9-status-stale-${randomUUID()}`, created.data.aggregateVersion), 412);
+
+    const retireKey = `phase9-status-retire-${randomUUID()}`;
+    const [retiredResponse, retireReplay] = await Promise.all([
+      request(`${urls[0]}${valuePath}/retire`, "POST", {}, retireKey, renamed.data.aggregateVersion),
+      request(`${urls[1]}${valuePath}/retire`, "POST", {}, retireKey, renamed.data.aggregateVersion, catalogueSecondSession),
+    ]);
+    expect(retiredResponse.status).toBe(200);
+    expect(retireReplay.status).toBe(200);
+    privateResponse(retiredResponse);
+    privateResponse(retireReplay);
+    const retired = zRetireOwnerProjectStatusValueResponse.safeParse(await retiredResponse.json());
+    expect(retired.success).toBe(true);
+    if (!retired.success) throw new Error("PHASE9_PROJECT_STATUS_RETIRE_RESPONSE_INVALID");
+    expect(retired.data).toMatchObject({ valueId: created.data.valueId, label: renameBody.label, state: "retired" });
+    expect(await retireReplay.json()).toEqual(retired.data);
+
+    const finalList = await request(`${urls[1]}${path}`, "GET");
+    expect(finalList.status).toBe(200);
+    privateResponse(finalList);
+    const listed = zListOwnerProjectStatusValuesResponse.safeParse(await finalList.json());
+    expect(listed.success).toBe(true);
+    expect(listed.success && listed.data.values).toContainEqual({ valueId: created.data.valueId, label: renameBody.label, state: "retired" });
+    if (listed.success) {
+      expect(listed.data.values.some(({ label }) => label.startsWith("Missing key "))).toBe(false);
+      expect(listed.data.values.some(({ label }) => label.startsWith("Foreign "))).toBe(false);
+    }
+
+    const invalidId = await request(`${urls[0]}${path}/not-a-uuid/commands/retire`, "POST", {},
+      `phase9-status-invalid-${randomUUID()}`, 1);
+    await expectPrivateProblem(invalidId, 400);
+    const foreignLabel = `Foreign ${randomUUID()}`;
+    const foreign = await request(`${urls[1]}${path}`, "POST", { label: foreignLabel },
+      `phase9-status-foreign-${randomUUID()}`, undefined, foreignOwner);
+    await expectPrivateProblem(foreign, 403);
+  }, 120_000);
+
   it("enforces the shared database limit across independent built instances and fails closed on limiter outage", async () => {
     const path = "/api/owner/v1/configuration/contact-channels";
     const originalWindow = (await admin.query<{ window: Date }>(
@@ -955,13 +1072,7 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     await expectPrivateProblem(response, 503);
   }, 30_000);
 
-  async function createLogin(email: string, providerId: string, linkedOwner: string): Promise<Login> {
-    const createResponse = await fetch(`${apiUrl}/auth/v1/admin/users`, { method: "POST", headers: {
-      apikey: serviceKey!, authorization: `Bearer ${serviceKey!}`, "content-type": "application/json",
-    }, body: JSON.stringify({ email, email_confirm: true }), signal: AbortSignal.timeout(10_000) });
-    if (!createResponse.ok) throw new Error("PHASE9_OWNER_HTTP_USER_CREATE_FAILED");
-    const created = await createResponse.json() as { id?: string };
-    if (!created.id) throw new Error("PHASE9_OWNER_HTTP_USER_ID_MISSING");
+  async function signIn(email: string, userId: string): Promise<Login> {
     const linkResponse = await fetch(`${apiUrl}/auth/v1/admin/generate_link`, { method: "POST", headers: {
       apikey: serviceKey!, authorization: `Bearer ${serviceKey!}`, "content-type": "application/json",
     }, body: JSON.stringify({ type: "magiclink", email }), signal: AbortSignal.timeout(10_000) });
@@ -974,12 +1085,23 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     if (!sessionResponse.ok) throw new Error("PHASE9_OWNER_HTTP_SESSION_CREATE_FAILED");
     const session = await sessionResponse.json() as { access_token?: string; user?: { id?: string } };
     const token = session.access_token;
-    if (!token || session.user?.id !== created.id) throw new Error("PHASE9_OWNER_HTTP_SESSION_INVALID");
+    if (!token || session.user?.id !== userId) throw new Error("PHASE9_OWNER_HTTP_SESSION_INVALID");
     const claims = JSON.parse(Buffer.from(token.split(".")[1]!, "base64url").toString("utf8")) as { session_id?: string };
     if (!claims.session_id) throw new Error("PHASE9_OWNER_HTTP_SESSION_ID_MISSING");
+    return { userId, token, sessionId: claims.session_id };
+  }
+
+  async function createLogin(email: string, providerId: string, linkedOwner: string): Promise<Login> {
+    const createResponse = await fetch(`${apiUrl}/auth/v1/admin/users`, { method: "POST", headers: {
+      apikey: serviceKey!, authorization: `Bearer ${serviceKey!}`, "content-type": "application/json",
+    }, body: JSON.stringify({ email, email_confirm: true }), signal: AbortSignal.timeout(10_000) });
+    if (!createResponse.ok) throw new Error("PHASE9_OWNER_HTTP_USER_CREATE_FAILED");
+    const created = await createResponse.json() as { id?: string };
+    if (!created.id) throw new Error("PHASE9_OWNER_HTTP_USER_ID_MISSING");
+    const login = await signIn(email, created.id);
     await admin.query("insert into auth.identities (user_id, identity_data, provider, provider_id) values ($1::uuid, $2::jsonb, 'github', $3)",
       [created.id, JSON.stringify({ sub: providerId, provider_id: providerId }), providerId]);
     await admin.query("insert into identity_access.owner_links (github_subject, owner_id) values ($1, $2::uuid)", [providerId, linkedOwner]);
-    return { userId: created.id, token, sessionId: claims.session_id };
+    return login;
   }
 });

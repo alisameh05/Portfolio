@@ -41,6 +41,8 @@
     "phase9:focus:owner-configuration-http": "node scripts/phase9-owner-configuration-http-integration.mjs",
     "prephase9:focus:content-authoring-http": "npm run validation:ready",
     "phase9:focus:content-authoring-http": "node scripts/phase9-owner-configuration-http-integration.mjs --ticket-295",
+    "prephase9:focus:project-status-http": "npm run validation:ready",
+    "phase9:focus:project-status-http": "node scripts/phase9-owner-configuration-http-integration.mjs --ticket-298",
     "phase9:record-evidence": "node scripts/phase9-route-evidence.mjs --record",
     "runtime:boundary": "node scripts/check-runtime-boundary.mjs",
     "runtime:boundary:foundation": "node scripts/check-runtime-boundary.mjs --mode foundation",

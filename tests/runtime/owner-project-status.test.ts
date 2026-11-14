@@ -89,6 +89,11 @@ function deps(service: ContentAuthoringService) {
   return { service, security: ownerTestSecurity(), logger: createTestLogger() };
 }
 
+function expectPrivate(response: Response) {
+  expect(response.headers.get("cache-control")).toBe("private, no-store");
+  expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+}
+
 describe("Owner Project status HTTP adapters", () => {
   it("lists private active and retired status identities through the authenticated Owner boundary", async () => {
     const fake = makeService();
@@ -96,8 +101,7 @@ describe("Owner Project status HTTP adapters", () => {
       request("/api/owner/v1/project-status-values", "GET"), deps(fake.service),
     );
     expect(response.status).toBe(200);
-    expect(response.headers.get("cache-control")).toBe("private, no-store");
-    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expectPrivate(response);
     expect(await response.json()).toEqual({ values: [{ valueId: VALUE_ID, label: "Shipped", state: "active" }] });
     expect(fake.calls).toHaveLength(1);
   });
@@ -109,6 +113,7 @@ describe("Owner Project status HTTP adapters", () => {
       deps(fake.service),
     );
     expect(response.status).toBe(201);
+    expectPrivate(response);
     expect(await response.json()).toEqual({ valueId: VALUE_ID, label: "Shipped", state: "active", aggregateVersion: 1, outcome: "project-status-value-created" });
     expect(fake.calls).toHaveLength(1);
     expect(fake.calls[0]).toMatch(/^create:Shipped:status-create-1:/u);
@@ -128,6 +133,7 @@ describe("Owner Project status HTTP adapters", () => {
       { valueId: VALUE_ID }, deps(fake.service),
     );
     expect(retired.status).toBe(200);
+    expectPrivate(retired);
     expect(await retired.json()).toMatchObject({ valueId: VALUE_ID, state: "retired", aggregateVersion: 2, outcome: "project-status-value-retired" });
     expect(fake.calls).toContain(`retire:${VALUE_ID}:1`);
   });
@@ -139,12 +145,14 @@ describe("Owner Project status HTTP adapters", () => {
       { valueId: VALUE_ID }, deps(fake.service),
     );
     expect(response.status).toBe(200);
+    expectPrivate(response);
     expect(await response.json()).toMatchObject({ valueId: VALUE_ID, label: "In Progress", aggregateVersion: 2, outcome: "project-status-value-renamed" });
     const missing = await handleRenameOwnerProjectStatusValue(
       request(`/api/owner/v1/project-status-values/${VALUE_ID}/commands/rename`, "POST", { label: "In Progress" }, { "idempotency-key": "status-rename-2" }),
       { valueId: VALUE_ID }, deps(fake.service),
     );
     expect(missing.status).toBe(400);
+    expectPrivate(missing);
     expect(fake.calls.filter((call) => call.startsWith("rename:")).length).toBe(1);
   });
 });

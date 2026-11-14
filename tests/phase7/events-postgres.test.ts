@@ -23,7 +23,9 @@ const url = process.env["PHASE7_EVENT_DATABASE_URL"];
 describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
   const portfolioId = createStableId("Portfolio"), ownerId = createStableId("Owner");
   const scope = { kind: "portfolio" as const, portfolioId };
-  let now = "2026-10-15T12:00:00.000Z";
+  // Keep application time near PostgreSQL time so idempotency expiry follows created_at.
+  const initialNow = new Date(Math.ceil(Date.now() / 1000) * 1000).toISOString();
+  let now = initialNow;
   const config = {
     functional: { active: { version: 1, secret: Buffer.alloc(32, 11).toString("base64url") }, previous: [] },
     measurement: { active: { version: 1, secret: Buffer.alloc(32, 22).toString("base64url") }, previous: [] },
@@ -406,7 +408,7 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
     expect(row.rowCount).toBe(1);
     now = evidence.evidenceExpiresAt;
     expect((await handlePostPublicEvent(request(evidence.token, event, "expired-consent-key"), { scope, service, consent })).status).toBe(403);
-    now = "2026-10-15T12:00:00.000Z";
+    now = initialNow;
     const withdrawn = await consent.recordConsent({ scope, correlationId: "withdraw-consent", consent: "denied", noticeVersion: "2026-10", consentId: evidence.consentId, expectedRevision: 1 });
     expect(withdrawn.ok).toBe(true);
     expect((await handlePostPublicEvent(request(evidence.token, event, "withdrawn-consent-key"), { scope, service, consent })).status).toBe(403);
@@ -437,10 +439,10 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
     const { routeId } = await seedProject();
     const evidence = await issueEvidence();
     const acceptedAt = now;
-    const atOldLimit = pageEvent(routeId, { occurredAt: "2026-10-14T12:00:00.000000Z" });
-    const atFutureLimit = pageEvent(routeId, { occurredAt: "2026-10-15T12:01:00.000000Z", referrerClass: "unknown", deviceClass: "other" });
-    const oneMicrosOld = pageEvent(routeId, { occurredAt: "2026-10-14T11:59:59.999999Z" });
-    const oneMicrosFuture = pageEvent(routeId, { occurredAt: "2026-10-15T12:01:00.000001Z" });
+    const atOldLimit = pageEvent(routeId, { occurredAt: new Date(Date.parse(now) - 86_400_000).toISOString().replace(".000Z", ".000000Z") });
+    const atFutureLimit = pageEvent(routeId, { occurredAt: new Date(Date.parse(now) + 60_000).toISOString().replace(".000Z", ".000000Z"), referrerClass: "unknown", deviceClass: "other" });
+    const oneMicrosOld = pageEvent(routeId, { occurredAt: new Date(Date.parse(now) - 86_400_001).toISOString().replace(".999Z", ".999999Z") });
+    const oneMicrosFuture = pageEvent(routeId, { occurredAt: new Date(Date.parse(now) + 60_000).toISOString().replace(".000Z", ".000001Z") });
     expect((await service.ingestEvent(command(atOldLimit, evidence.verified, key("old-limit-event-key-01")))).ok).toBe(true);
     const futureReceipt = await service.ingestEvent(command(atFutureLimit, evidence.verified, key("future-limit-event-key-01")));
     expect(futureReceipt.ok).toBe(true);
@@ -448,9 +450,9 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
     expect((await service.ingestEvent(command(oneMicrosFuture, evidence.verified, key("future-outside-event-key-01")))).ok).toBe(false);
     if (futureReceipt.ok) {
       const row = await admin.query("select to_char(accepted_at at time zone 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') accepted, to_char(effective_at at time zone 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') effective from measurement.public_events where event_id=$1", [futureReceipt.value.eventId]);
-      expect(row.rows[0]).toEqual({ accepted: "2026-10-15T12:00:00.000000Z", effective: "2026-10-15T12:00:00.000000Z" });
+      expect(row.rows[0]).toEqual({ accepted: now.replace(".000Z", ".000000Z"), effective: now.replace(".000Z", ".000000Z") });
     }
-    expect(acceptedAt).toBe("2026-10-15T12:00:00.000Z");
+    expect(acceptedAt).toBe(now);
   });
 
   it("T09-07 commits event, safe receipt and private job once; exact races replay and failures roll back", async () => {

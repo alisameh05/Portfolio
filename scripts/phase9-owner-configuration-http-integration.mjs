@@ -15,10 +15,11 @@ import { safeAssertionDiagnostic } from "./validation-errors.mjs";
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const CLI = join(ROOT, "node_modules/supabase/dist/supabase.js");
 const NEXT = join(ROOT, "node_modules/next/dist/bin/next");
-const ticket = process.argv.includes("--ticket-295") ? 295 : 294;
-const REPORT = join(ROOT, ticket === 295
-  ? "evidence/phase9-content-authoring-http-295.json"
-  : "evidence/phase9-owner-configuration-http-294.json");
+const ticket = process.argv.includes("--ticket-298") ? 298 : process.argv.includes("--ticket-295") ? 295 : 294;
+const contentAuthoringTicket = ticket === 295 || ticket === 298;
+const REPORT = join(ROOT, ticket === 298
+  ? "evidence/phase9-project-status-http-298.json"
+  : ticket === 295 ? "evidence/phase9-content-authoring-http-295.json" : "evidence/phase9-owner-configuration-http-294.json");
 
 async function availablePorts(count) {
   const servers = [];
@@ -140,7 +141,7 @@ async function main() {
       APP_BASE_URL: appBase, DATABASE_URL: restricted.toString(), PORTFOLIO_ID: portfolioId, OWNER_ID: ownerId,
       SUPABASE_URL: status.API_URL, SUPABASE_ANON_KEY: status.ANON_KEY,
       SUPABASE_JWT_ISSUER: `${status.API_URL}/auth/v1`, SUPABASE_JWT_AUDIENCE: "authenticated",
-      OWNER_GITHUB_SUBJECTS: "910294,910296", HOSTNAME: "127.0.0.1",
+      OWNER_GITHUB_SUBJECTS: "910294,910296,910298", HOSTNAME: "127.0.0.1",
     };
     stage = "server";
     for (const port of appPorts) {
@@ -170,7 +171,7 @@ async function main() {
       PHASE9_OWNER_HTTP_URLS: JSON.stringify(appPorts.slice(0, 2).map((port) => `http://127.0.0.1:${port}`)),
       PHASE9_OWNER_HTTP_UNREADY_URL: `http://127.0.0.1:${appPorts[2]}`,
       OWNER_ID: ownerId, PORTFOLIO_ID: portfolioId,
-      ...(ticket === 295 ? { PHASE5_REQUIRE_CONTENT_AUTHORING: "1", PHASE5_CONTENT_AUTHORING_DATABASE_URL: status.DB_URL } : {}),
+      ...(contentAuthoringTicket ? { PHASE5_REQUIRE_CONTENT_AUTHORING: "1", PHASE5_CONTENT_AUTHORING_DATABASE_URL: status.DB_URL } : {}),
     };
     stage = "tests";
     // Keep draining the live servers' pipes while tests send HTTP requests.
@@ -179,13 +180,15 @@ async function main() {
     const test = await new Promise((resolve) => {
       const suites = [
         "tests/runtime/owner-configuration-network.integration.test.ts",
-        ...(ticket === 295 ? ["tests/runtime/owner-content-http.test.ts", "tests/runtime/owner-publication.test.ts"] : []),
+        ...(contentAuthoringTicket ? ["tests/runtime/owner-content-http.test.ts", "tests/runtime/owner-publication.test.ts"] : []),
+        ...(ticket === 298 ? ["tests/runtime/owner-project-status.test.ts", "tests/contracts/owner-contract.test.ts",
+          "tests/routes/phase9-route-registration.test.ts"] : []),
         "tests/runtime/owner-configuration-http-bootstrap.test.ts",
         "tests/runtime/owner-configuration.test.ts",
         "tests/phase4/owner-request-security.test.ts",
         "tests/phase4/owner-session-auth.test.ts",
         "tests/phase8/operations-observability.test.ts",
-        ...(ticket === 295 ? ["tests/database/content-authoring.integration.test.ts"] : []),
+        ...(contentAuthoringTicket ? ["tests/database/content-authoring.integration.test.ts"] : []),
       ];
       const child = spawn(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), "run",
       "--config", "vitest.owner-configuration-network.config.ts",
@@ -204,7 +207,8 @@ async function main() {
     const report = JSON.parse(readFileSync(reportPath, "utf8"));
     if (test.error || test.status !== 0 || report.success !== true || report.numPassedTests <= 3 ||
         report.numFailedTests !== 0 || report.numPendingTests !== 0 || report.numTodoTests !== 0 ||
-        report.testResults?.length !== (ticket === 295 ? 9 : 6) || report.testResults.some((suite) => suite.status !== "passed")) {
+        report.testResults?.length !== (ticket === 298 ? 12 : contentAuthoringTicket ? 9 : 6) ||
+        report.testResults.some((suite) => suite.status !== "passed")) {
       const failedAssertions = report.testResults?.flatMap((suite) => suite.assertionResults ?? [])
         .filter((assertion) => assertion.status !== "passed")
         .map((assertion) => {
@@ -278,9 +282,10 @@ async function main() {
   }));
   mkdirSync(join(ROOT, "evidence"), { recursive: true });
   writeFileSync(REPORT, `${JSON.stringify({
-    ticket, scope: ticket === 295
-      ? "built-next-owner-content-authoring-review-preview-history-http-real-auth-postgresql"
-      : "built-next-owner-configuration-http-real-auth-postgresql",
+    ticket, scope: ticket === 298
+      ? "built-next-owner-project-status-catalogue-http-real-auth-postgresql"
+      : ticket === 295 ? "built-next-owner-content-authoring-review-preview-history-http-real-auth-postgresql"
+        : "built-next-owner-configuration-http-real-auth-postgresql",
     runId: randomUUID(), githubRunId: process.env.GITHUB_RUN_ID ?? null, githubRunAttempt: process.env.GITHUB_RUN_ATTEMPT ?? null,
     source: { commit: commit.status === 0 ? commit.stdout.trim() : "unavailable", treeSha256: workingTreeSourceSha256() },
     contractBundles, migrations,
@@ -293,7 +298,41 @@ async function main() {
       "revoked-session-denial", "shared-database-rate-limit", "limiter-outage-fails-closed", "log-privacy",
       ...(ticket === 295 ? ["all-six-content-authoring-http-operations", "content-cross-instance-exact-replay-and-conflict",
         "foreign-and-revoked-content-read-and-replay-denial", "strict-content-transport-validation-before-effects",
-        "postgres-content-save-preserves-public-projection"] : [])],
+        "postgres-content-save-preserves-public-projection"] : []),
+      ...(ticket === 298 ? ["all-four-project-status-catalogue-http-operations", "status-cross-instance-exact-replay-and-conflict",
+        "private-status-headers-and-operation-specific-preconditions", "foreign-invalid-and-stale-status-denials",
+        "postgres-status-history-retirement-and-usage-race"] : [])],
+    ...(ticket === 298 ? { acceptanceCriteria: {
+      AC01: ["tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all four Project status catalogue operations over built HTTP with exact replay and private contracts"],
+      AC02: ["tests/database/content-authoring.integration.test.ts :: Content authoring production PostgreSQL invariants / keeps Project status identities, histories, Featured state, and published projections atomic"],
+      AC03: ["tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all four Project status catalogue operations over built HTTP with exact replay and private contracts",
+        "tests/runtime/owner-project-status.test.ts :: Owner Project status HTTP adapters / rejects unknown body properties before dispatch and applies If-Match to retirement"],
+      AC04: ["tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all four Project status catalogue operations over built HTTP with exact replay and private contracts",
+        "tests/runtime/owner-project-status.test.ts :: Owner Project status HTTP adapters / rejects unknown body properties before dispatch and applies If-Match to retirement"],
+      AC05: ["tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all four Project status catalogue operations over built HTTP with exact replay and private contracts",
+        "tests/database/content-authoring.integration.test.ts :: Content authoring production PostgreSQL invariants / keeps Project status identities, histories, Featured state, and published projections atomic"],
+      AC06: ["tests/contracts/owner-contract.test.ts :: Owner v1 contract / documents examples for all four Project status catalogue operations",
+        "tests/routes/phase9-route-registration.test.ts :: Phase 9 guarded route registration (#293) / derives the exact 53 operation identifiers and keeps pending declarations",
+        "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all four Project status catalogue operations over built HTTP with exact replay and private contracts"],
+    } } : {}),
+    ...(ticket === 298 ? { traceability: [
+      { method: "GET", route: "/api/owner/v1/project-status-values", operation: "listOwnerProjectStatusValues",
+        application: "dispatchOwnerProjectStatusHttp(listOwnerProjectStatusValues) -> ContentAuthoringService.listProjectStatusValues",
+        executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all four Project status catalogue operations over built HTTP with exact replay and private contracts",
+        assertions: ["200 schema-valid catalogue with private headers", "list succeeds without invented mutation headers", "retired values remain listed"] },
+      { method: "POST", route: "/api/owner/v1/project-status-values", operation: "createOwnerProjectStatusValue",
+        application: "dispatchOwnerProjectStatusHttp(createOwnerProjectStatusValue) -> ContentAuthoringService.createProjectStatusValue",
+        executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all four Project status catalogue operations over built HTTP with exact replay and private contracts",
+        assertions: ["201 schema-valid receipt and private headers", "concurrent cross-instance exact replay", "changed-input 409", "missing key and invalid label rejected"] },
+      { method: "POST", route: "/api/owner/v1/project-status-values/{valueId}/commands/rename", operation: "renameOwnerProjectStatusValue",
+        application: "dispatchOwnerProjectStatusHttp(renameOwnerProjectStatusValue) -> ContentAuthoringService.renameProjectStatusValue",
+        executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all four Project status catalogue operations over built HTTP with exact replay and private contracts",
+        assertions: ["200 schema-valid receipt and private headers", "stable identity", "concurrent replay", "missing precondition 400 and stale version 412"] },
+      { method: "POST", route: "/api/owner/v1/project-status-values/{valueId}/commands/retire", operation: "retireOwnerProjectStatusValue",
+        application: "dispatchOwnerProjectStatusHttp(retireOwnerProjectStatusValue) -> ContentAuthoringService.retireProjectStatusValue",
+        executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all four Project status catalogue operations over built HTTP with exact replay and private contracts",
+        assertions: ["200 schema-valid receipt and private headers", "concurrent replay", "retired history retained", "invalid ID and missing preconditions rejected"] },
+    ] } : {}),
     ...(ticket === 295 ? { acceptanceCriteria: {
       AC01: ["tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all six private Content authoring, review, preview and history operations over built HTTP"],
       AC02: ["tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all six private Content authoring, review, preview and history operations over built HTTP",
@@ -360,9 +399,16 @@ async function main() {
         { operation: "reviewOwnerContentRevision", httpStatus: 200, responseSchemaValid: true, privateHeaders: true, exactReplayVerified: true },
         { operation: "getOwnerContentHistory", httpStatus: 200, responseSchemaValid: true, privateHeaders: true },
       ] : []),
+      ...(ticket === 298 ? [
+        { operation: "listOwnerProjectStatusValues", httpStatus: 200, responseSchemaValid: true, privateHeaders: true },
+        { operation: "createOwnerProjectStatusValue", httpStatus: 201, responseSchemaValid: true, privateHeaders: true, exactReplayVerified: true },
+        { operation: "renameOwnerProjectStatusValue", httpStatus: 200, responseSchemaValid: true, privateHeaders: true, exactReplayVerified: true },
+        { operation: "retireOwnerProjectStatusValue", httpStatus: 200, responseSchemaValid: true, privateHeaders: true, exactReplayVerified: true },
+      ] : []),
     ],
     passed: passedTestCount, failed: 0, skipped: 0, productionBuild: true, isolatedLoopbackSupabase: true,
-    execution: { command: ticket === 295 ? "npm run phase9:focus:content-authoring-http" : "npm run phase9:focus:owner-configuration-http", exitCode: 0,
+    execution: { command: ticket === 298 ? "npm run phase9:focus:project-status-http"
+      : ticket === 295 ? "npm run phase9:focus:content-authoring-http" : "npm run phase9:focus:owner-configuration-http", exitCode: 0,
       passed: executedTests.filter(({ status }) => status === "passed").length,
       failed: executedTests.filter(({ status }) => status === "failed").length, skipped: 0, tests: executedTests },
     cleanupVerified: true, credentialsRecorded: false, secretValuesRecorded: false,
