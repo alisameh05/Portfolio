@@ -640,16 +640,17 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     expect(relationResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(relation.success).toBe(true);
     if (!relation.success) throw new Error("PHASE9_PROJECT_RELATION_INVALID");
+    const relatedVersion = relation.data.aggregateVersion;
     const replay = await request(relateUrl, "POST", relationBody, relationKey, slug.data.aggregateVersion);
     expect(replay.status).toBe(200);
     expect(replay.headers.get("cache-control")).toBe("private, no-store");
     expect(replay.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(await replay.json()).toEqual(relation.data);
-    await expectPrivateProblem(await request(relateUrl, "POST", { relatedProjectId: published.contentId }, relationKey, slug.data.aggregateVersion), 409);
-    await expectPrivateProblem(await request(relateUrl, "POST", relationBody, `phase9-project-stale-${suffix}`, slug.data.aggregateVersion - 1), 412);
+    await expectPrivateProblem(await request(relateUrl, "POST", { relatedProjectId: published.contentId }, relationKey, relatedVersion), 409);
+    await expectPrivateProblem(await request(relateUrl, "POST", relationBody, `phase9-project-stale-${suffix}`, relatedVersion - 1), 412);
     const missingProjectId = createStableId("Project");
     await expectPrivateProblem(await request(relateUrl, "POST", { relatedProjectId: missingProjectId },
-      `phase9-project-missing-related-${suffix}`, slug.data.aggregateVersion), 404);
+      `phase9-project-missing-related-${suffix}`, relatedVersion), 404);
 
     const [leftView, rightView] = await Promise.all([request(aggregateUrl, "GET"), request(draftUrl, "GET")]);
     const left = zGetOwnerProjectAggregateResponse.safeParse(await leftView.json() as unknown);
