@@ -209,7 +209,7 @@ async function main() {
         .filter((assertion) => assertion.status !== "passed")
         .map((assertion) => ({ ...safeAssertionDiagnostic(assertion),
           authCode: assertion.failureMessages?.join("\n").match(/PHASE9_AUTH_DIAGNOSTIC:(SESSION_MALFORMED|UNSUPPORTED_ALGORITHM|UNKNOWN_SIGNING_KEY|INVALID_SIGNATURE|SESSION_EXPIRED|INVALID_CLAIMS|SESSION_REVOKED|AUTH_PROVIDER_UNAVAILABLE|UNTRUSTED_PROVIDER_IDENTITY|NOT_OWNER)/u)?.[1] ?? null,
-          httpStatus: assertion.failureMessages?.join("\n").match(/expected (200|400|401|403|409|429|500|503) to be (?:200|400|401|403|409|429|500|503)/u)?.[1] ?? null,
+          httpStatus: assertion.failureMessages?.join("\n").match(/expected (200|201|400|401|403|409|429|500|503) to be (?:200|201|400|401|403|409|429|500|503)/u)?.[1] ?? null,
         })) ?? [];
       const diagnosticCodes = [...new Set((JSON.stringify(report) + test.stdout + test.stderr + logs.join("")).match(/\b(?:PHASE9_[A-Z_]+|OWNER_RATE_LIMIT_[A-Z_]+|RATE_LIMIT_UNAVAILABLE|INVALID_CLAIMS|INVALID_SIGNATURE|SESSION_REVOKED|AUTH_PROVIDER_UNAVAILABLE|UNKNOWN_SIGNING_KEY)\b/gu) ?? [])];
       const contentCreateFailure = (test.stdout + test.stderr + logs.join("")).match(/PHASE9_CONTENT_CREATE_HTTP:(\d{3}):([a-z_]+)/u);
