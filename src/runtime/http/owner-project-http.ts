@@ -25,7 +25,6 @@ export type OwnerProjectHttpOperation =
 
 type ProjectParams = { readonly projectId: string };
 
-const INSTANCE = "/api/owner/v1/projects";
 let initialization: Promise<void> | undefined;
 
 async function ensureRuntime(): Promise<void> {
@@ -48,7 +47,7 @@ function unavailable(request: Request): Response {
     title: "Service Unavailable",
     status: 503,
     detail: "A required dependency is temporarily unavailable. Retry later.",
-    instance: INSTANCE,
+    instance: new URL(request.url).pathname,
     code: "temporarily_unavailable",
     traceId,
   }, { status: 503, headers: { "content-type": "application/problem+json", ...OWNER_PRIVATE_RESPONSE_HEADERS } });
