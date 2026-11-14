@@ -505,6 +505,14 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
 
     const published = await makeProject("Project HTTP identity", true);
     const draft = await makeProject("Project HTTP draft", false);
+    const hiddenFixture = await makeProject("Project HTTP hidden", true);
+    const hiddenPath = `${contentPath}/${hiddenFixture.contentId}`;
+    const hiddenLifecycleResponse = await request(`${hiddenPath}/commands/hide`, "POST", {},
+      `phase9-project-hide-${suffix}`, hiddenFixture.aggregateVersion);
+    const hiddenLifecycle = zHideOwnerContentResponse.safeParse(await hiddenLifecycleResponse.json() as unknown);
+    expect(hiddenLifecycleResponse.status).toBe(200);
+    expect(hiddenLifecycle.success).toBe(true);
+    if (!hiddenLifecycle.success) throw new Error("PHASE9_PROJECT_HIDE_INVALID");
     const statusId = createStableId("ProjectStatusValue");
     const statusLabel = `HTTP Active ${suffix.slice(0, 10)}`;
     await admin.query(
@@ -565,6 +573,29 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     );
     expect(noDraftProjection.rows[0]?.count).toBe(0);
 
+    const hiddenProjectUrl = `${urls[1]}/api/owner/v1/projects/${hiddenFixture.contentId}`;
+    const hiddenProjectBefore = await request(hiddenProjectUrl, "GET");
+    const hiddenView = zGetOwnerProjectAggregateResponse.safeParse(await hiddenProjectBefore.json() as unknown);
+    expect(hiddenView.success).toBe(true);
+    if (!hiddenView.success) throw new Error("PHASE9_HIDDEN_PROJECT_VIEW_INVALID");
+    const hiddenStatusResponse = await request(`${hiddenProjectUrl}/commands/change-status`, "POST",
+      { statusValueId: statusId }, `phase9-project-hidden-status-${suffix}`, hiddenView.data.aggregateVersion);
+    const hiddenStatus = zChangeOwnerProjectStatusResponse.safeParse(await hiddenStatusResponse.json() as unknown);
+    expect(hiddenStatusResponse.status).toBe(200);
+    expect(hiddenStatus.success).toBe(true);
+    if (!hiddenStatus.success) throw new Error("PHASE9_HIDDEN_PROJECT_STATUS_INVALID");
+    const hiddenFeaturedResponse = await request(`${hiddenProjectUrl}/commands/set-featured`, "POST",
+      { featured: true }, `phase9-project-hidden-featured-${suffix}`, hiddenStatus.data.aggregateVersion);
+    const hiddenFeatured = zSetOwnerProjectFeaturedResponse.safeParse(await hiddenFeaturedResponse.json() as unknown);
+    expect(hiddenFeaturedResponse.status).toBe(200);
+    expect(hiddenFeatured.success).toBe(true);
+    if (!hiddenFeatured.success) throw new Error("PHASE9_HIDDEN_PROJECT_FEATURED_INVALID");
+    const hiddenProjection = await admin.query(
+      "select count(*)::int as count from content.public_project_locales where content_id = $1::uuid",
+      [hiddenFixture.contentId],
+    );
+    expect(hiddenProjection.rows[0]?.count).toBe(0);
+
     const newSlug = `${published.candidateSlug}-updated`;
     const slugKey = `phase9-project-public-slug-${suffix}`;
     const slugResponse = await request(`${aggregateUrl}/commands/change-slug`, "POST", { slug: newSlug }, slugKey, aggregate.data.aggregateVersion);
@@ -584,6 +615,13 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     if (!routeHistory.success || routeHistory.data.publicRoute === null) throw new Error("PHASE9_PROJECT_ROUTE_HISTORY_INVALID");
     expect(routeHistory.data.publicRoute.identity).toBe(aggregate.data.publicRoute.identity);
 
+    const slugCollision = await request(`${aggregateUrl}/commands/change-slug`, "POST",
+      { slug: hiddenFixture.candidateSlug }, `phase9-project-slug-collision-${suffix}`, routeHistory.data.aggregateVersion);
+    await expectPrivateProblem(slugCollision, 409);
+    const afterSlugCollisionResponse = await request(aggregateUrl, "GET");
+    const afterSlugCollision = zGetOwnerProjectAggregateResponse.safeParse(await afterSlugCollisionResponse.json() as unknown);
+    expect(afterSlugCollision).toMatchObject({ success: true, data: { publicRoute: { canonicalSlug: newSlug } } });
+
     const relationKey = `phase9-project-relation-${suffix}`;
     const relateUrl = `${aggregateUrl}/commands/relate-project`;
     const relationBody = { relatedProjectId: draft.contentId };
@@ -601,6 +639,9 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     expect(await replay.json()).toEqual(relation.data);
     await expectPrivateProblem(await request(relateUrl, "POST", { relatedProjectId: published.contentId }, relationKey, slug.data.aggregateVersion), 409);
     await expectPrivateProblem(await request(relateUrl, "POST", relationBody, `phase9-project-stale-${suffix}`, slug.data.aggregateVersion - 1), 412);
+    const missingProjectId = createStableId("Project");
+    await expectPrivateProblem(await request(relateUrl, "POST", { relatedProjectId: missingProjectId },
+      `phase9-project-missing-related-${suffix}`, slug.data.aggregateVersion), 404);
 
     const [leftView, rightView] = await Promise.all([request(aggregateUrl, "GET"), request(draftUrl, "GET")]);
     const left = zGetOwnerProjectAggregateResponse.safeParse(await leftView.json() as unknown);
