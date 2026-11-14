@@ -141,7 +141,7 @@ async function main() {
       APP_BASE_URL: appBase, DATABASE_URL: restricted.toString(), PORTFOLIO_ID: portfolioId, OWNER_ID: ownerId,
       SUPABASE_URL: status.API_URL, SUPABASE_ANON_KEY: status.ANON_KEY,
       SUPABASE_JWT_ISSUER: `${status.API_URL}/auth/v1`, SUPABASE_JWT_AUDIENCE: "authenticated",
-      OWNER_GITHUB_SUBJECTS: "910294,910296", HOSTNAME: "127.0.0.1",
+      OWNER_GITHUB_SUBJECTS: "910294,910296,910298", HOSTNAME: "127.0.0.1",
     };
     stage = "server";
     for (const port of appPorts) {

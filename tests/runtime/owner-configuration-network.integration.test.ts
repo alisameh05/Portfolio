@@ -47,6 +47,7 @@ const ownerId = process.env["OWNER_ID"];
 const portfolioId = process.env["PORTFOLIO_ID"];
 const githubSubject = "910294";
 const secondGithubSubject = "910296";
+const catalogueGithubSubject = "910298";
 const foreignGithubSubject = "910295";
 const sentinel = "SHOULD_NEVER_APPEAR_PHASE9_SECRET_7d0b0a";
 const urls = JSON.parse(process.env["PHASE9_OWNER_HTTP_URLS"] ?? "[]") as string[];
@@ -878,8 +879,10 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
   }, 90_000);
 
   it("serves all four Project status catalogue operations over built HTTP with exact replay and private contracts", async () => {
-    // Content acceptance revokes the shared second session; use a fresh real login here.
-    const catalogueSecondSession = await signIn("phase9-owner-second-session@example.test", ownerSecondSession.userId);
+    // Use a distinct Auth account linked to the same Owner. The earlier content
+    // scenario revokes ownerSecondSession; reissuing its magic link also couples
+    // this scenario to Auth's repeated-link behavior.
+    const catalogueSecondSession = await createLogin("phase9-catalogue-owner@example.test", catalogueGithubSubject, ownerId!);
     const origin = new URL(urls[0]!).origin;
     const path = "/api/owner/v1/project-status-values";
     const request = (url: string, method: string, body?: unknown, key?: string, version?: number, session: Login = owner) => fetch(url, {
