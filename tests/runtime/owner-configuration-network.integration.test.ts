@@ -878,13 +878,15 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
   }, 90_000);
 
   it("serves all four Project status catalogue operations over built HTTP with exact replay and private contracts", async () => {
+    // Content acceptance revokes the shared second session; use a fresh real login here.
+    const catalogueSecondSession = await signIn("phase9-owner-second-session@example.test", ownerSecondSession.userId);
     const origin = new URL(urls[0]!).origin;
     const path = "/api/owner/v1/project-status-values";
     const request = (url: string, method: string, body?: unknown, key?: string, version?: number, session: Login = owner) => fetch(url, {
       method,
       headers: {
         "content-type": "application/json", origin,
-        cookie: `sw_owner_session=${session.token}`, "x-csrf-token": session === ownerSecondSession ? secondCsrf : csrf,
+        cookie: `sw_owner_session=${session.token}`, "x-csrf-token": session === catalogueSecondSession ? secondCsrf : csrf,
         ...(key === undefined ? {} : { "idempotency-key": key }),
         ...(version === undefined ? {} : { "if-match": `"${version}"` }),
       },
@@ -910,7 +912,7 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     const createBody = { label: `Research ${randomUUID().slice(0, 8)}` };
     const [createdResponse, createReplay] = await Promise.all([
       request(`${urls[0]}${path}`, "POST", createBody, createKey),
-      request(`${urls[1]}${path}`, "POST", createBody, createKey, undefined, ownerSecondSession),
+      request(`${urls[1]}${path}`, "POST", createBody, createKey, undefined, catalogueSecondSession),
     ]);
     expect(createdResponse.status).toBe(201);
     expect(createReplay.status).toBe(201);
@@ -933,7 +935,7 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     const renameBody = { label: `${createBody.label} renamed` };
     const [renamedResponse, renameReplay] = await Promise.all([
       request(`${urls[0]}${valuePath}/rename`, "POST", renameBody, renameKey, created.data.aggregateVersion),
-      request(`${urls[1]}${valuePath}/rename`, "POST", renameBody, renameKey, created.data.aggregateVersion, ownerSecondSession),
+      request(`${urls[1]}${valuePath}/rename`, "POST", renameBody, renameKey, created.data.aggregateVersion, catalogueSecondSession),
     ]);
     expect(renamedResponse.status).toBe(200);
     expect(renameReplay.status).toBe(200);
@@ -950,7 +952,7 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     const retireKey = `phase9-status-retire-${randomUUID()}`;
     const [retiredResponse, retireReplay] = await Promise.all([
       request(`${urls[0]}${valuePath}/retire`, "POST", {}, retireKey, renamed.data.aggregateVersion),
-      request(`${urls[1]}${valuePath}/retire`, "POST", {}, retireKey, renamed.data.aggregateVersion, ownerSecondSession),
+      request(`${urls[1]}${valuePath}/retire`, "POST", {}, retireKey, renamed.data.aggregateVersion, catalogueSecondSession),
     ]);
     expect(retiredResponse.status).toBe(200);
     expect(retireReplay.status).toBe(200);
@@ -1067,13 +1069,7 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     await expectPrivateProblem(response, 503);
   }, 30_000);
 
-  async function createLogin(email: string, providerId: string, linkedOwner: string): Promise<Login> {
-    const createResponse = await fetch(`${apiUrl}/auth/v1/admin/users`, { method: "POST", headers: {
-      apikey: serviceKey!, authorization: `Bearer ${serviceKey!}`, "content-type": "application/json",
-    }, body: JSON.stringify({ email, email_confirm: true }), signal: AbortSignal.timeout(10_000) });
-    if (!createResponse.ok) throw new Error("PHASE9_OWNER_HTTP_USER_CREATE_FAILED");
-    const created = await createResponse.json() as { id?: string };
-    if (!created.id) throw new Error("PHASE9_OWNER_HTTP_USER_ID_MISSING");
+  async function signIn(email: string, userId: string): Promise<Login> {
     const linkResponse = await fetch(`${apiUrl}/auth/v1/admin/generate_link`, { method: "POST", headers: {
       apikey: serviceKey!, authorization: `Bearer ${serviceKey!}`, "content-type": "application/json",
     }, body: JSON.stringify({ type: "magiclink", email }), signal: AbortSignal.timeout(10_000) });
@@ -1086,12 +1082,23 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     if (!sessionResponse.ok) throw new Error("PHASE9_OWNER_HTTP_SESSION_CREATE_FAILED");
     const session = await sessionResponse.json() as { access_token?: string; user?: { id?: string } };
     const token = session.access_token;
-    if (!token || session.user?.id !== created.id) throw new Error("PHASE9_OWNER_HTTP_SESSION_INVALID");
+    if (!token || session.user?.id !== userId) throw new Error("PHASE9_OWNER_HTTP_SESSION_INVALID");
     const claims = JSON.parse(Buffer.from(token.split(".")[1]!, "base64url").toString("utf8")) as { session_id?: string };
     if (!claims.session_id) throw new Error("PHASE9_OWNER_HTTP_SESSION_ID_MISSING");
+    return { userId, token, sessionId: claims.session_id };
+  }
+
+  async function createLogin(email: string, providerId: string, linkedOwner: string): Promise<Login> {
+    const createResponse = await fetch(`${apiUrl}/auth/v1/admin/users`, { method: "POST", headers: {
+      apikey: serviceKey!, authorization: `Bearer ${serviceKey!}`, "content-type": "application/json",
+    }, body: JSON.stringify({ email, email_confirm: true }), signal: AbortSignal.timeout(10_000) });
+    if (!createResponse.ok) throw new Error("PHASE9_OWNER_HTTP_USER_CREATE_FAILED");
+    const created = await createResponse.json() as { id?: string };
+    if (!created.id) throw new Error("PHASE9_OWNER_HTTP_USER_ID_MISSING");
+    const login = await signIn(email, created.id);
     await admin.query("insert into auth.identities (user_id, identity_data, provider, provider_id) values ($1::uuid, $2::jsonb, 'github', $3)",
       [created.id, JSON.stringify({ sub: providerId, provider_id: providerId }), providerId]);
     await admin.query("insert into identity_access.owner_links (github_subject, owner_id) values ($1, $2::uuid)", [providerId, linkedOwner]);
-    return { userId: created.id, token, sessionId: claims.session_id };
+    return login;
   }
 });
