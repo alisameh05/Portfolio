@@ -469,11 +469,12 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
       artifacts: [{ id: artifactId, title: "Project identity evidence", destinationUrl: "https://example.test/project-identity" }],
     };
     const makeProject = async (name: string, publish: boolean) => {
-      const candidateSlug = `${name.toLowerCase().replaceAll(/[^a-z0-9]+/gu, "-").replaceAll(/^-|-$/gu, "")}-${suffix.slice(0, 10)}`;
+      const fixtureName = name.toLowerCase().replaceAll(/[^a-z0-9]+/gu, "-").replaceAll(/^-|-$/gu, "");
+      const candidateSlug = `${fixtureName}-${suffix.slice(0, 10)}`;
       const createdResponse = await request(contentPath, "POST", {
         contentType: "project", locale: "en", title: name, summary: "Synthetic Project HTTP fixture.",
         body: "Only the explicit publication command makes this Project public.", candidateSlug, caseStudy, evidence, externalLinks: [],
-      }, `phase9-project-create-${name}-${suffix}`);
+      }, `phase9-project-create-${fixtureName}-${suffix}`);
       expect(createdResponse.status).toBe(201);
       expect(createdResponse.headers.get("cache-control")).toBe("private, no-store");
       const created = zCreateOwnerContentResponse.safeParse(await createdResponse.json() as unknown);
