@@ -646,7 +646,7 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     expect(replay.headers.get("cache-control")).toBe("private, no-store");
     expect(replay.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(await replay.json()).toEqual(relation.data);
-    await expectPrivateProblem(await request(relateUrl, "POST", { relatedProjectId: published.contentId }, relationKey, relatedVersion), 409);
+    await expectPrivateProblem(await request(relateUrl, "POST", { relatedProjectId: hiddenFixture.contentId }, relationKey, relatedVersion), 409);
     await expectPrivateProblem(await request(relateUrl, "POST", relationBody, `phase9-project-stale-${suffix}`, relatedVersion - 1), 412);
     const missingProjectId = createStableId("Project");
     await expectPrivateProblem(await request(relateUrl, "POST", { relatedProjectId: missingProjectId },
