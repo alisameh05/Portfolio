@@ -65,10 +65,11 @@ describe("Phase 9 guarded route registration (#293)", () => {
     expect(report.declared.filter((entry: { surface: string }) => entry.surface === "owner")).toHaveLength(48);
     expect(report.registered.map((entry: { operationId: string }) => entry.operationId)).toEqual([
       "archiveOwnerContent",
+      "assignOwnerProjectTaxonomyValue",
       "changeOwnerProjectPublicSlug", "changeOwnerProjectStatus", "correctOwnerProjectCandidateSlug",
-      "createOwnerContent", "createOwnerProjectStatusValue", "getOwnerContentAggregate", "getOwnerContentHistory", "getOwnerProjectAggregate",
-      "hideOwnerContent", "listOwnerProjectStatusValues", "previewOwnerContentRevision", "publishOwnerContentLanguage",
-      "relateOwnerProjects", "renameOwnerProjectStatusValue", "restoreOwnerContent", "retireOwnerProjectStatusValue", "reviewOwnerContentRevision", "saveOwnerContentRevision",
+      "createOwnerContent", "createOwnerProjectStatusValue", "createOwnerTaxonomyValue", "getOwnerContentAggregate", "getOwnerContentHistory", "getOwnerProjectAggregate", "getOwnerTaxonomyAggregate",
+      "hideOwnerContent", "listOwnerProjectStatusValues", "mergeOwnerTaxonomyValue", "previewOwnerContentRevision", "publishOwnerContentLanguage",
+      "relateOwnerProjects", "renameOwnerProjectStatusValue", "renameOwnerTaxonomyValue", "restoreOwnerContent", "retireOwnerProjectStatusValue", "retireOwnerTaxonomyValue", "reviewOwnerContentRevision", "saveOwnerContentRevision",
       "setOwnerProjectFeatured",
       "updateOwnerContactChannels", "updateOwnerGlobalProjectCta", "updateOwnerProfileConfiguration",
     ]);
@@ -84,7 +85,7 @@ describe("Phase 9 guarded route registration (#293)", () => {
       { method: "POST", path: "/api/owner/v1/content/{contentId}/commands/restore", operationId: "restoreOwnerContent",
         file: "src/app/api/owner/v1/content/[contentId]/commands/restore/route.ts" },
     ]);
-    expect(report.pending).toHaveLength(30);
+    expect(report.pending).toHaveLength(24);
     expect(report.registered.filter((entry: { operationId: string }) =>
       ["getOwnerProjectAggregate", "changeOwnerProjectStatus", "setOwnerProjectFeatured", "changeOwnerProjectPublicSlug",
         "correctOwnerProjectCandidateSlug", "relateOwnerProjects"].includes(entry.operationId)))
