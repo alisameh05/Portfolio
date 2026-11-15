@@ -32,6 +32,7 @@ import {
   zCorrectOwnerProjectCandidateSlugResponse,
   zRelateOwnerProjectsResponse,
   zGetOwnerTaxonomyAggregateResponse,
+  zGetOwnerCvPortfolioResponse,
   zCreateOwnerTaxonomyValueResponse,
   zRenameOwnerTaxonomyValueResponse,
   zRetireOwnerTaxonomyValueResponse,
@@ -166,7 +167,8 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
       expect(contentLimit.allowed).toBe(true);
       const publicationLimit = createPostgresOwnerConfigurationRateLimit(appDatabase.database);
       for (const operation of ["publishOwnerContentLanguage", "hideOwnerContent", "archiveOwnerContent", "restoreOwnerContent",
-        "acceptOwnerMediaAsset", "rejectOwnerMediaAsset"]) {
+        "acceptOwnerMediaAsset", "rejectOwnerMediaAsset", "getOwnerCvPortfolio", "registerOwnerCvVersion",
+        "acceptOwnerCvVersion", "activateOwnerCvVersion"]) {
         expect(await publicationLimit.check(`owner_session:${ownerId}:${operation}`)).toMatchObject({ allowed: true });
       }
       for (const operation of ["listOwnerProjectStatusValues", "createOwnerProjectStatusValue", "renameOwnerProjectStatusValue", "retireOwnerProjectStatusValue"]) {
@@ -185,6 +187,56 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     if (appDatabase !== undefined) await appDatabase.resource.close();
     if (admin !== undefined) await admin.end();
   });
+
+  it("serves the Owner CV portfolio over built HTTP and safely rejects missing or unsupported CV states", async () => {
+    const ownerHeaders = {
+      origin: new URL(urls[0]!).origin,
+      cookie: `sw_owner_session=${owner.token}`,
+      "x-csrf-token": csrf,
+    };
+    const portfolioResponse = await fetch(`${urls[0]}/api/owner/v1/cv`, {
+      method: "GET", headers: { host: new URL(urls[0]!).host, cookie: ownerHeaders.cookie }, signal: AbortSignal.timeout(15_000),
+    });
+    expect(portfolioResponse.status).toBe(200);
+    expect(portfolioResponse.headers.get("cache-control")).toBe("private, no-store");
+    expect(portfolioResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    const portfolio = zGetOwnerCvPortfolioResponse.safeParse(await portfolioResponse.json() as unknown);
+    expect(portfolio.success).toBe(true);
+    if (!portfolio.success) throw new Error("PHASE9_CV_PORTFOLIO_HTTP_INVALID");
+    expect(portfolio.data.currentVersionId).toBeNull();
+
+    const versionId = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea3";
+    const register = await fetch(`${urls[0]}/api/owner/v1/cv/versions`, {
+      method: "POST",
+      headers: { host: new URL(urls[0]!).host, ...ownerHeaders, "content-type": "application/json",
+        "idempotency-key": `phase9-cv-register-${randomUUID()}`, "if-match": '"1"' },
+      body: JSON.stringify({ mediaId: versionId, locale: "en", label: "Unaccepted CV candidate" }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    await expectPrivateProblem(register, 409);
+
+    for (const action of ["accept", "activate"] as const) {
+      const response = await fetch(`${urls[0]}/api/owner/v1/cv/versions/${versionId}/commands/${action}`, {
+        method: "POST",
+        headers: { host: new URL(urls[0]!).host, ...ownerHeaders,
+          "idempotency-key": `phase9-cv-${action}-${randomUUID()}`, "if-match": '"1"' },
+        signal: AbortSignal.timeout(15_000),
+      });
+      await expectPrivateProblem(response, 404);
+    }
+
+    const missingCurrent = await fetch(`${urls[0]}/api/v1/cv/current?locale=en`, {
+      method: "GET", headers: { host: new URL(urls[0]!).host }, signal: AbortSignal.timeout(15_000),
+    });
+    expect(missingCurrent.status).toBe(404);
+    expect(missingCurrent.headers.get("cache-control")).toBe("no-store");
+    expect(zProblem.safeParse(await missingCurrent.json() as unknown).success).toBe(true);
+    const arabicCurrent = await fetch(`${urls[0]}/api/v1/cv/current?locale=ar`, {
+      method: "GET", headers: { host: new URL(urls[0]!).host }, signal: AbortSignal.timeout(15_000),
+    });
+    expect(arabicCurrent.status).toBe(400);
+    expect(zProblem.safeParse(await arabicCurrent.json() as unknown).success).toBe(true);
+  }, 60_000);
 
   it("admits all Media adapters through the restricted PostgreSQL limiter and returns 429 on exhaustion", async () => {
     const rateLimit = createPostgresOwnerConfigurationRateLimit(appDatabase.database);

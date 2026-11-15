@@ -1257,7 +1257,7 @@ export async function getFeedbackRuntimeServices(): Promise<FeedbackRuntimeServi
   return { service: unavailableFeedbackService, rateLimit: { check: async () => { throw new Error("FEEDBACK_NOT_CONFIGURED"); } } };
 }
 
-/** Shared effective public abuse control used by public writes and Current CV delivery. */
+/** Shared effective public abuse control used by Feedback and Current CV delivery. */
 export function getPublicRateLimit(): import("../runtime/http/current-cv-rate-limit.js").CurrentCvRateLimitCheck {
   return currentPublicRateLimit ?? { async check() { throw new Error("PUBLIC_RATE_LIMIT_NOT_CONFIGURED"); } };
 }
