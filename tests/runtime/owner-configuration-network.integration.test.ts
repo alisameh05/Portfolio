@@ -1,3 +1,6 @@
+import { handleGetOwnerMediaAggregate, handleCreateOwnerMediaUploadIntent, handleRecordOwnerMediaProcessing } from "../../src/runtime/http/owner-media.js";
+import { createOwnerMediaTestFake, OWNER_MEDIA_ID } from "../../src/runtime/fakes/owner-media.js";
+import { ownerTestSecurity, withOwnerTestAuth, OWNER_TEST_ACTOR } from "./owner-test-auth.js";
 import { createHash, randomUUID } from "node:crypto";
 import { request as httpRequest } from "node:http";
 import { Client } from "pg";
@@ -179,6 +182,46 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
   afterAll(async () => {
     if (appDatabase !== undefined) await appDatabase.resource.close();
     if (admin !== undefined) await admin.end();
+  });
+
+  it("admits all Media adapters through the restricted PostgreSQL limiter and returns 429 on exhaustion", async () => {
+    const rateLimit = createPostgresOwnerConfigurationRateLimit(appDatabase.database);
+    const security = { ...ownerTestSecurity(), rateLimit };
+    const service = createOwnerMediaTestFake({ type: "success" });
+    const sha256 = "a".repeat(64);
+    const request = (path: string, body?: unknown) => new Request(`https://example.com/api/owner/v1/media/${path}`, {
+      method: body === undefined ? "GET" : "POST",
+      headers: withOwnerTestAuth({ "content-type": "application/json", "idempotency-key": "media-limiter-regression", "if-match": '"2"' }),
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    const cases = [
+      { operation: "getOwnerMediaAggregate", status: 200, invoke: () => handleGetOwnerMediaAggregate(request(OWNER_MEDIA_ID), { mediaId: OWNER_MEDIA_ID }, { service, security }) },
+      { operation: "createOwnerMediaUploadIntent", status: 201, invoke: () => handleCreateOwnerMediaUploadIntent(request("upload-intents", {
+        kind: "image", originalFileName: "image.png", declaredMediaType: "image/png", byteLength: 204800, sha256,
+      }), { service, security }) },
+      { operation: "recordOwnerMediaProcessing", status: 200, invoke: () => handleRecordOwnerMediaProcessing(request(`${OWNER_MEDIA_ID}/commands/record-processing`, {
+        result: "passed", detectedMediaType: "image/png", detectedByteLength: 204800, sha256,
+      }), { mediaId: OWNER_MEDIA_ID }, { service, security }) },
+    ];
+    if (OWNER_TEST_ACTOR.kind !== "owner") throw new Error("OWNER_TEST_ACTOR_REQUIRED");
+    const subjectHash = createHash("sha256").update(OWNER_TEST_ACTOR.ownerId).digest("hex");
+    try {
+      for (const test of cases) {
+        await admin.query("delete from identity_access.owner_configuration_limit_windows where subject_hash = $1", [subjectHash]);
+        expect((await test.invoke()).status).toBe(test.status);
+        // Seed the current and next window to keep the assertion stable at a minute boundary.
+        await admin.query(`insert into identity_access.owner_configuration_limit_windows
+          (subject_hash, operation, window_started_at, request_count)
+          select $1, $2, to_timestamp(floor(extract(epoch from clock_timestamp()) / 60) * 60) + offset_minute * interval '1 minute', 30
+          from generate_series(0, 1) as offset_minute
+          on conflict (subject_hash, operation, window_started_at) do update set request_count = 30`, [subjectHash, test.operation]);
+        const exhausted = await test.invoke();
+        await expectPrivateProblem(exhausted, 429);
+        expect(Number(exhausted.headers.get("retry-after"))).toBeGreaterThan(0);
+      }
+    } finally {
+      await admin.query("delete from identity_access.owner_configuration_limit_windows where subject_hash = $1", [subjectHash]);
+    }
   });
 
   it("executes all three operations over two built server instances with exact replay, version and scope protections", async () => {

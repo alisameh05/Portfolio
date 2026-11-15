@@ -17,7 +17,7 @@ export type OwnerMediaHttpOperation =
   | "createOwnerMediaUploadIntent"
   | "recordOwnerMediaProcessing";
 
-let initialization: Promise<void> | undefined;
+let initialization: ReturnType<typeof initializeDatabaseRuntime> | undefined;
 
 async function ensureRuntime(): Promise<void> {
   initialization ??= initializeDatabaseRuntime(getRuntimeEnvironmentSnapshot(), "application");
