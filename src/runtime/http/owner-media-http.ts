@@ -8,6 +8,8 @@ import {
   handleCreateOwnerMediaUploadIntent,
   handleGetOwnerMediaAggregate,
   handleRecordOwnerMediaProcessing,
+  handleAcceptOwnerMediaAsset,
+  handleRejectOwnerMediaAsset,
 } from "./owner-media.js";
 import { OWNER_PRIVATE_RESPONSE_HEADERS } from "./owner-security.js";
 import { createCorrelation } from "../ports.js";
@@ -15,7 +17,9 @@ import { createCorrelation } from "../ports.js";
 export type OwnerMediaHttpOperation =
   | "getOwnerMediaAggregate"
   | "createOwnerMediaUploadIntent"
-  | "recordOwnerMediaProcessing";
+  | "recordOwnerMediaProcessing"
+  | "acceptOwnerMediaAsset"
+  | "rejectOwnerMediaAsset";
 
 let initialization: ReturnType<typeof initializeDatabaseRuntime> | undefined;
 
@@ -71,6 +75,10 @@ export async function dispatchOwnerMediaHttp(
         return await handleCreateOwnerMediaUploadIntent(request, deps);
       case "recordOwnerMediaProcessing":
         return await handleRecordOwnerMediaProcessing(request, { mediaId: params?.mediaId ?? "" }, deps);
+      case "acceptOwnerMediaAsset":
+        return await handleAcceptOwnerMediaAsset(request, { mediaId: params?.mediaId ?? "" }, deps);
+      case "rejectOwnerMediaAsset":
+        return await handleRejectOwnerMediaAsset(request, { mediaId: params?.mediaId ?? "" }, deps);
     }
   } catch (error) {
     const safeCode = error instanceof Error && /^[A-Z][A-Z0-9_]{1,80}$/u.test(error.message)

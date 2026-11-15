@@ -513,9 +513,9 @@ export function handleRecordOwnerMediaProcessing(request: Request, params: { med
 }
 
 export function handleAcceptOwnerMediaAsset(request: Request, params: { mediaId: string }, deps: OwnerMediaAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-media", () => handleAcceptOwnerMediaAssetUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-media", () => withOwnerPrivateResponseHeaders(handleAcceptOwnerMediaAssetUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleRejectOwnerMediaAsset(request: Request, params: { mediaId: string }, deps: OwnerMediaAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-media", () => handleRejectOwnerMediaAssetUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-media", () => withOwnerPrivateResponseHeaders(handleRejectOwnerMediaAssetUnobserved(request, params, deps)), deps.logger);
 }

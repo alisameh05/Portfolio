@@ -454,6 +454,8 @@ describe("Owner Media processing, acceptance, and rejection (#31)", () => {
       { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(fake.calls.acceptOwnerMediaAsset).toHaveLength(1);
     const command = fake.calls.acceptOwnerMediaAsset[0] as {
       mediaId: string;
@@ -478,6 +480,8 @@ describe("Owner Media processing, acceptance, and rejection (#31)", () => {
       { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(fake.calls.rejectOwnerMediaAsset).toHaveLength(1);
     const body = (await response.json()) as unknown;
     expect(zRejectOwnerMediaAssetResponse.safeParse(body).success).toBe(true);

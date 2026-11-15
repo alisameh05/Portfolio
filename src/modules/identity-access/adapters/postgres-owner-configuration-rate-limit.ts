@@ -36,6 +36,8 @@ const OWNER_CONFIGURATION_OPERATIONS = new Set([
   "getOwnerMediaAggregate",
   "createOwnerMediaUploadIntent",
   "recordOwnerMediaProcessing",
+  "acceptOwnerMediaAsset",
+  "rejectOwnerMediaAsset",
 ]);
 const OWNER_SCOPE_PATTERN = /^owner_session:([0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}):([A-Za-z]+)$/i;
 
