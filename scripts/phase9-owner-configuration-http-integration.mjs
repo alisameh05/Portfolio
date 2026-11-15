@@ -15,11 +15,12 @@ import { safeAssertionDiagnostic } from "./validation-errors.mjs";
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const CLI = join(ROOT, "node_modules/supabase/dist/supabase.js");
 const NEXT = join(ROOT, "node_modules/next/dist/bin/next");
-const ticket = process.argv.includes("--ticket-298") ? 298 : process.argv.includes("--ticket-295") ? 295 : 294;
-const contentAuthoringTicket = ticket === 295 || ticket === 298;
-const REPORT = join(ROOT, ticket === 298
-  ? "evidence/phase9-project-status-http-298.json"
-  : ticket === 295 ? "evidence/phase9-content-authoring-http-295.json" : "evidence/phase9-owner-configuration-http-294.json");
+const ticket = process.argv.includes("--ticket-299") ? 299 : process.argv.includes("--ticket-298") ? 298 : process.argv.includes("--ticket-295") ? 295 : 294;
+const contentAuthoringTicket = ticket === 295 || ticket === 298 || ticket === 299;
+const REPORT = join(ROOT, ticket === 299
+  ? "evidence/phase9-taxonomy-http-299.json"
+  : ticket === 298 ? "evidence/phase9-project-status-http-298.json"
+    : ticket === 295 ? "evidence/phase9-content-authoring-http-295.json" : "evidence/phase9-owner-configuration-http-294.json");
 
 async function availablePorts(count) {
   const servers = [];
@@ -183,6 +184,8 @@ async function main() {
         ...(contentAuthoringTicket ? ["tests/runtime/owner-content-http.test.ts", "tests/runtime/owner-publication.test.ts"] : []),
         ...(ticket === 298 ? ["tests/runtime/owner-project-status.test.ts", "tests/contracts/owner-contract.test.ts",
           "tests/routes/phase9-route-registration.test.ts"] : []),
+        ...(ticket === 299 ? ["tests/runtime/owner-taxonomy.test.ts", "tests/runtime/owner-project.test.ts",
+          "tests/contracts/owner-contract.test.ts", "tests/routes/phase9-route-registration.test.ts"] : []),
         "tests/runtime/owner-configuration-http-bootstrap.test.ts",
         "tests/runtime/owner-configuration.test.ts",
         "tests/phase4/owner-request-security.test.ts",
@@ -207,7 +210,7 @@ async function main() {
     const report = JSON.parse(readFileSync(reportPath, "utf8"));
     if (test.error || test.status !== 0 || report.success !== true || report.numPassedTests <= 3 ||
         report.numFailedTests !== 0 || report.numPendingTests !== 0 || report.numTodoTests !== 0 ||
-        report.testResults?.length !== (ticket === 298 ? 12 : contentAuthoringTicket ? 9 : 6) ||
+        report.testResults?.length !== (ticket === 299 ? 13 : ticket === 298 ? 12 : contentAuthoringTicket ? 9 : 6) ||
         report.testResults.some((suite) => suite.status !== "passed")) {
       const failedAssertions = report.testResults?.flatMap((suite) => suite.assertionResults ?? [])
         .filter((assertion) => assertion.status !== "passed")
@@ -282,10 +285,11 @@ async function main() {
   }));
   mkdirSync(join(ROOT, "evidence"), { recursive: true });
   writeFileSync(REPORT, `${JSON.stringify({
-    ticket, scope: ticket === 298
-      ? "built-next-owner-project-status-catalogue-http-real-auth-postgresql"
-      : ticket === 295 ? "built-next-owner-content-authoring-review-preview-history-http-real-auth-postgresql"
-        : "built-next-owner-configuration-http-real-auth-postgresql",
+    ticket, scope: ticket === 299
+      ? "built-next-owner-controlled-taxonomy-workflows-http-real-auth-restricted-postgresql"
+      : ticket === 298 ? "built-next-owner-project-status-catalogue-http-real-auth-postgresql"
+        : ticket === 295 ? "built-next-owner-content-authoring-review-preview-history-http-real-auth-postgresql"
+          : "built-next-owner-configuration-http-real-auth-postgresql",
     runId: randomUUID(), githubRunId: process.env.GITHUB_RUN_ID ?? null, githubRunAttempt: process.env.GITHUB_RUN_ATTEMPT ?? null,
     source: { commit: commit.status === 0 ? commit.stdout.trim() : "unavailable", treeSha256: workingTreeSourceSha256() },
     contractBundles, migrations,
@@ -301,7 +305,27 @@ async function main() {
         "postgres-content-save-preserves-public-projection"] : []),
       ...(ticket === 298 ? ["all-four-project-status-catalogue-http-operations", "status-cross-instance-exact-replay-and-conflict",
         "private-status-headers-and-operation-specific-preconditions", "foreign-invalid-and-stale-status-denials",
-        "postgres-status-history-retirement-and-usage-race"] : [])],
+        "postgres-status-history-retirement-and-usage-race"] : []),
+      ...(ticket === 299 ? ["all-six-controlled-taxonomy-http-operations", "taxonomy-cross-instance-assignment-and-merge-replay",
+        "rename-stable-id-retirement-history-and-merge-mapping", "invalid-foreign-stale-and-conflicting-key-denials",
+        "restricted-postgres-merge-assignment-history-and-retirement-evidence", "postgres-rollback-and-independent-connection-races"] : [])],
+    ...(ticket === 299 ? { acceptanceCriteria: {
+      AC01: ["tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves controlled Taxonomy workflows over built HTTP and verifies real PostgreSQL assignment history"],
+      AC02: ["tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves controlled Taxonomy workflows over built HTTP and verifies real PostgreSQL assignment history",
+        "tests/database/content-authoring.integration.test.ts :: Content authoring production PostgreSQL invariants / renames and retires Taxonomy values while preserving assignments, public labels, and restoration"],
+      AC03: ["tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves controlled Taxonomy workflows over built HTTP and verifies real PostgreSQL assignment history",
+        "tests/database/content-authoring.integration.test.ts :: Content authoring production PostgreSQL invariants / merges active values atomically across Projects, deduplicates survivors, preserves history, and replays the original receipt"],
+      AC04: ["tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves controlled Taxonomy workflows over built HTTP and verifies real PostgreSQL assignment history",
+        "tests/database/content-authoring.integration.test.ts :: Content authoring production PostgreSQL invariants / rolls back every Project when a multi-Project merge projection or outbox write fails",
+        "tests/database/content-authoring.integration.test.ts :: Content authoring production PostgreSQL invariants / serializes assignment against merge and simultaneous merges on independent connections",
+        "tests/database/content-authoring.integration.test.ts :: Content authoring production PostgreSQL invariants / serializes Taxonomy retirement against new assignments"],
+      AC05: ["tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves controlled Taxonomy workflows over built HTTP and verifies real PostgreSQL assignment history",
+        "tests/runtime/owner-taxonomy.test.ts :: Owner Taxonomy commands (#30) / rejects command inputs before dispatch and translates typed authorization, version, and conflict rejections",
+        "tests/database/content-authoring.integration.test.ts :: Content authoring production PostgreSQL invariants / rejects foreign-scope Taxonomy values and non-Project assignment targets"],
+      AC06: ["tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves controlled Taxonomy workflows over built HTTP and verifies real PostgreSQL assignment history",
+        "tests/database/content-authoring.integration.test.ts :: Content authoring production PostgreSQL invariants / merges active values atomically across Projects, deduplicates survivors, preserves history, and replays the original receipt",
+        "tests/routes/phase9-route-registration.test.ts :: Phase 9 guarded route registration (#293) / derives the exact 53 operation identifiers and keeps pending declarations"],
+    } } : {}),
     ...(ticket === 298 ? { acceptanceCriteria: {
       AC01: ["tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all four Project status catalogue operations over built HTTP with exact replay and private contracts"],
       AC02: ["tests/database/content-authoring.integration.test.ts :: Content authoring production PostgreSQL invariants / keeps Project status identities, histories, Featured state, and published projections atomic"],
@@ -387,6 +411,32 @@ async function main() {
         executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all six private Content authoring, review, preview and history operations over built HTTP",
         assertions: ["200 response contract and private headers", "ordered retained revisions", "foreign 403 and revoked 401"] },
     ] } : {}),
+    ...(ticket === 299 ? { traceability: [
+      { method: "GET", route: "/api/owner/v1/taxonomies/{taxonomyId}", operation: "getOwnerTaxonomyAggregate",
+        application: "dispatchOwnerTaxonomyHttp(getOwnerTaxonomyAggregate) -> TaxonomyOwnerService.getOwnerTaxonomy",
+        executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves controlled Taxonomy workflows over built HTTP and verifies real PostgreSQL assignment history",
+        assertions: ["200 schema-valid aggregate with value mapping/history/assignment history", "private no-store and non-indexable headers", "invalid and foreign requests denied"] },
+      { method: "POST", route: "/api/owner/v1/taxonomies/{taxonomyId}/values", operation: "createOwnerTaxonomyValue",
+        application: "dispatchOwnerTaxonomyHttp(createOwnerTaxonomyValue) -> TaxonomyOwnerService.createOwnerTaxonomyValue",
+        executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves controlled Taxonomy workflows over built HTTP and verifies real PostgreSQL assignment history",
+        assertions: ["201 schema-valid receipt and private headers", "If-Match and Idempotency-Key honored"] },
+      { method: "POST", route: "/api/owner/v1/taxonomy-values/{valueId}/commands/rename", operation: "renameOwnerTaxonomyValue",
+        application: "dispatchOwnerTaxonomyHttp(renameOwnerTaxonomyValue) -> TaxonomyOwnerService.renameOwnerTaxonomyValue",
+        executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves controlled Taxonomy workflows over built HTTP and verifies real PostgreSQL assignment history",
+        assertions: ["200 schema-valid receipt", "stable value ID and retained rename history", "stale version denied without changing state"] },
+      { method: "POST", route: "/api/owner/v1/taxonomy-values/{valueId}/commands/retire", operation: "retireOwnerTaxonomyValue",
+        application: "dispatchOwnerTaxonomyHttp(retireOwnerTaxonomyValue) -> TaxonomyOwnerService.retireOwnerTaxonomyValue",
+        executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves controlled Taxonomy workflows over built HTTP and verifies real PostgreSQL assignment history",
+        assertions: ["200 schema-valid receipt", "earlier assignment retained", "later assignment rejected"] },
+      { method: "POST", route: "/api/owner/v1/taxonomy-values/{valueId}/commands/merge", operation: "mergeOwnerTaxonomyValue",
+        application: "dispatchOwnerTaxonomyHttp(mergeOwnerTaxonomyValue) -> TaxonomyOwnerService.mergeOwnerTaxonomyValue",
+        executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves controlled Taxonomy workflows over built HTTP and verifies real PostgreSQL assignment history",
+        assertions: ["cross-instance exact replay and conflicting-key 409", "atomic assignment migration, mapping, history and private response"] },
+      { method: "POST", route: "/api/owner/v1/projects/{projectId}/commands/assign-taxonomy-value", operation: "assignOwnerProjectTaxonomyValue",
+        application: "dispatchOwnerProjectHttp(assignOwnerProjectTaxonomyValue) -> ContentAuthoringService.assignProjectTaxonomyValue",
+        executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves controlled Taxonomy workflows over built HTTP and verifies real PostgreSQL assignment history",
+        assertions: ["200 schema-valid receipt", "cross-instance exact replay", "retired value rejected without new assignment"] },
+    ] } : {}),
     operationExamples: [
       { operation: "updateOwnerProfileConfiguration", httpStatus: 200, receiptSchemaValid: true, oneLedgerAndOutboxRecord: true },
       { operation: "updateOwnerContactChannels", httpStatus: 200, receiptSchemaValid: true, oneLedgerAndOutboxRecord: true },
@@ -405,9 +455,18 @@ async function main() {
         { operation: "renameOwnerProjectStatusValue", httpStatus: 200, responseSchemaValid: true, privateHeaders: true, exactReplayVerified: true },
         { operation: "retireOwnerProjectStatusValue", httpStatus: 200, responseSchemaValid: true, privateHeaders: true, exactReplayVerified: true },
       ] : []),
+      ...(ticket === 299 ? [
+        { operation: "getOwnerTaxonomyAggregate", httpStatus: 200, responseSchemaValid: true, privateHeaders: true },
+        { operation: "createOwnerTaxonomyValue", httpStatus: 201, responseSchemaValid: true, privateHeaders: true },
+        { operation: "renameOwnerTaxonomyValue", httpStatus: 200, responseSchemaValid: true, privateHeaders: true, stableValueIdVerified: true },
+        { operation: "retireOwnerTaxonomyValue", httpStatus: 200, responseSchemaValid: true, privateHeaders: true, historicalAssignmentsRetained: true },
+        { operation: "mergeOwnerTaxonomyValue", httpStatus: 200, responseSchemaValid: true, privateHeaders: true, crossInstanceReplayVerified: true },
+        { operation: "assignOwnerProjectTaxonomyValue", httpStatus: 200, responseSchemaValid: true, privateHeaders: true, crossInstanceReplayVerified: true },
+      ] : []),
     ],
     passed: passedTestCount, failed: 0, skipped: 0, productionBuild: true, isolatedLoopbackSupabase: true,
-    execution: { command: ticket === 298 ? "npm run phase9:focus:project-status-http"
+    execution: { command: ticket === 299 ? "npm run phase9:focus:taxonomy-http"
+      : ticket === 298 ? "npm run phase9:focus:project-status-http"
       : ticket === 295 ? "npm run phase9:focus:content-authoring-http" : "npm run phase9:focus:owner-configuration-http", exitCode: 0,
       passed: executedTests.filter(({ status }) => status === "passed").length,
       failed: executedTests.filter(({ status }) => status === "failed").length, skipped: 0, tests: executedTests },
