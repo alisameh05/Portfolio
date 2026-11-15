@@ -12,7 +12,14 @@ export function createContentBackedOwnerTaxonomyService(
     async getOwnerTaxonomyAggregate(query) {
       const result = await taxonomy.getOwnerTaxonomy({ actor: query.actor, taxonomyId: query.taxonomyId as never });
       if (!result.ok) return result;
-      return { ok: true, value: result.value as unknown as OwnerTaxonomyAggregateView };
+      return { ok: true, value: {
+        taxonomyId: result.value.taxonomyId,
+        aggregateVersion: result.value.aggregateVersion,
+        kind: result.value.kind,
+        values: result.value.values,
+        history: result.value.history,
+        assignmentHistory: result.value.assignmentHistory,
+      } satisfies OwnerTaxonomyAggregateView };
     },
     async createOwnerTaxonomyValue(command) {
       const result = await taxonomy.createOwnerTaxonomyValue(command as never);

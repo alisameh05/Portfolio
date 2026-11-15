@@ -17,10 +17,9 @@
  * The Owner actor is resolved through the shared Phase 4 verified-actor
  * boundary (`./owner-security.js`): every operation requires a verified
  * Owner session, owner-scoped authorization, and (for mutations) exact
- * origin plus CSRF proof before dispatch. Unauthenticated and forbidden
- * translation is exercised through fakes. Taxonomy evolution, persistence,
- * and authorization rules remain unimplemented provider-neutral application
- * behavior.
+ * origin plus CSRF proof before dispatch. Taxonomy evolution and persistence
+ * stay behind the provider-neutral TaxonomyOwnerService; this adapter does
+ * not write Content tables directly.
  *
  * Generated transport types and validators remain confined to this HTTP
  * layer. Commands, queries, results, and rejections crossing the application
@@ -62,6 +61,7 @@ import {
   guardOwnerRequest,
   OWNER_PRIVATE_RESPONSE_HEADERS,
   type OwnerRequestSecurity,
+  withOwnerPrivateResponseHeaders,
 } from "./owner-security.js";
 import {
   internalErrorProblem,
@@ -391,7 +391,7 @@ async function handleTaxonomyCommand(
       );
     }
     logger?.info("request.completed", { traceId, status: successStatus });
-    return Response.json(parsed.data, { status: successStatus });
+    return Response.json(parsed.data, { status: successStatus, headers: OWNER_PRIVATE_RESPONSE_HEADERS });
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }
@@ -511,21 +511,21 @@ async function handleTaxonomyCommand(
 
 
 export function handleGetOwnerTaxonomyAggregate(request: Request, params: { taxonomyId: string }, deps: OwnerTaxonomyAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-taxonomy", () => handleGetOwnerTaxonomyAggregateUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-taxonomy", () => withOwnerPrivateResponseHeaders(handleGetOwnerTaxonomyAggregateUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleCreateOwnerTaxonomyValue(request: Request, params: { taxonomyId: string }, deps: OwnerTaxonomyAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-taxonomy", () => handleCreateOwnerTaxonomyValueUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-taxonomy", () => withOwnerPrivateResponseHeaders(handleCreateOwnerTaxonomyValueUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleRenameOwnerTaxonomyValue(request: Request, params: { valueId: string }, deps: OwnerTaxonomyAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-taxonomy", () => handleRenameOwnerTaxonomyValueUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-taxonomy", () => withOwnerPrivateResponseHeaders(handleRenameOwnerTaxonomyValueUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleRetireOwnerTaxonomyValue(request: Request, params: { valueId: string }, deps: OwnerTaxonomyAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-taxonomy", () => handleRetireOwnerTaxonomyValueUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-taxonomy", () => withOwnerPrivateResponseHeaders(handleRetireOwnerTaxonomyValueUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleMergeOwnerTaxonomyValue(request: Request, params: { valueId: string }, deps: OwnerTaxonomyAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-taxonomy", () => handleMergeOwnerTaxonomyValueUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-taxonomy", () => withOwnerPrivateResponseHeaders(handleMergeOwnerTaxonomyValueUnobserved(request, params, deps)), deps.logger);
 }

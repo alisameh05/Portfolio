@@ -8,6 +8,7 @@ import {
   handleChangeOwnerProjectPublicSlug,
   handleChangeOwnerProjectStatus,
   handleCorrectOwnerProjectCandidateSlug,
+  handleAssignOwnerProjectTaxonomyValue,
   handleGetOwnerProjectAggregate,
   handleRelateOwnerProjects,
   handleSetOwnerProjectFeatured,
@@ -21,7 +22,8 @@ export type OwnerProjectHttpOperation =
   | "setOwnerProjectFeatured"
   | "changeOwnerProjectPublicSlug"
   | "correctOwnerProjectCandidateSlug"
-  | "relateOwnerProjects";
+  | "relateOwnerProjects"
+  | "assignOwnerProjectTaxonomyValue";
 
 type ProjectParams = { readonly projectId: string };
 
@@ -76,6 +78,7 @@ export async function dispatchOwnerProjectHttp(
       case "changeOwnerProjectPublicSlug": return await handleChangeOwnerProjectPublicSlug(request, params, deps);
       case "correctOwnerProjectCandidateSlug": return await handleCorrectOwnerProjectCandidateSlug(request, params, deps);
       case "relateOwnerProjects": return await handleRelateOwnerProjects(request, params, deps);
+      case "assignOwnerProjectTaxonomyValue": return await handleAssignOwnerProjectTaxonomyValue(request, params, deps);
     }
   } catch (error) {
     const safeCode = error instanceof Error && /^[A-Z][A-Z0-9_]{1,80}$/u.test(error.message)

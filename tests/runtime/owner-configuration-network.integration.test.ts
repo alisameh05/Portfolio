@@ -27,6 +27,12 @@ import {
   zChangeOwnerProjectPublicSlugResponse,
   zCorrectOwnerProjectCandidateSlugResponse,
   zRelateOwnerProjectsResponse,
+  zGetOwnerTaxonomyAggregateResponse,
+  zCreateOwnerTaxonomyValueResponse,
+  zRenameOwnerTaxonomyValueResponse,
+  zRetireOwnerTaxonomyValueResponse,
+  zMergeOwnerTaxonomyValueResponse,
+  zAssignOwnerProjectTaxonomyValueResponse,
 } from "../../src/contracts/http/owner/v1/generated/zod.gen.js";
 import { createPostgresPortfolioSettingsRepository } from "../../src/modules/portfolio-configuration/adapters/postgres-settings.js";
 import { createPortfolioSettingsService } from "../../src/modules/portfolio-configuration/application/settings-service.js";
@@ -985,6 +991,205 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     const foreign = await request(`${urls[1]}${path}`, "POST", { label: foreignLabel },
       `phase9-status-foreign-${randomUUID()}`, undefined, foreignOwner);
     await expectPrivateProblem(foreign, 403);
+  }, 120_000);
+
+  it("serves controlled Taxonomy workflows over built HTTP and verifies real PostgreSQL assignment history", async () => {
+    const origin = new URL(urls[0]!).origin;
+    const suffix = randomUUID();
+    const request = (url: string, method: string, body?: unknown, key?: string, version?: number, session: Login = owner) => fetch(url, {
+      method,
+      headers: {
+        "content-type": "application/json", origin,
+        cookie: `sw_owner_session=${session.token}`, "x-csrf-token": session === foreignOwner ? "phase9-csrf-proof-910295" : csrf,
+        ...(key === undefined ? {} : { "idempotency-key": key }),
+        ...(version === undefined ? {} : { "if-match": `"${version}"` }),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const taxonomyId = "01890f3e-7b2f-7cc0-98cf-5a2890378ef8";
+    const taxonomyUrl = `${urls[0]}/api/owner/v1/taxonomies/${taxonomyId}`;
+    const privateResponse = (response: Response) => {
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
+      expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    };
+    const readTaxonomy = async () => {
+      const response = await request(taxonomyUrl, "GET");
+      expect(response.status).toBe(200);
+      privateResponse(response);
+      const parsed = zGetOwnerTaxonomyAggregateResponse.safeParse(await response.json());
+      expect(parsed.success).toBe(true);
+      if (!parsed.success) throw new Error("PHASE9_TAXONOMY_HTTP_QUERY_INVALID");
+      return parsed.data;
+    };
+    const initial = await readTaxonomy();
+    const createValue = async (name: string, version: number) => {
+      const key = `phase9-taxonomy-create-${suffix}-${name.replaceAll(/[^A-Za-z0-9-]/gu, "-")}`;
+      const response = await request(`${taxonomyUrl}/values`, "POST", { name }, key, version);
+      expect(response.status).toBe(201);
+      privateResponse(response);
+      const parsed = zCreateOwnerTaxonomyValueResponse.safeParse(await response.json());
+      expect(parsed.success).toBe(true);
+      if (!parsed.success) throw new Error("PHASE9_TAXONOMY_HTTP_CREATE_INVALID");
+      const aggregate = await readTaxonomy();
+      const value = aggregate.values.find((entry) => entry.name === name);
+      if (!value) throw new Error("PHASE9_TAXONOMY_HTTP_CREATED_VALUE_MISSING");
+      return { ...parsed.data, valueId: value.valueId };
+    };
+    const source = await createValue(`Legacy ${suffix.slice(0, 8)}`, initial.aggregateVersion);
+    const target = await createValue(`Current ${suffix.slice(0, 8)}`, source.aggregateVersion);
+    const retired = await createValue(`Retired ${suffix.slice(0, 8)}`, target.aggregateVersion);
+
+    const contentPath = `${urls[0]}/api/owner/v1/content`;
+    const makeProject = async (label: string) => {
+      const artifactId = createStableId("SupportingArtifact");
+      const claimId = createStableId("EvidenceClaim");
+      const response = await request(contentPath, "POST", {
+        contentType: "project", locale: "en", title: `${label} ${suffix.slice(0, 8)}`,
+        summary: "Synthetic controlled Taxonomy workflow fixture.",
+        body: "Project exists to verify Taxonomy assignment and merge behavior.",
+        candidateSlug: `${label.toLowerCase()}-${suffix.slice(0, 12)}`,
+        caseStudy: { problem: "Classify Projects consistently.", ownerRole: "Owner", contributions: ["Managed a Taxonomy"],
+          outcomes: ["Preserved assignment history."], lessons: "Retirement and merge retain identity." },
+        evidence: {
+          claims: [{ claimId, text: "The Taxonomy workflow preserves classification history.", artifactIds: [artifactId] }],
+          artifacts: [{ id: artifactId, title: "Taxonomy workflow evidence", destinationUrl: "https://example.test/taxonomy-workflow" }],
+        }, externalLinks: [],
+      }, `phase9-taxonomy-project-${label}-${suffix}`);
+      expect(response.status).toBe(201);
+      privateResponse(response);
+      const parsed = zCreateOwnerContentResponse.safeParse(await response.json());
+      expect(parsed.success).toBe(true);
+      if (!parsed.success) throw new Error("PHASE9_TAXONOMY_PROJECT_CREATE_INVALID");
+      const projectUrl = `${contentPath}/${parsed.data.contentId}`;
+      const previewResponse = await request(`${projectUrl}/revisions/${parsed.data.revisionId}/preview`, "GET");
+      const preview = zPreviewOwnerContentRevisionResponse.safeParse(await previewResponse.json());
+      expect(previewResponse.status).toBe(200);
+      expect(preview.success).toBe(true);
+      if (!preview.success) throw new Error("PHASE9_TAXONOMY_PROJECT_PREVIEW_INVALID");
+      const reviewResponse = await request(`${projectUrl}/revisions/${parsed.data.revisionId}/review`, "POST", {
+        locale: "en", snapshotHash: preview.data.snapshotHash, evidenceVersion: preview.data.evidenceVersion,
+        decision: "accepted", findings: [],
+      }, `phase9-taxonomy-project-review-${label}-${suffix}`, parsed.data.aggregateVersion);
+      const review = zReviewOwnerContentRevisionResponse.safeParse(await reviewResponse.json());
+      expect(reviewResponse.status).toBe(200);
+      expect(review.success).toBe(true);
+      if (!review.success) throw new Error("PHASE9_TAXONOMY_PROJECT_REVIEW_INVALID");
+      const publishResponse = await request(`${projectUrl}/commands/publish-language`, "POST",
+        { locale: "en", revisionId: parsed.data.revisionId }, `phase9-taxonomy-project-publish-${label}-${suffix}`, review.data.aggregateVersion);
+      const published = zPublishOwnerContentLanguageResponse.safeParse(await publishResponse.json());
+      expect(publishResponse.status).toBe(200);
+      expect(published.success).toBe(true);
+      if (!published.success) throw new Error("PHASE9_TAXONOMY_PROJECT_PUBLISH_INVALID");
+      return { ...parsed.data, aggregateVersion: published.data.aggregateVersion };
+    };
+    const firstProject = await makeProject("taxonomy-first");
+    const secondProject = await makeProject("taxonomy-second");
+    const assign = async (projectId: string, valueId: string, key: string, version: number, url = urls[0]!) =>
+      request(`${url}/api/owner/v1/projects/${projectId}/commands/assign-taxonomy-value`, "POST", { valueId }, key, version);
+    const assignFirst = await assign(firstProject.contentId, source.valueId, `phase9-taxonomy-assign-first-${suffix}`, firstProject.aggregateVersion);
+    expect(assignFirst.status).toBe(200);
+    privateResponse(assignFirst);
+    expect(zAssignOwnerProjectTaxonomyValueResponse.safeParse(await assignFirst.json()).success).toBe(true);
+
+    const [assignReplay, firstReplay] = await Promise.all([
+      assign(secondProject.contentId, source.valueId, `phase9-taxonomy-assign-second-${suffix}`, secondProject.aggregateVersion),
+      assign(secondProject.contentId, source.valueId, `phase9-taxonomy-assign-second-${suffix}`, secondProject.aggregateVersion, urls[1]!),
+    ]);
+    expect(assignReplay.status).toBe(200);
+    expect(firstReplay.status).toBe(200);
+    privateResponse(assignReplay);
+    privateResponse(firstReplay);
+    expect(await firstReplay.json()).toEqual(await assignReplay.json());
+    const secondProjectViewResponse = await request(`${urls[0]}/api/owner/v1/projects/${secondProject.contentId}`, "GET");
+    const secondProjectView = zGetOwnerProjectAggregateResponse.safeParse(await secondProjectViewResponse.json());
+    expect(secondProjectView.success).toBe(true);
+    if (!secondProjectView.success) throw new Error("PHASE9_TAXONOMY_PROJECT_VIEW_INVALID");
+    const assignTarget = await assign(secondProject.contentId, target.valueId, `phase9-taxonomy-assign-target-${suffix}`, secondProjectView.data.aggregateVersion);
+    expect(assignTarget.status).toBe(200);
+
+    const renamedResponse = await request(`${urls[0]}/api/owner/v1/taxonomy-values/${source.valueId}/commands/rename`, "POST",
+      { name: `Legacy renamed ${suffix.slice(0, 8)}` }, `phase9-taxonomy-rename-${suffix}`, retired.aggregateVersion);
+    expect(renamedResponse.status).toBe(200);
+    privateResponse(renamedResponse);
+    const renamed = zRenameOwnerTaxonomyValueResponse.safeParse(await renamedResponse.json());
+    expect(renamed.success).toBe(true);
+    if (!renamed.success) throw new Error("PHASE9_TAXONOMY_RENAME_INVALID");
+    expect(renamed.data.aggregateId).toBe(taxonomyId);
+    expect((await readTaxonomy()).values.find((value) => value.valueId === source.valueId)?.name)
+      .toBe(`Legacy renamed ${suffix.slice(0, 8)}`);
+
+    const retiredAssignment = await assign(firstProject.contentId, retired.valueId,
+      `phase9-taxonomy-assign-retired-existing-${suffix}`, firstProject.aggregateVersion + 1);
+    expect(retiredAssignment.status).toBe(200);
+    const firstProjectAfterRetiredAssignment = zGetOwnerProjectAggregateResponse.safeParse(
+      await (await request(`${urls[0]}/api/owner/v1/projects/${firstProject.contentId}`, "GET")).json(),
+    );
+    expect(firstProjectAfterRetiredAssignment.success).toBe(true);
+    if (!firstProjectAfterRetiredAssignment.success) throw new Error("PHASE9_TAXONOMY_PROJECT_VIEW_INVALID");
+    const beforeRetire = await readTaxonomy();
+    const retireResponse = await request(`${urls[0]}/api/owner/v1/taxonomy-values/${retired.valueId}/commands/retire`, "POST", {},
+      `phase9-taxonomy-retire-${suffix}`, beforeRetire.aggregateVersion);
+    expect(retireResponse.status).toBe(200);
+    privateResponse(retireResponse);
+    const retiredReceipt = zRetireOwnerTaxonomyValueResponse.safeParse(await retireResponse.json());
+    expect(retiredReceipt.success).toBe(true);
+    if (!retiredReceipt.success) throw new Error("PHASE9_TAXONOMY_RETIRE_INVALID");
+    const deniedRetiredAssignment = await assign(secondProject.contentId, retired.valueId,
+      `phase9-taxonomy-assign-retired-new-${suffix}`, secondProjectView.data.aggregateVersion + 1);
+    await expectPrivateProblem(deniedRetiredAssignment, 422);
+
+    const beforeMerge = await readTaxonomy();
+    await expectPrivateProblem(await request(`${urls[0]}/api/owner/v1/taxonomy-values/${source.valueId}/commands/rename`, "POST",
+      { name: `Foreign change ${suffix.slice(0, 8)}` }, `phase9-taxonomy-foreign-${suffix}`, beforeMerge.aggregateVersion, foreignOwner), 403);
+    const afterForeignDenial = await readTaxonomy();
+    expect(afterForeignDenial.aggregateVersion).toBe(beforeMerge.aggregateVersion);
+    expect(afterForeignDenial.values.find((value) => value.valueId === source.valueId)?.name)
+      .toBe(`Legacy renamed ${suffix.slice(0, 8)}`);
+    const mergeKey = `phase9-taxonomy-merge-${suffix}`;
+    const mergeBody = { targetValueId: target.valueId };
+    const [mergeResponse, mergeReplay] = await Promise.all([
+      request(`${urls[0]}/api/owner/v1/taxonomy-values/${source.valueId}/commands/merge`, "POST", mergeBody, mergeKey, beforeMerge.aggregateVersion),
+      request(`${urls[1]}/api/owner/v1/taxonomy-values/${source.valueId}/commands/merge`, "POST", mergeBody, mergeKey, beforeMerge.aggregateVersion),
+    ]);
+    expect(mergeResponse.status).toBe(200);
+    expect(mergeReplay.status).toBe(200);
+    privateResponse(mergeResponse);
+    privateResponse(mergeReplay);
+    const merged = zMergeOwnerTaxonomyValueResponse.safeParse(await mergeResponse.json());
+    expect(merged.success).toBe(true);
+    if (!merged.success) throw new Error("PHASE9_TAXONOMY_MERGE_INVALID");
+    expect(await mergeReplay.json()).toEqual(merged.data);
+    await expectPrivateProblem(await request(`${urls[1]}/api/owner/v1/taxonomy-values/${source.valueId}/commands/merge`,
+      "POST", { targetValueId: retired.valueId }, mergeKey, beforeMerge.aggregateVersion), 409);
+
+    const current = await readTaxonomy();
+    expect(current.values.find((value) => value.valueId === source.valueId)).toMatchObject({ state: "merged", mergedIntoValueId: target.valueId });
+    expect(current.values.find((value) => value.valueId === retired.valueId)?.state).toBe("retired");
+    expect(current.history.some((entry) => entry.valueId === source.valueId && entry.action === "renamed")).toBe(true);
+    expect(current.history.some((entry) => entry.valueId === source.valueId && entry.action === "merged")).toBe(true);
+    expect(current.assignmentHistory.some((entry) => entry.projectId === firstProject.contentId && entry.valueId === source.valueId)).toBe(true);
+    const persisted = await admin.query<{ source_assignments: number; target_assignments: number; retired_assignments: number; merged_history: number; retired_history: number }>(
+      "select " +
+      "(select count(*)::int from content.project_taxonomy_assignments where portfolio_id = $1::uuid and value_id = $2::uuid) source_assignments, " +
+      "(select count(*)::int from content.project_taxonomy_assignments where portfolio_id = $1::uuid and value_id = $3::uuid) target_assignments, " +
+      "(select count(*)::int from content.project_taxonomy_assignments where portfolio_id = $1::uuid and value_id = $4::uuid) retired_assignments, " +
+      "(select count(*)::int from taxonomy.value_history where portfolio_id = $1::uuid and value_id = $2::uuid and action = 'merged') merged_history, " +
+      "(select count(*)::int from taxonomy.value_history where portfolio_id = $1::uuid and value_id = $4::uuid and action = 'retired') retired_history",
+      [portfolioId, source.valueId, target.valueId, retired.valueId],
+    );
+    expect(persisted.rows).toEqual([{ source_assignments: 0, target_assignments: 2, retired_assignments: 1, merged_history: 1, retired_history: 1 }]);
+
+    await expectPrivateProblem(await request(`${urls[0]}/api/owner/v1/taxonomy-values/not-a-uuid/commands/retire`, "POST", {},
+      `phase9-taxonomy-invalid-id-${suffix}`, 1), 400);
+    await expectPrivateProblem(await request(`${urls[0]}/api/owner/v1/taxonomies/not-a-uuid`, "GET"), 400);
+    await expectPrivateProblem(await request(taxonomyUrl, "GET", undefined, undefined, undefined, foreignOwner), 403);
+    const staleRename = await request(`${urls[0]}/api/owner/v1/taxonomy-values/${target.valueId}/commands/rename`, "POST",
+      { name: `Must not apply ${suffix.slice(0, 8)}` }, `phase9-taxonomy-stale-${suffix}`, beforeMerge.aggregateVersion);
+    await expectPrivateProblem(staleRename, 412);
+    const unchanged = await readTaxonomy();
+    expect(unchanged.aggregateVersion).toBe(current.aggregateVersion);
+    expect(unchanged.values.find((value) => value.valueId === target.valueId)?.name).toBe(`Current ${suffix.slice(0, 8)}`);
   }, 120_000);
 
   it("enforces the shared database limit across independent built instances and fails closed on limiter outage", async () => {
