@@ -80,6 +80,7 @@ import type {
 import { createCorrelation, type Logger } from "../ports.js";
 import {
   guardOwnerRequest,
+  withOwnerPrivateResponseHeaders,
   type OwnerRequestSecurity,
 } from "./owner-security.js";
 import {
@@ -500,15 +501,15 @@ async function handleMediaCommand(
 
 
 export function handleGetOwnerMediaAggregate(request: Request, params: { mediaId: string }, deps: OwnerMediaAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-media", () => handleGetOwnerMediaAggregateUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-media", () => withOwnerPrivateResponseHeaders(handleGetOwnerMediaAggregateUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleCreateOwnerMediaUploadIntent(request: Request, deps: OwnerMediaAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-media", () => handleCreateOwnerMediaUploadIntentUnobserved(request, deps), deps.logger);
+  return observeHttpRequest("owner-media", () => withOwnerPrivateResponseHeaders(handleCreateOwnerMediaUploadIntentUnobserved(request, deps)), deps.logger);
 }
 
 export function handleRecordOwnerMediaProcessing(request: Request, params: { mediaId: string }, deps: OwnerMediaAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-media", () => handleRecordOwnerMediaProcessingUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-media", () => withOwnerPrivateResponseHeaders(handleRecordOwnerMediaProcessingUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleAcceptOwnerMediaAsset(request: Request, params: { mediaId: string }, deps: OwnerMediaAdapterDeps): Promise<Response> {
