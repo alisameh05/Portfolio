@@ -77,6 +77,7 @@ let currentOwnerExport: OwnerExportApplicationService | undefined;
 let currentOwnerExportAssembly: ReturnType<typeof import("../modules/portability-operations/application/owner-export-assembly.js").createOwnerExportAssemblyService> | undefined;
 let currentOwnerConfiguration: OwnerConfigurationApplicationService | undefined;
 let currentOwnerRequestSecurity: OwnerRequestSecurity | undefined;
+let currentPublicRateLimit: import("../runtime/http/current-cv-rate-limit.js").CurrentCvRateLimitCheck | undefined;
 let currentContentAuthoring: ContentAuthoringService | undefined;
 let currentOwnerTaxonomy: OwnerTaxonomyApplicationService | undefined;
 let currentPublicDiscovery: PublicDiscoveryService | undefined;
@@ -542,12 +543,13 @@ export async function initializeDatabaseRuntime(
           moderation = createOwnerFeedbackModerationService({ scope, operations,
             authorize: async query => decideAuthorization(query), repository: createPostgresModerationRepository(),
             content: createPostgresProjectInteractionFacts(scope), clock: createSystemClock(), ids: createSystemIdGenerator() });
+          currentPublicRateLimit = createBoundedCurrentCvRateLimit({ clientKey: () => "public:" + scope.portfolioId,
+            maxRequests: Number(env["FEEDBACK_RATE_LIMIT_MAX_REQUESTS"] ?? 30), windowSeconds: Number(env["FEEDBACK_RATE_LIMIT_WINDOW_SECONDS"] ?? 60) });
           feedback = { scope: { kind: "portfolio", portfolioId: scope.portfolioId },
             service: createFeedbackApplicationService({ portfolioId: scope.portfolioId, content: createPostgresProjectInteractionFacts(scope),
               operations, repository: createPostgresFeedbackSubmissionRepository(), clock: createSystemClock(), ids: createSystemIdGenerator() }),
-            // Portfolio-wide process budget needs no IP, fingerprint or persistent identity.
-            rateLimit: createBoundedCurrentCvRateLimit({ clientKey: () => "feedback:" + scope.portfolioId,
-              maxRequests: Number(env["FEEDBACK_RATE_LIMIT_MAX_REQUESTS"] ?? 30), windowSeconds: Number(env["FEEDBACK_RATE_LIMIT_WINDOW_SECONDS"] ?? 60) }) };
+            // Feedback submissions and Current CV delivery share the bounded public budget.
+            rateLimit: currentPublicRateLimit };
         }
         if (runtimeKind === "application" && configuredScope?.portfolioId.ok && configuredScope.ownerId.ok && env["FUNCTIONAL_ID_HASH_KEY"]) {
           const [{ createReactionApplicationService, createRatingApplicationService, createFunctionalInteractionContext }, { createPostgresReactionRepository }, { createPostgresRatingRepository },
@@ -1255,6 +1257,11 @@ export async function getFeedbackRuntimeServices(): Promise<FeedbackRuntimeServi
   return { service: unavailableFeedbackService, rateLimit: { check: async () => { throw new Error("FEEDBACK_NOT_CONFIGURED"); } } };
 }
 
+/** Shared effective public abuse control used by public writes and Current CV delivery. */
+export function getPublicRateLimit(): import("../runtime/http/current-cv-rate-limit.js").CurrentCvRateLimitCheck {
+  return currentPublicRateLimit ?? { async check() { throw new Error("PUBLIC_RATE_LIMIT_NOT_CONFIGURED"); } };
+}
+
 /** Owner adapters use configured scope plus their existing verified-session security boundary. */
 export async function getOwnerAnalyticsRuntimeServices() {
   if (currentOwnerAnalytics !== undefined && currentOwnerAnalyticsScope !== undefined) {
@@ -1288,6 +1295,7 @@ export function getProjectInteractionSummaryApplicationService() {
 
 /** Test-only seam to isolate focused suites. */
 export function resetRuntimeForTests(): void {
+  currentPublicRateLimit = undefined;
   current = undefined;
   currentOperations = undefined;
   currentOwnerExport = undefined;

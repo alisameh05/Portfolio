@@ -64,13 +64,13 @@ describe("Phase 9 guarded route registration (#293)", () => {
     expect(report.declared.filter((entry: { surface: string }) => entry.surface === "public")).toHaveLength(5);
     expect(report.declared.filter((entry: { surface: string }) => entry.surface === "owner")).toHaveLength(48);
     expect(report.registered.map((entry: { operationId: string }) => entry.operationId)).toEqual([
-      "acceptOwnerMediaAsset",
+      "acceptOwnerCvVersion", "acceptOwnerMediaAsset", "activateOwnerCvVersion",
       "archiveOwnerContent",
       "assignOwnerProjectTaxonomyValue",
       "changeOwnerProjectPublicSlug", "changeOwnerProjectStatus", "correctOwnerProjectCandidateSlug",
-      "createOwnerContent", "createOwnerMediaUploadIntent", "createOwnerProjectStatusValue", "createOwnerTaxonomyValue", "getOwnerContentAggregate", "getOwnerContentHistory", "getOwnerMediaAggregate", "getOwnerProjectAggregate", "getOwnerTaxonomyAggregate",
+      "createOwnerContent", "createOwnerMediaUploadIntent", "createOwnerProjectStatusValue", "createOwnerTaxonomyValue", "getCurrentCv", "getOwnerContentAggregate", "getOwnerContentHistory", "getOwnerCvPortfolio", "getOwnerMediaAggregate", "getOwnerProjectAggregate", "getOwnerTaxonomyAggregate",
       "hideOwnerContent", "listOwnerProjectStatusValues", "mergeOwnerTaxonomyValue", "previewOwnerContentRevision", "publishOwnerContentLanguage",
-      "recordOwnerMediaProcessing", "rejectOwnerMediaAsset", "relateOwnerProjects", "renameOwnerProjectStatusValue", "renameOwnerTaxonomyValue", "restoreOwnerContent", "retireOwnerProjectStatusValue", "retireOwnerTaxonomyValue", "reviewOwnerContentRevision", "saveOwnerContentRevision",
+      "recordOwnerMediaProcessing", "registerOwnerCvVersion", "rejectOwnerMediaAsset", "relateOwnerProjects", "renameOwnerProjectStatusValue", "renameOwnerTaxonomyValue", "restoreOwnerContent", "retireOwnerProjectStatusValue", "retireOwnerTaxonomyValue", "reviewOwnerContentRevision", "saveOwnerContentRevision",
       "setOwnerProjectFeatured",
       "updateOwnerContactChannels", "updateOwnerGlobalProjectCta", "updateOwnerProfileConfiguration",
     ]);
@@ -86,7 +86,24 @@ describe("Phase 9 guarded route registration (#293)", () => {
       { method: "POST", path: "/api/owner/v1/content/{contentId}/commands/restore", operationId: "restoreOwnerContent",
         file: "src/app/api/owner/v1/content/[contentId]/commands/restore/route.ts" },
     ]);
-    expect(report.pending).toHaveLength(19);
+    const cvOperations = new Set([
+      "getOwnerCvPortfolio", "registerOwnerCvVersion", "acceptOwnerCvVersion", "activateOwnerCvVersion", "getCurrentCv",
+    ]);
+    expect(report.registered.filter((entry: { operationId: string }) => cvOperations.has(entry.operationId)).map((entry: {
+      method: string; path: string; operationId: string; file: string;
+    }) => ({ method: entry.method, path: entry.path, operationId: entry.operationId, file: entry.file }))).toEqual([
+      { method: "POST", path: "/api/owner/v1/cv/versions/{versionId}/commands/accept", operationId: "acceptOwnerCvVersion",
+        file: "src/app/api/owner/v1/cv/versions/[versionId]/commands/accept/route.ts" },
+      { method: "POST", path: "/api/owner/v1/cv/versions/{versionId}/commands/activate", operationId: "activateOwnerCvVersion",
+        file: "src/app/api/owner/v1/cv/versions/[versionId]/commands/activate/route.ts" },
+      { method: "GET", path: "/api/v1/cv/current", operationId: "getCurrentCv",
+        file: "src/app/api/v1/cv/current/route.ts" },
+      { method: "GET", path: "/api/owner/v1/cv", operationId: "getOwnerCvPortfolio",
+        file: "src/app/api/owner/v1/cv/route.ts" },
+      { method: "POST", path: "/api/owner/v1/cv/versions", operationId: "registerOwnerCvVersion",
+        file: "src/app/api/owner/v1/cv/versions/route.ts" },
+    ]);
+    expect(report.pending).toHaveLength(14);
     expect(report.registered.filter((entry: { operationId: string }) =>
       ["getOwnerProjectAggregate", "changeOwnerProjectStatus", "setOwnerProjectFeatured", "changeOwnerProjectPublicSlug",
         "correctOwnerProjectCandidateSlug", "relateOwnerProjects"].includes(entry.operationId)))
