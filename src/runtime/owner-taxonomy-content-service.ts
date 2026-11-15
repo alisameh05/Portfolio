@@ -16,7 +16,20 @@ export function createContentBackedOwnerTaxonomyService(
         taxonomyId: result.value.taxonomyId,
         aggregateVersion: result.value.aggregateVersion,
         kind: result.value.kind,
-        values: result.value.values,
+        values: result.value.values.map((value) => {
+          if (value.state === "merged") {
+            if (value.mergedIntoValueId === undefined) {
+              throw new Error("TAXONOMY_MERGED_VALUE_TARGET_MISSING");
+            }
+            return {
+              valueId: value.valueId,
+              name: value.name,
+              state: "merged" as const,
+              mergedIntoValueId: value.mergedIntoValueId,
+            };
+          }
+          return { valueId: value.valueId, name: value.name, state: value.state };
+        }),
         history: result.value.history,
         assignmentHistory: result.value.assignmentHistory,
       } satisfies OwnerTaxonomyAggregateView };

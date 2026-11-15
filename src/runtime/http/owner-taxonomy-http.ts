@@ -24,7 +24,9 @@ export type OwnerTaxonomyHttpOperation =
 let initialization: Promise<void> | undefined;
 
 async function ensureRuntime(): Promise<void> {
-  initialization ??= initializeDatabaseRuntime(getRuntimeEnvironmentSnapshot(), "application");
+  initialization ??= (async () => {
+    await initializeDatabaseRuntime(getRuntimeEnvironmentSnapshot(), "application");
+  })();
   const current = initialization;
   try {
     await current;
