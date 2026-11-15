@@ -1,4 +1,5 @@
-import { handleGetOwnerMediaAggregate, handleCreateOwnerMediaUploadIntent, handleRecordOwnerMediaProcessing } from "../../src/runtime/http/owner-media.js";
+import { handleGetOwnerMediaAggregate, handleCreateOwnerMediaUploadIntent, handleRecordOwnerMediaProcessing,
+  handleAcceptOwnerMediaAsset, handleRejectOwnerMediaAsset } from "../../src/runtime/http/owner-media.js";
 import { createOwnerMediaTestFake, OWNER_MEDIA_ID } from "../../src/runtime/fakes/owner-media.js";
 import { ownerTestSecurity, withOwnerTestAuth, OWNER_TEST_ACTOR } from "./owner-test-auth.js";
 import { createHash, randomUUID } from "node:crypto";
@@ -164,7 +165,8 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
         .check(`owner_session:${ownerId}:createOwnerContent`);
       expect(contentLimit.allowed).toBe(true);
       const publicationLimit = createPostgresOwnerConfigurationRateLimit(appDatabase.database);
-      for (const operation of ["publishOwnerContentLanguage", "hideOwnerContent", "archiveOwnerContent", "restoreOwnerContent"]) {
+      for (const operation of ["publishOwnerContentLanguage", "hideOwnerContent", "archiveOwnerContent", "restoreOwnerContent",
+        "acceptOwnerMediaAsset", "rejectOwnerMediaAsset"]) {
         expect(await publicationLimit.check(`owner_session:${ownerId}:${operation}`)).toMatchObject({ allowed: true });
       }
       for (const operation of ["listOwnerProjectStatusValues", "createOwnerProjectStatusValue", "renameOwnerProjectStatusValue", "retireOwnerProjectStatusValue"]) {
@@ -201,6 +203,12 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
       }), { service, security }) },
       { operation: "recordOwnerMediaProcessing", status: 200, invoke: () => handleRecordOwnerMediaProcessing(request(`${OWNER_MEDIA_ID}/commands/record-processing`, {
         result: "passed", detectedMediaType: "image/png", detectedByteLength: 204800, sha256,
+      }), { mediaId: OWNER_MEDIA_ID }, { service, security }) },
+      { operation: "acceptOwnerMediaAsset", status: 200, invoke: () => handleAcceptOwnerMediaAsset(request(`${OWNER_MEDIA_ID}/commands/accept`, {
+        accessibilityMetadata: { kind: "described-image", altText: "A validated portfolio result." },
+      }), { mediaId: OWNER_MEDIA_ID }, { service, security }) },
+      { operation: "rejectOwnerMediaAsset", status: 200, invoke: () => handleRejectOwnerMediaAsset(request(`${OWNER_MEDIA_ID}/commands/reject`, {
+        reason: "The candidate did not meet the public-use policy.",
       }), { mediaId: OWNER_MEDIA_ID }, { service, security }) },
     ];
     if (OWNER_TEST_ACTOR.kind !== "owner") throw new Error("OWNER_TEST_ACTOR_REQUIRED");
