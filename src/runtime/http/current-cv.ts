@@ -218,6 +218,8 @@ function streamBytes(bytes: AsyncIterable<Uint8Array>): ReadableStream<Uint8Arra
 }
 
 
-export function handleGetCurrentCv(request: Request, deps: CurrentCvAdapterDeps): Promise<Response> {
-  return observeHttpRequest("public-current-cv", () => handleGetCurrentCvUnobserved(request, deps), deps.logger);
+export async function handleGetCurrentCv(request: Request, deps: CurrentCvAdapterDeps): Promise<Response> {
+  const response = await observeHttpRequest("public-current-cv", () => handleGetCurrentCvUnobserved(request, deps), deps.logger);
+  response.headers.set("cache-control", "no-store");
+  return response;
 }
