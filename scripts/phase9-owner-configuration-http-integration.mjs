@@ -207,6 +207,7 @@ async function main() {
       PHASE9_OWNER_HTTP_URLS: JSON.stringify(appPorts.slice(0, 2).map((port) => `http://127.0.0.1:${port}`)),
       PHASE9_OWNER_HTTP_UNREADY_URL: `http://127.0.0.1:${appPorts[2]}`,
       OWNER_ID: ownerId, PORTFOLIO_ID: portfolioId,
+      ...(ticket === 302 ? { PHASE9_CV_HTTP_ACCEPTANCE: "1" } : {}),
       ...(contentAuthoringTicket ? { PHASE5_REQUIRE_CONTENT_AUTHORING: "1", PHASE5_CONTENT_AUTHORING_DATABASE_URL: status.DB_URL } : {}),
     };
     stage = "tests";
