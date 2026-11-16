@@ -280,8 +280,10 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     expect(upload.success).toBe(true);
     if (!upload.success) throw new Error("PHASE9_CV_MEDIA_UPLOAD_HTTP_INVALID");
 
+    const uploadBody = new ArrayBuffer(pdf.byteLength);
+    new Uint8Array(uploadBody).set(pdf);
     const uploaded = await globalThis.fetch(upload.data.uploadTarget, {
-      method: "PUT", headers: { "content-type": "application/pdf", "x-upsert": "false" }, body: pdf,
+      method: "PUT", headers: { "content-type": "application/pdf", "x-upsert": "false" }, body: uploadBody,
       signal: AbortSignal.timeout(30_000),
     });
     expect([200, 201]).toContain(uploaded.status);
