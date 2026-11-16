@@ -147,7 +147,13 @@ export function createMediaAcceptanceApplicationService(input: {
     getAcceptanceFacts,
     async getAcceptedPdfSnapshot(query, transaction) {
       const facts = await getAcceptanceFacts({ ownerId: query.ownerId, mediaAssetIds: [query.mediaAssetId], intendedUse: "supporting-artifact" }, transaction);
-      if (!facts.ok) return facts;
+      if (!facts.ok) {
+        // A missing or foreign-scoped asset has no acceptance fact to disclose.
+        // For the PDF eligibility boundary, treat it like any other ineligible
+        // asset so callers cannot distinguish those cases from one another.
+        if (facts.error.code === "MEDIA_ACCEPTANCE_FACTS_INCOMPLETE") return ok({ status: "not-eligible" });
+        return facts;
+      }
       const fact = facts.value[0];
       if (facts.value.length !== 1 || fact === undefined || fact.mediaAssetId !== query.mediaAssetId ||
           fact.ownerId !== query.ownerId || !fact.accepted || !fact.safe || !fact.suitable || !fact.accessible) {
