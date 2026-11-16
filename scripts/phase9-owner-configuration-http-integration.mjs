@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { initializeLocalMigrationProject } from "./local-migration-bootstrap.mjs";
 import { isolatedConfig, localEnvironment, requireDocker } from "./local-auth-integration.mjs";
+import { PHASE6_TOOL_DEFINITIONS } from "./phase6-verification-support.mjs";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 import { safeAssertionDiagnostic } from "./validation-errors.mjs";
 
@@ -92,6 +93,14 @@ async function main() {
   const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
   const installed = JSON.parse(readFileSync(join(ROOT, "node_modules/supabase/package.json"), "utf8"));
   if (installed.version !== pkg.devDependencies.supabase) throw new Error("PHASE9_OWNER_HTTP_CLI_PIN_MISMATCH");
+  if (ticket === 302) {
+    for (const image of [PHASE6_TOOL_DEFINITIONS.scanner, PHASE6_TOOL_DEFINITIONS.pdfProcessor]) {
+      const pulled = spawnSync("docker", ["pull", image], {
+        env: localEnvironment(), encoding: "utf8", stdio: "ignore", timeout: 240_000,
+      });
+      if (pulled.error || pulled.status !== 0) throw new Error("PHASE9_OWNER_HTTP_MEDIA_TOOLS_UNAVAILABLE");
+    }
+  }
   const [apiPort, dbPort, shadowPort, ...appPorts] = await availablePorts(6);
   const workdir = mkdtempSync(join(tmpdir(), "shipwithali-owner-http-"));
   const projectId = `shipwithali-auth-${randomUUID().replaceAll("-", "").slice(0, 16)}`;
