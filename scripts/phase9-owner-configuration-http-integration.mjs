@@ -23,6 +23,20 @@ const REPORT = join(ROOT, ticket === 302
     : ticket === 298 ? "evidence/phase9-project-status-http-298.json"
       : ticket === 295 ? "evidence/phase9-content-authoring-http-295.json" : "evidence/phase9-owner-configuration-http-294.json");
 
+function configureIsolatedMediaStorage(config) {
+  const storageHeader = config.indexOf("[storage]");
+  if (storageHeader < 0) throw new Error("PHASE9_OWNER_HTTP_STORAGE_CONFIG_MISSING");
+  const sectionEnd = config.indexOf("\n[", storageHeader + "[storage]".length);
+  const end = sectionEnd < 0 ? config.length : sectionEnd;
+  const section = config.slice(storageHeader, end);
+  if (!/^\[storage\]\r?\nenabled = false\s*$/mu.test(section)) {
+    throw new Error("PHASE9_OWNER_HTTP_STORAGE_CONFIG_UNEXPECTED");
+  }
+  const enabled = section.replace(/^\[storage\]\r?\nenabled = false/mu, "[storage]\nenabled = true");
+  const configured = `${config.slice(0, storageHeader)}${enabled}${config.slice(end)}`;
+  return `${configured.trimEnd()}\n\n[storage.buckets.media-candidates]\npublic = false\nfile_size_limit = "50MiB"\nallowed_mime_types = ["application/pdf", "image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"]\n\n[storage.buckets.media-processed]\npublic = false\nfile_size_limit = "50MiB"\nallowed_mime_types = ["application/pdf", "image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"]\n`;
+}
+
 async function availablePorts(count) {
   const servers = [];
   try {
@@ -99,8 +113,11 @@ async function main() {
   try {
     const supabaseDir = join(workdir, "supabase");
     mkdirSync(supabaseDir);
-    writeFileSync(join(supabaseDir, "config.toml"), isolatedConfig(readFileSync(join(ROOT, "supabase/config.toml"), "utf8"), projectId,
-      { api: apiPort, db: dbPort, shadow: shadowPort }));
+    const isolatedSupabaseConfig = isolatedConfig(readFileSync(join(ROOT, "supabase/config.toml"), "utf8"), projectId,
+      { api: apiPort, db: dbPort, shadow: shadowPort });
+    writeFileSync(join(supabaseDir, "config.toml"), ticket === 302
+      ? configureIsolatedMediaStorage(isolatedSupabaseConfig)
+      : isolatedSupabaseConfig);
     cpSync(join(ROOT, "supabase/migrations"), join(supabaseDir, "migrations"), { recursive: true });
     copyFileSync(join(ROOT, "supabase/seed.sql"), join(supabaseDir, "seed.sql"));
     const created = spawnSync("docker", ["network", "create", "-o", "com.docker.network.bridge.host_binding_ipv4=127.0.0.1", network], {
@@ -140,15 +157,16 @@ async function main() {
     const appBase = `http://127.0.0.1:${appPorts[0]}`;
     const serverEnv = {
       ...env, NODE_ENV: "production", NODE_OPTIONS: "", NEXT_TELEMETRY_DISABLED: "1",
-      PHASE9_REQUIRE_OWNER_HTTP: "1",
       APP_BASE_URL: appBase, DATABASE_URL: restricted.toString(), PORTFOLIO_ID: portfolioId, OWNER_ID: ownerId,
       SUPABASE_URL: status.API_URL, SUPABASE_ANON_KEY: status.ANON_KEY,
-      // The only service credential here belongs to this disposable local
-      // Supabase project and is required by the production Media/Storage adapters.
-      SUPABASE_SERVICE_ROLE_KEY: status.SERVICE_ROLE_KEY,
-      MEDIA_UPLOAD_REPLAY_ENCRYPTION_KEY: Buffer.from(
-        `${randomUUID().replaceAll("-", "")}${randomUUID().replaceAll("-", "")}`, "hex",
-      ).toString("base64"),
+      ...(ticket === 302 ? {
+        PHASE9_REQUIRE_OWNER_HTTP: "1",
+        // This credential belongs only to the disposable local Supabase project.
+        SUPABASE_SERVICE_ROLE_KEY: status.SERVICE_ROLE_KEY,
+        MEDIA_UPLOAD_REPLAY_ENCRYPTION_KEY: Buffer.from(
+          `${randomUUID().replaceAll("-", "")}${randomUUID().replaceAll("-", "")}`, "hex",
+        ).toString("base64"),
+      } : {}),
       SUPABASE_JWT_ISSUER: `${status.API_URL}/auth/v1`, SUPABASE_JWT_AUDIENCE: "authenticated",
       OWNER_GITHUB_SUBJECTS: "910294,910296,910298", HOSTNAME: "127.0.0.1",
     };
