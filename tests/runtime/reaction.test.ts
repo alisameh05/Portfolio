@@ -71,6 +71,8 @@ describe("PUT Reaction adapter (#26)", () => {
       { service: fake, logger },
     );
     expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(fake.calls).toHaveLength(1);
     const command = fake.calls[0] as { projectId: string; kind: string; idempotencyKey: string };
     expect(command.projectId).toBe(PROJECT_ID);

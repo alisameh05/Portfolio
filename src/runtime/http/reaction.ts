@@ -148,6 +148,8 @@ function requestInstance(request: Request): string {
 
     logger?.info("request.completed", { traceId, status: 200 });
     const response = Response.json(responseResult.data, { status: 200 });
+    response.headers.set("cache-control", "no-store");
+    response.headers.set("x-robots-tag", "noindex, nofollow");
     if (prepared?.ok && prepared.value.issued) {
       response.headers.set("set-cookie", `visitor_functional=${prepared.value.issued.tokenString}; Path=/; Secure; HttpOnly; SameSite=Lax; Expires=${new Date(prepared.value.issued.expiresAt).toUTCString()}`);
     }
