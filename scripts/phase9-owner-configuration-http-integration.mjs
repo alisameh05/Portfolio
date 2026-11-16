@@ -313,7 +313,7 @@ async function main() {
         "postgres-status-history-retirement-and-usage-race"] : []),
       ...(ticket === 299 ? ["all-six-controlled-taxonomy-http-operations", "taxonomy-cross-instance-assignment-and-merge-replay",
         "rename-stable-id-retirement-history-and-merge-mapping", "invalid-foreign-stale-and-conflicting-key-denials",
-        "restricted-postgres-merge-assignment-history-and-retirement-evidence", "postgres-rollback-and-independent-connection-races"] : [])],
+        "restricted-postgres-merge-assignment-history-and-retirement-evidence", "postgres-rollback-and-independent-connection-races"] : []),
       ...(ticket === 302 ? ["five-CV-operation-routes-bound-to-the-canonical-contract-inventory",
         "built-http-private-CV-portfolio-and-real-database-missing-media-or-version-denials",
         "current-CV-English-only-absence-and-Problem-contract", "owner-CV-rate-limit-operations-accepted-by-restricted-postgresql",
