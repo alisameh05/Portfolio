@@ -524,7 +524,7 @@ async function main() {
       { method: "GET", route: "/api/v1/cv/current", operation: "getCurrentCv",
         application: "dispatchCurrentCvHttp(getCurrentCv) -> CurrentCvDeliveryService.downloadCurrentCv",
         executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / executes all five CV operations over built HTTP with accepted PDF bytes and rejects invalid CV states",
-        assertions: ["307 no-store response", "short-lived private Storage target constrained to configured Storage origin and processed bucket", "delivered PDF header and bounded size", "signed target omitted from diagnostics and evidence"] },
+        assertions: ["200 PDF or 307 no-store response", "short-lived private Storage target constrained to configured Storage origin and processed bucket when redirecting", "delivered PDF header, exact stored hash and bounded size", "signed target omitted from diagnostics and evidence"] },
     ] } : {}),
     operationExamples: [
       { operation: "updateOwnerProfileConfiguration", httpStatus: 200, receiptSchemaValid: true, oneLedgerAndOutboxRecord: true },
@@ -557,7 +557,7 @@ async function main() {
         { operation: "registerOwnerCvVersion", httpStatus: 201, responseSchemaValid: true, privateHeaders: true, acceptedMediaPdf: true },
         { operation: "acceptOwnerCvVersion", httpStatus: 200, responseSchemaValid: true, privateHeaders: true },
         { operation: "activateOwnerCvVersion", httpStatus: 200, responseSchemaValid: true, privateHeaders: true, currentPointerVerified: true },
-        { operation: "getCurrentCv", httpStatus: 307, noStore: true, configuredStorageOrigin: true, boundedPdfDelivered: true },
+        { operation: "getCurrentCv", httpStatuses: [200, 307], noStore: true, configuredStorageOrigin: true, exactStoredPdfHash: true, boundedPdfDelivered: true },
       ] : []),
     ],
     passed: passedTestCount, failed: 0, skipped: 0, productionBuild: true, isolatedLoopbackSupabase: true,

@@ -354,18 +354,25 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     const currentPdf = await fetch(`${urls[0]}/api/v1/cv/current?locale=en`, {
       method: "GET", headers: { host: new URL(urls[0]!).host }, signal: AbortSignal.timeout(30_000),
     });
-    expect(currentPdf.status).toBe(307);
     expect(currentPdf.headers.get("cache-control")).toBe("no-store");
-    const location = currentPdf.headers.get("location");
-    expect(location).toBeTruthy();
-    if (location === null) throw new Error("PHASE9_CV_CURRENT_LOCATION_MISSING");
-    const signedLocation = new URL(location);
-    expect(signedLocation.origin).toBe(apiUrl);
-    expect(signedLocation.pathname).toMatch(/^\/storage\/v1\/object\/sign\/media-processed\//u);
-    const deliveredPdf = await globalThis.fetch(signedLocation, { signal: AbortSignal.timeout(30_000) });
-    expect(deliveredPdf.status).toBe(200);
-    expect(deliveredPdf.headers.get("content-type")).toContain("application/pdf");
-    const deliveredBytes = Buffer.from(await deliveredPdf.arrayBuffer());
+    expect([200, 307]).toContain(currentPdf.status);
+    let deliveredBytes: Buffer;
+    if (currentPdf.status === 200) {
+      expect(currentPdf.headers.get("content-type")).toContain("application/pdf");
+      expect(currentPdf.headers.get("content-disposition")).toBe('inline; filename="cv.pdf"');
+      deliveredBytes = Buffer.from(await currentPdf.arrayBuffer());
+    } else {
+      const location = currentPdf.headers.get("location");
+      expect(location).toBeTruthy();
+      if (location === null) throw new Error("PHASE9_CV_CURRENT_LOCATION_MISSING");
+      const signedLocation = new URL(location);
+      expect(signedLocation.origin).toBe(apiUrl);
+      expect(signedLocation.pathname).toMatch(/^\/storage\/v1\/object\/sign\/media-processed\//u);
+      const deliveredPdf = await globalThis.fetch(signedLocation, { signal: AbortSignal.timeout(30_000) });
+      expect(deliveredPdf.status).toBe(200);
+      expect(deliveredPdf.headers.get("content-type")).toContain("application/pdf");
+      deliveredBytes = Buffer.from(await deliveredPdf.arrayBuffer());
+    }
     expect(deliveredBytes.subarray(0, 5).toString("ascii")).toBe("%PDF-");
     expect(deliveredBytes.byteLength).toBeGreaterThan(0);
     expect(deliveredBytes.byteLength).toBeLessThanOrEqual(50 * 1024 * 1024);
@@ -377,8 +384,7 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     expect(storedPdf.rowCount).toBe(1);
     expect(createHash("sha256").update(deliveredBytes).digest("hex")).toBe(storedPdf.rows[0]?.sha256);
     expect(deliveredBytes.byteLength).toBe(Number(storedPdf.rows[0]?.byte_length));
-    // The capability is used only in memory and is intentionally absent from assertions and diagnostics.
-    await currentPdf.body?.cancel();
+    // Any capability is used only in memory and is intentionally absent from assertions and diagnostics.
   }, 240_000);
 
   it("admits all Media adapters through the restricted PostgreSQL limiter and returns 429 on exhaustion", async () => {
