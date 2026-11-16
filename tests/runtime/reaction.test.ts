@@ -87,7 +87,7 @@ describe("PUT Reaction adapter (#26)", () => {
   it.each([
     ["malformed JSON", { rawBody: "{not-json" }],
     ["missing Idempotency-Key", { idempotencyKey: null }],
-    ["malformed Idempotency-Key", { idempotencyKey: "bad" }],
+    ["malformed Idempotency-Key", { idempotencyKey: "bad key" }],
     ["invalid projectId", { projectId: "not-a-uuid" }],
     ["absent reaction", { body: {} }],
     ["invalid enum", { body: { reaction: "love" } }],

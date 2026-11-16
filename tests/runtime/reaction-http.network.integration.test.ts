@@ -122,7 +122,7 @@ describe.runIf(baseUrls.length === 2 && Boolean(adminUrl) && Boolean(portfolioId
       const missingKey = await fetch(`${baseUrls[0]}/api/v1/projects/${projectId}/reaction`, {
         method: "PUT", headers: { "content-type": "application/json", "x-vercel-forwarded-for": "198.51.100.41" }, body: '{"reaction":"like"}',
       });
-      const malformedKey = await put({ projectId, key: "bad", ip: "198.51.100.42" });
+      const malformedKey = await put({ projectId, key: "bad key", ip: "198.51.100.42" });
       const badChoice = await put({ projectId, reaction: "love", ip: "198.51.100.43" });
       expect(missingKey.status).toBe(400);
       expect(malformedKey.status).toBe(400);
