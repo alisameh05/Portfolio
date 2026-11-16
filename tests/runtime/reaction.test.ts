@@ -34,6 +34,7 @@ import { handlePutProjectReaction } from "../../src/runtime/http/reaction.js";
 
 const PROJECT_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7e8f";
 const IDEMPOTENCY_KEY = "test-key-123";
+const allowRateLimit = { async check() { return { allowed: true }; } };
 
 function putReactionRequest(options?: {
   projectId?: string;
@@ -43,7 +44,7 @@ function putReactionRequest(options?: {
   inboundTrace?: string;
 }): Request {
   const projectId = options?.projectId ?? PROJECT_ID;
-  const headers: Record<string, string> = { "content-type": "application/json" };
+  const headers: Record<string, string> = { "content-type": "application/json", "x-vercel-forwarded-for": "198.51.100.10" };
   if (options?.idempotencyKey !== null) {
     headers["Idempotency-Key"] = options?.idempotencyKey ?? IDEMPOTENCY_KEY;
   }
@@ -68,7 +69,7 @@ describe("PUT Reaction adapter (#26)", () => {
     const response = await handlePutProjectReaction(
       putReactionRequest(),
       { projectId: PROJECT_ID },
-      { service: fake, logger },
+      { service: fake, logger, rateLimit: allowRateLimit },
     );
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
@@ -86,6 +87,7 @@ describe("PUT Reaction adapter (#26)", () => {
   it.each([
     ["malformed JSON", { rawBody: "{not-json" }],
     ["missing Idempotency-Key", { idempotencyKey: null }],
+    ["malformed Idempotency-Key", { idempotencyKey: "bad" }],
     ["invalid projectId", { projectId: "not-a-uuid" }],
     ["absent reaction", { body: {} }],
     ["invalid enum", { body: { reaction: "love" } }],
@@ -97,13 +99,32 @@ describe("PUT Reaction adapter (#26)", () => {
     const response = await handlePutProjectReaction(
       putReactionRequest(options),
       { projectId: (options as { projectId?: string }).projectId ?? PROJECT_ID },
-      { service: fake, logger },
+      { service: fake, logger, rateLimit: allowRateLimit },
     );
     expect(response.status).toBe(400);
     expect(fake.calls).toHaveLength(0);
     const body = (await response.json()) as Record<string, unknown>;
     expect(zProblem.safeParse(body).success).toBe(true);
     expect(body["code"]).toBe("validation");
+  });
+
+  it("blocks exhausted and unavailable shared rate limits before identity or mutation", async () => {
+    const fake = createReactionTestFake({ type: "success", reaction: "like" });
+    const limited = await handlePutProjectReaction(putReactionRequest(), { projectId: PROJECT_ID }, {
+      service: fake, rateLimit: { async check() { return { allowed: false, retryAfterSeconds: 19 }; } },
+    });
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("retry-after")).toBe("19");
+    expect(limited.headers.get("set-cookie")).toBeNull();
+    expect(fake.calls).toHaveLength(0);
+
+    const unavailable = await handlePutProjectReaction(putReactionRequest(), { projectId: PROJECT_ID }, {
+      service: fake, rateLimit: { async check(): Promise<never> { throw new Error("database details"); } },
+    });
+    expect(unavailable.status).toBe(503);
+    expect(JSON.stringify(await unavailable.json())).not.toContain("database details");
+    expect(unavailable.headers.get("set-cookie")).toBeNull();
+    expect(fake.calls).toHaveLength(0);
   });
 
   it.each([
@@ -131,7 +152,7 @@ describe("PUT Reaction adapter (#26)", () => {
       const response = await handlePutProjectReaction(
         putReactionRequest(),
         { projectId: PROJECT_ID },
-        { service: fake, logger },
+        { service: fake, logger, rateLimit: allowRateLimit },
       );
       expect(response.status).toBe(status);
       expect(fake.calls).toHaveLength(1);
@@ -150,7 +171,7 @@ describe("PUT Reaction adapter (#26)", () => {
     const response = await handlePutProjectReaction(
       putReactionRequest(),
       { projectId: PROJECT_ID },
-      { service: fake, logger },
+      { service: fake, logger, rateLimit: allowRateLimit },
     );
     expect(response.status).toBe(500);
     const body = (await response.json()) as Record<string, unknown>;
@@ -166,7 +187,7 @@ describe("PUT Reaction adapter (#26)", () => {
     const response = await handlePutProjectReaction(
       putReactionRequest({ body: { reaction: "dislike" } }),
       { projectId: PROJECT_ID },
-      { service: fake, logger },
+      { service: fake, logger, rateLimit: allowRateLimit },
     );
     expect(response.status).toBe(200);
 
@@ -178,7 +199,7 @@ describe("PUT Reaction adapter (#26)", () => {
     await handlePutProjectReaction(
       putReactionRequest(),
       { projectId: PROJECT_ID },
-      { service: rejecting, logger: rejectLogger },
+      { service: rejecting, logger: rejectLogger, rateLimit: allowRateLimit },
     );
     const fields = (rejectLogger.records[0] as { fields: Record<string, unknown> }).fields;
     expect(fields["code"]).toBe("RUNTIME_NOT_IMPLEMENTED");
@@ -202,7 +223,7 @@ describe("PUT Reaction adapter (#26)", () => {
     const response = await handlePutProjectReaction(
       putReactionRequest(),
       { projectId: PROJECT_ID },
-      { service, logger },
+      { service, logger, rateLimit: allowRateLimit },
     );
     expect(response.status).toBe(503);
     const body = (await response.json()) as Record<string, unknown>;
@@ -219,7 +240,7 @@ describe("PUT Reaction adapter (#26)", () => {
     const first = await handlePutProjectReaction(
       putReactionRequest({ inboundTrace: "inbound-attacker-value" }),
       { projectId: PROJECT_ID },
-      { service: fake, logger },
+      { service: fake, logger, rateLimit: allowRateLimit },
     );
     const firstBody = (await first.json()) as Record<string, unknown>;
     expect(firstBody["traceId"]).not.toBe("inbound-attacker-value");
@@ -230,7 +251,7 @@ describe("PUT Reaction adapter (#26)", () => {
     const second = await handlePutProjectReaction(
       putReactionRequest(),
       { projectId: PROJECT_ID },
-      { service: fake, logger: secondLogger },
+      { service: fake, logger: secondLogger, rateLimit: allowRateLimit },
     );
     const secondBody = (await second.json()) as Record<string, unknown>;
     expect(secondBody["traceId"]).not.toBe(firstBody["traceId"]);
@@ -247,7 +268,7 @@ describe("PUT Reaction adapter (#26)", () => {
     const response = await handlePutProjectReaction(
       putReactionRequest(),
       { projectId: PROJECT_ID },
-      { service: throwing, logger },
+      { service: throwing, logger, rateLimit: allowRateLimit },
     );
     expect(response.status).toBe(500);
     const serialized = JSON.stringify(await response.json());

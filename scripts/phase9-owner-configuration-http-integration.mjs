@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from "node:child_process";
 import { createServer, connect } from "node:net";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { copyFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -16,9 +16,11 @@ import { safeAssertionDiagnostic } from "./validation-errors.mjs";
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const CLI = join(ROOT, "node_modules/supabase/dist/supabase.js");
 const NEXT = join(ROOT, "node_modules/next/dist/bin/next");
-const ticket = process.argv.includes("--ticket-302") ? 302 : process.argv.includes("--ticket-299") ? 299 : process.argv.includes("--ticket-298") ? 298 : process.argv.includes("--ticket-295") ? 295 : 294;
+const ticket = process.argv.includes("--ticket-303") ? 303 : process.argv.includes("--ticket-302") ? 302 : process.argv.includes("--ticket-299") ? 299 : process.argv.includes("--ticket-298") ? 298 : process.argv.includes("--ticket-295") ? 295 : 294;
 const contentAuthoringTicket = ticket === 295 || ticket === 298 || ticket === 299;
-const REPORT = join(ROOT, ticket === 302
+const REPORT = join(ROOT, ticket === 303
+  ? "evidence/phase9-reaction-http-303.json"
+  : ticket === 302
   ? "evidence/phase9-cv-http-302.json"
   : ticket === 299 ? "evidence/phase9-taxonomy-http-299.json"
     : ticket === 298 ? "evidence/phase9-project-status-http-298.json"
@@ -90,6 +92,18 @@ function runSupabase(workdir, env, args, timeout = 600_000) {
 
 async function main() {
   requireDocker();
+  let reactionPrerequisiteEvidence;
+  if (ticket === 303) {
+    try {
+      reactionPrerequisiteEvidence = JSON.parse(readFileSync(join(ROOT, "evidence/phase7-reactions-190.json"), "utf8"));
+    } catch { throw new Error("PHASE9_REACTION_PHASE7_EVIDENCE_MISSING"); }
+    if (reactionPrerequisiteEvidence.cleanup !== true || reactionPrerequisiteEvidence.required?.success !== true ||
+        reactionPrerequisiteEvidence.required?.passed !== 17 || reactionPrerequisiteEvidence.required?.failed !== 0 ||
+        reactionPrerequisiteEvidence.required?.skipped !== 0 ||
+        reactionPrerequisiteEvidence.sourceTreeSha256 !== workingTreeSourceSha256()) {
+      throw new Error("PHASE9_REACTION_PHASE7_EVIDENCE_STALE_OR_INCOMPLETE");
+    }
+  }
   const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
   const installed = JSON.parse(readFileSync(join(ROOT, "node_modules/supabase/package.json"), "utf8"));
   if (installed.version !== pkg.devDependencies.supabase) throw new Error("PHASE9_OWNER_HTTP_CLI_PIN_MISMATCH");
@@ -176,6 +190,10 @@ async function main() {
           `${randomUUID().replaceAll("-", "")}${randomUUID().replaceAll("-", "")}`, "hex",
         ).toString("base64"),
       } : {}),
+      ...(ticket === 303 ? {
+        FUNCTIONAL_ID_HASH_KEY: randomBytes(32).toString("base64url"),
+        FUNCTIONAL_ID_HASH_KEY_VERSION: "1",
+      } : {}),
       SUPABASE_JWT_ISSUER: `${status.API_URL}/auth/v1`, SUPABASE_JWT_AUDIENCE: "authenticated",
       OWNER_GITHUB_SUBJECTS: "910294,910296,910298", HOSTNAME: "127.0.0.1",
     };
@@ -208,6 +226,10 @@ async function main() {
       PHASE9_OWNER_HTTP_UNREADY_URL: `http://127.0.0.1:${appPorts[2]}`,
       OWNER_ID: ownerId, PORTFOLIO_ID: portfolioId,
       ...(ticket === 302 ? { PHASE9_CV_HTTP_ACCEPTANCE: "1" } : {}),
+      ...(ticket === 303 ? {
+        PHASE9_REACTION_HTTP_ADMIN_DATABASE_URL: status.DB_URL,
+        PHASE9_REACTION_HTTP_URLS: JSON.stringify(appPorts.slice(0, 2).map((port) => `http://127.0.0.1:${port}`)),
+      } : {}),
       ...(contentAuthoringTicket ? { PHASE5_REQUIRE_CONTENT_AUTHORING: "1", PHASE5_CONTENT_AUTHORING_DATABASE_URL: status.DB_URL } : {}),
     };
     stage = "tests";
@@ -215,7 +237,11 @@ async function main() {
     // Blocking this event loop can fill a server's stdout pipe on Linux and
     // stall its responses until the test's request deadline expires.
     const test = await new Promise((resolve) => {
-      const suites = [
+      const suites = ticket === 303 ? [
+        "tests/runtime/reaction.test.ts",
+        "tests/runtime/reaction-http.network.integration.test.ts",
+        "tests/routes/phase9-route-registration.test.ts",
+      ] : [
         "tests/runtime/owner-configuration-network.integration.test.ts",
         ...(contentAuthoringTicket ? ["tests/runtime/owner-content-http.test.ts", "tests/runtime/owner-publication.test.ts"] : []),
         ...(ticket === 298 ? ["tests/runtime/owner-project-status.test.ts", "tests/contracts/owner-contract.test.ts",
@@ -249,7 +275,7 @@ async function main() {
     const report = JSON.parse(readFileSync(reportPath, "utf8"));
     if (test.error || test.status !== 0 || report.success !== true || report.numPassedTests <= 3 ||
         report.numFailedTests !== 0 || report.numPendingTests !== 0 || report.numTodoTests !== 0 ||
-        report.testResults?.length !== (ticket === 302 ? 11 : ticket === 299 ? 13 : ticket === 298 ? 12 : contentAuthoringTicket ? 9 : 6) ||
+        report.testResults?.length !== (ticket === 303 ? 3 : ticket === 302 ? 11 : ticket === 299 ? 13 : ticket === 298 ? 12 : contentAuthoringTicket ? 9 : 6) ||
         report.testResults.some((suite) => suite.status !== "passed")) {
       const failedAssertions = report.testResults?.flatMap((suite) => suite.assertionResults ?? [])
         .filter((assertion) => assertion.status !== "passed")
@@ -324,7 +350,9 @@ async function main() {
   }));
   mkdirSync(join(ROOT, "evidence"), { recursive: true });
   writeFileSync(REPORT, `${JSON.stringify({
-    ticket, scope: ticket === 302
+    ticket, scope: ticket === 303
+      ? "built-next-public-reaction-http-real-postgresql-functional-identity-and-shared-rate-limit"
+      : ticket === 302
       ? "built-next-owner-cv-and-public-current-cv-http-real-auth-restricted-postgresql"
       : ticket === 299 ? "built-next-owner-controlled-taxonomy-workflows-http-real-auth-restricted-postgresql"
         : ticket === 298 ? "built-next-owner-project-status-catalogue-http-real-auth-postgresql"
@@ -332,12 +360,29 @@ async function main() {
             : "built-next-owner-configuration-http-real-auth-postgresql",
     runId: randomUUID(), githubRunId: process.env.GITHUB_RUN_ID ?? null, githubRunAttempt: process.env.GITHUB_RUN_ATTEMPT ?? null,
     source: { commit: commit.status === 0 ? commit.stdout.trim() : "unavailable", treeSha256: workingTreeSourceSha256() },
+    ...(ticket === 303 ? { phase7Prerequisite: {
+      artifact: "evidence/phase7-reactions-190.json",
+      sourceTreeSha256: reactionPrerequisiteEvidence.sourceTreeSha256,
+      required: reactionPrerequisiteEvidence.required,
+      cleanupVerified: reactionPrerequisiteEvidence.cleanup,
+    } } : {}),
     contractBundles, migrations,
     toolIdentity: { node: process.version, npm: npmVersion.status === 0 ? npmVersion.stdout.trim() : "unavailable",
       next: nextVersion, supabaseCli: supabaseVersion, postgres: postgresVersion },
     databaseRole: "restricted login granted shipwithali_application; bypassrls=false",
-    fixtures: { owner: "synthetic linked GitHub test identity", portfolio: "synthetic configured test portfolio", session: "temporary Auth sessions" },
-    verdict: "passed", namedChecks: ["all-three-configuration-operations", "valid-receipts-private-headers",
+    fixtures: ticket === 303
+      ? { portfolio: "synthetic isolated test portfolio", projects: "synthetic Published, Hidden and Archived Projects", measurementConsent: "none" }
+      : { owner: "synthetic linked GitHub test identity", portfolio: "synthetic configured test portfolio", session: "temporary Auth sessions" },
+    verdict: "passed", namedChecks: ticket === 303 ? [
+      "built-next-public-reaction-route-and-production-composition",
+      "valid-200-receipt-secure-host-only-functional-cookie-no-store-non-indexable",
+      "language-independent-current-row-and-idempotency-replay-across-servers",
+      "malformed-input-rejected-before-rate-limit-identity-or-mutation",
+      "hidden-archived-and-missing-project-denial-before-cookie-issuance",
+      "functional-interaction-independent-of-measurement-events",
+      "shared-postgresql-30-per-minute-rate-limit-and-fail-closed-outage",
+      "functional-cookie-crypto-tamper-expiry-purpose-rotation-and-lost-first-cookie-regression",
+    ] : ["all-three-configuration-operations", "valid-receipts-private-headers",
       "cross-instance-exact-replay-and-version-conflict", "csrf-origin-forwarded-host-and-non-owner-denials",
       "revoked-session-denial", "shared-database-rate-limit", "limiter-outage-fails-closed", "log-privacy",
       ...(ticket === 295 ? ["all-six-content-authoring-http-operations", "content-cross-instance-exact-replay-and-conflict",
@@ -355,6 +400,27 @@ async function main() {
         "current-CV-English-only-absence-and-Problem-contract", "owner-CV-rate-limit-operations-accepted-by-restricted-postgresql",
         "CV-adapter-stream-redirect-rate-limit-and-privacy-regression-suites",
         "real-PDF-activation-and-storage-evidence-is-produced-by-the-required-Phase-6-gate"] : [])],
+    ...(ticket === 303 ? { acceptanceCriteria: {
+      AC01: ["tests/runtime/reaction-http.network.integration.test.ts :: AC01 returns a schema-valid personalized receipt and secure functional cookie over the built route"],
+      AC02: ["tests/runtime/reaction-http.network.integration.test.ts :: AC02-03 shares one language-independent subject and preserves replay and current-row semantics across servers",
+        "tests/phase7/reactions-postgres.test.ts :: T03-08 subjects and Projects remain independent and votes have no locale copy"],
+      AC03: ["tests/runtime/reaction-http.network.integration.test.ts :: AC02-03 shares one language-independent subject and preserves replay and current-row semantics across servers",
+        "tests/phase7/reactions-postgres.test.ts :: T03-05 new-key same-value is a no-op; exact retry retains original safe result; conflicting reuse changes nothing",
+        "tests/phase7/reactions-postgres.test.ts :: T03-05 same-key races across independent pools yield one effect; differing payload yields one conflict"],
+      AC04: ["tests/runtime/reaction-http.network.integration.test.ts :: AC04 rejects malformed keys and bodies before the limiter, identity, or mutation",
+        "tests/runtime/reaction.test.ts :: rejects malformed JSON, missing or malformed Idempotency-Key, invalid choice and unknown body before dispatch"],
+      AC05: ["tests/runtime/reaction-http.network.integration.test.ts :: AC05 denies hidden, archived, and missing Projects before cookie issuance",
+        "tests/phase7/reactions-postgres.test.ts :: T03-02 withdrawal-first serialization rejects preflight-authorized submission and retained replay",
+        "tests/phase7/reactions-postgres.test.ts :: T03-02 submission-first holds real lifecycle withdrawal until commit; later writes reject"],
+      AC06: ["tests/runtime/reaction-http.network.integration.test.ts :: AC06 permits functional Reaction without Measurement consent or event writes",
+        "tests/phase7/reactions-postgres.test.ts :: T03-03 consent denial/unknown permits functional use and non-interaction issuance rejects",
+        "tests/phase7/reactions-postgres.test.ts :: restricted principal RLS scopes votes and pooled settings; no anonymous/worker grants or subject leakage"],
+      AC07: ["tests/runtime/reaction-http.network.integration.test.ts :: AC07 enforces the shared 30-per-minute PostgreSQL budget and fails closed on limiter outage",
+        "tests/phase7/reactions-postgres.test.ts :: T03-04 actual crypto rejects tampered/expired/wrong-purpose/retired tokens; rotation preserves subject",
+        "tests/phase7/reactions-postgres.test.ts :: T03-06 enforces 30 requests per client-minute across independent PostgreSQL instances",
+        "tests/phase7/reactions-postgres.test.ts :: T03-08 losing the initial cookie creates independent actors even for the same key",
+        "evidence/phase7-reactions-190.json :: actual assertion results, sanitized environment identity and verified cleanup"],
+    } } : {}),
     ...(ticket === 299 ? { acceptanceCriteria: {
       AC01: ["tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves controlled Taxonomy workflows over built HTTP and verifies real PostgreSQL assignment history"],
       AC02: ["tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves controlled Taxonomy workflows over built HTTP and verifies real PostgreSQL assignment history",
@@ -505,6 +571,12 @@ async function main() {
         executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves controlled Taxonomy workflows over built HTTP and verifies real PostgreSQL assignment history",
         assertions: ["200 schema-valid receipt", "cross-instance exact replay", "retired value rejected without new assignment"] },
     ] } : {}),
+    ...(ticket === 303 ? { traceability: [
+      { method: "PUT", route: "/api/v1/projects/{projectId}/reaction", operation: "putProjectReaction",
+        application: "dispatchPutProjectReactionHttp -> getReactionRuntimeServices -> handlePutProjectReaction -> InteractionModerationService.submitReaction",
+        executedTest: "tests/runtime/reaction-http.network.integration.test.ts :: Phase 9 #303 production-built Reaction HTTP acceptance",
+        assertions: ["200 generated response schema", "secure host-only functional cookie", "Cache-Control no-store", "X-Robots-Tag noindex", "functional subject redacted"] },
+    ] } : {}),
     ...(ticket === 302 ? { traceability: [
       { method: "GET", route: "/api/owner/v1/cv", operation: "getOwnerCvPortfolio",
         application: "dispatchOwnerCvHttp(getOwnerCvPortfolio) -> OwnerCvApplicationService.getOwnerCvPortfolio",
@@ -527,7 +599,12 @@ async function main() {
         executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / executes all five CV operations over built HTTP with accepted PDF bytes and rejects invalid CV states",
         assertions: ["200 PDF or 307 no-store response", "short-lived private Storage target constrained to configured Storage origin and processed bucket when redirecting", "delivered PDF header, exact stored hash and bounded size", "signed target omitted from diagnostics and evidence"] },
     ] } : {}),
-    operationExamples: [
+    operationExamples: ticket === 303 ? [
+      { operation: "putProjectReaction", httpStatus: 200, responseSchemaValid: true, secureFunctionalCookie: true,
+        noStore: true, noIndex: true, sameSubjectCurrentRow: true, exactReplayVerified: true },
+      { operation: "putProjectReaction", httpStatus: 429, positiveRetryAfter: true, sharedPostgresLimiter: true },
+      { operation: "putProjectReaction", httpStatus: 503, limiterOutageFailsClosed: true, noCookieReleased: true },
+    ] : [
       { operation: "updateOwnerProfileConfiguration", httpStatus: 200, receiptSchemaValid: true, oneLedgerAndOutboxRecord: true },
       { operation: "updateOwnerContactChannels", httpStatus: 200, receiptSchemaValid: true, oneLedgerAndOutboxRecord: true },
       { operation: "updateOwnerGlobalProjectCta", httpStatus: 200, receiptSchemaValid: true, oneLedgerAndOutboxRecord: true },
@@ -562,7 +639,8 @@ async function main() {
       ] : []),
     ],
     passed: passedTestCount, failed: 0, skipped: 0, productionBuild: true, isolatedLoopbackSupabase: true,
-    execution: { command: ticket === 302 ? "npm run phase9:focus:cv-http"
+    execution: { command: ticket === 303 ? "npm run phase9:focus:reaction-http"
+      : ticket === 302 ? "npm run phase9:focus:cv-http"
       : ticket === 299 ? "npm run phase9:focus:taxonomy-http"
       : ticket === 298 ? "npm run phase9:focus:project-status-http"
       : ticket === 295 ? "npm run phase9:focus:content-authoring-http" : "npm run phase9:focus:owner-configuration-http", exitCode: 0,

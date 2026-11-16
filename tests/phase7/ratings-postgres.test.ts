@@ -40,7 +40,7 @@ describe.runIf(Boolean(url))("real PostgreSQL Rating acceptance", () => {
   const repository = createPostgresRatingRepository();
   const service = createRatingApplicationService({ portfolioId, content, operations, repository, clock: { now: () => now }, ids: createSystemIdGenerator() });
   const functionalIdentity = createFunctionalInteractionContext({ portfolioId, content, transactions: operations.transactions, identity });
-  const deps = { scope, service, functionalIdentity };
+  const deps = { scope, service, functionalIdentity, rateLimit: { async check() { return { allowed: true }; } } };
   const key = (text = createStableId("Key")) => { const result = parseIdempotencyKey(text); if (!result.ok) throw new Error("key"); return result.value; };
   const prepare = (projectId: StableId<"Project">, tokenString?: string, consent: "unknown" | "denied" = "unknown") => functionalIdentity.prepare({
     scope, correlationId: "rating-test", projectId, interaction: "rating", consent, ...(tokenString === undefined ? {} : { tokenString }) });
@@ -49,7 +49,7 @@ describe.runIf(Boolean(url))("real PostgreSQL Rating acceptance", () => {
   }
   function http(projectId: StableId<"Project">, choice = 1, cookie?: string, idempotency = key(), dependencies = deps) {
     return handlePutProjectRating(new Request("https://example.com/api/v1/projects/" + projectId + "/rating", {
-      method: "PUT", headers: { "Idempotency-Key": idempotency, ...(cookie === undefined ? {} : { cookie }) },
+      method: "PUT", headers: { "Idempotency-Key": idempotency, "x-vercel-forwarded-for": "198.51.100.25", ...(cookie === undefined ? {} : { cookie }) },
       body: JSON.stringify({ rating: choice }) }), { projectId }, dependencies);
   }
   async function counts(projectId: StableId<"Project">) {
@@ -124,7 +124,7 @@ describe.runIf(Boolean(url))("real PostgreSQL Rating acceptance", () => {
     const reactionService = createReactionApplicationService({ portfolioId, content, operations,
       repository: createPostgresReactionRepository(), clock: { now: () => now }, ids: createSystemIdGenerator() });
     const reaction = (kind: "like" | "dislike", cookie: string) => handlePutProjectReaction(new Request("https://example.com/en/projects/" + projectId + "/reaction", {
-      method: "PUT", headers: { cookie, "Idempotency-Key": kind === "like" ? idempotency : key() }, body: JSON.stringify({ reaction: kind }),
+      method: "PUT", headers: { cookie, "Idempotency-Key": kind === "like" ? idempotency : key(), "x-vercel-forwarded-for": "198.51.100.25" }, body: JSON.stringify({ reaction: kind }),
     }), { projectId }, { ...deps, service: reactionService });
     // Rating-first issues one recognized subject reusable by the separately authorized Reaction.
     const initial = await http(projectId, 1, undefined, idempotency);
@@ -146,7 +146,7 @@ describe.runIf(Boolean(url))("real PostgreSQL Rating acceptance", () => {
     // Reaction-first recognizes the same subject when the first Rating follows.
     const otherProject = await seed();
     const firstReaction = await handlePutProjectReaction(new Request("https://example.com/reaction", {
-      method: "PUT", headers: { "Idempotency-Key": key() }, body: '{"reaction":"like"}',
+      method: "PUT", headers: { "Idempotency-Key": key(), "x-vercel-forwarded-for": "198.51.100.26" }, body: '{"reaction":"like"}',
     }), { projectId: otherProject }, { ...deps, service: reactionService });
     expect(firstReaction.status).toBe(200);
     const following = await http(otherProject, 4, firstReaction.headers.get("set-cookie")!.split(";")[0]);

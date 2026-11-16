@@ -16,6 +16,8 @@ import { createSystemIdGenerator, createTestLogger } from "../../src/runtime/por
 import { handlePutProjectReaction } from "../../src/runtime/http/reaction.js";
 import { initializeDatabaseRuntime, getReactionRuntimeServices, resetRuntimeForTests } from "../../src/bootstrap/composition-root.js";
 import { getLifecycleCoordinator } from "../../src/runtime/lifecycle.js";
+import { createPostgresReactionRateLimit } from "../../src/modules/identity-access/adapters/postgres-reaction-rate-limit.js";
+import { PUT as putProjectReactionRoute } from "../../src/app/api/v1/projects/[projectId]/reaction/route.js";
 
 const url = process.env["PHASE7_REACTION_DATABASE_URL"];
 describe.runIf(Boolean(url))("real PostgreSQL Reaction acceptance", () => {
@@ -37,7 +39,19 @@ describe.runIf(Boolean(url))("real PostgreSQL Reaction acceptance", () => {
   const repository = createPostgresReactionRepository();
   const service = createReactionApplicationService({ portfolioId, content, operations, repository, clock: { now: () => now }, ids: createSystemIdGenerator() });
   const functionalIdentity = createFunctionalInteractionContext({ portfolioId, content, transactions: operations.transactions, identity });
-  const deps = { scope, service, functionalIdentity };
+  const rateLimit = createPostgresReactionRateLimit({ database: db.database, portfolioId, hashKey: config.functional.active.secret });
+  const independentRateLimit = createPostgresReactionRateLimit({ database: second.database, portfolioId, hashKey: config.functional.active.secret });
+  const clientAddresses = new Map<string, string>();
+  let clientAddressSequence = 10;
+  const clientAddress = (projectId: StableId<"Project">) => {
+    let address = clientAddresses.get(projectId);
+    if (!address) {
+      address = `198.51.100.${clientAddressSequence++}`;
+      clientAddresses.set(projectId, address);
+    }
+    return address;
+  };
+  const deps = { scope, service, functionalIdentity, rateLimit };
   const key = (text = createStableId("Key")) => { const result = parseIdempotencyKey(text); if (!result.ok) throw new Error("key"); return result.value; };
   const prepare = (projectId: StableId<"Project">, tokenString?: string, consent: "unknown" | "denied" = "unknown") => functionalIdentity.prepare({
     scope, correlationId: "reaction-test", projectId, interaction: "reaction", consent, ...(tokenString === undefined ? {} : { tokenString }) });
@@ -46,7 +60,7 @@ describe.runIf(Boolean(url))("real PostgreSQL Reaction acceptance", () => {
   }
   function http(projectId: StableId<"Project">, choice = "like", cookie?: string, idempotency = key(), dependencies = deps) {
     return handlePutProjectReaction(new Request("https://example.com/api/v1/projects/" + projectId + "/reaction", {
-      method: "PUT", headers: { "Idempotency-Key": idempotency, ...(cookie === undefined ? {} : { cookie }) },
+      method: "PUT", headers: { "Idempotency-Key": idempotency, "x-vercel-forwarded-for": clientAddress(projectId), ...(cookie === undefined ? {} : { cookie }) },
       body: JSON.stringify({ reaction: choice }) }), { projectId }, dependencies);
   }
   async function counts(projectId: StableId<"Project">) {
@@ -164,6 +178,20 @@ describe.runIf(Boolean(url))("real PostgreSQL Reaction acceptance", () => {
       expect((await counts(projectId)).reduce((sum, r) => sum + r.count, 0)).toBe(1); expect(await events(projectId)).toHaveLength(1);
     }
   });
+  it("T03-06 enforces 30 requests per client-minute across independent PostgreSQL instances", async () => {
+    const projectId = await seed();
+    const address = clientAddress(projectId);
+    for (let attempt = 0; attempt < 30; attempt++) {
+      const verdict = await (attempt % 2 === 0 ? rateLimit : independentRateLimit).check(address);
+      expect(verdict.allowed).toBe(true);
+    }
+    const response = await http(projectId);
+    expect(response.status).toBe(429);
+    expect(Number(response.headers.get("retry-after"))).toBeGreaterThan(0);
+    expect(response.headers.get("set-cookie")).toBeNull();
+    expect(await counts(projectId)).toEqual([]);
+    expect(await events(projectId)).toHaveLength(0);
+  });
   function barrier() { let release!: () => void; const promise = new Promise<void>(r => { release = r; }); return { promise, release }; }
   async function waitForLock() {
     const until = Date.now() + 2500;
@@ -274,9 +302,16 @@ describe.runIf(Boolean(url))("real PostgreSQL Reaction acceptance", () => {
     await initializeDatabaseRuntime({ ...isolatedOwnerAuthEnvironment, ...env }, "application", undefined, { identityReadiness: isolatedIdentityReadiness });
     const assembled = await getReactionRuntimeServices();
     if (!("functionalIdentity" in assembled)) throw new Error("not assembled");
-    const logger = createTestLogger();
-    const response = await http(projectId, "like", undefined, key(), { ...assembled, logger } as typeof deps);
+    const firstKey = key();
+    const response = await putProjectReactionRoute(new Request(`https://example.com/api/v1/projects/${projectId}/reaction`, {
+      method: "PUT", headers: { "Idempotency-Key": firstKey, "x-vercel-forwarded-for": clientAddress(projectId) },
+      body: JSON.stringify({ reaction: "like" }),
+    }), { params: Promise.resolve({ projectId }) });
     expect(response.status).toBe(200);
+    expect(response.headers.get("set-cookie")).toContain("Secure; HttpOnly; SameSite=Lax");
+    const logger = createTestLogger();
+    const observed = await http(projectId, "like", response.headers.get("set-cookie")!.split(";")[0], key(), { ...assembled, logger });
+    expect(observed.status).toBe(200);
     expect(JSON.stringify(logger.records)).not.toContain(response.headers.get("set-cookie")!.split(";")[0]!.split("=")[1]!);
     await getLifecycleCoordinator().shutdown();
     const failed = await http(projectId, "like", undefined, key(), assembled);

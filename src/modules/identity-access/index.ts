@@ -43,3 +43,4 @@ export type {
 } from "./ports/index.js";
 
 export type { ConsentEvidencePayload, ConsentEvidenceCryptoPort } from "./ports/consent.js";
+export type { PublicRateLimitCheck } from "./ports/public-rate-limit.js";

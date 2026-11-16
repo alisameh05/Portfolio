@@ -44,3 +44,21 @@ Rollback: disable Reaction assembly while retaining the new table and existing
 data. Correct defects with a new timestamped migration. No production migrations,
 schedule, Measurement event consumer, Rating activation or new HTTP route is
 part of this ticket.
+
+## Phase 9 public HTTP acceptance (#303)
+
+The built route dispatches through the normal application composition and uses
+the shared PostgreSQL fixed-window limiter: 30 requests per trusted client IP
+per 60 seconds. The route reads only Vercel's `x-vercel-forwarded-for` system
+header, requires one valid IP address, HMACs it with the purpose-separated
+Functional identity key plus Portfolio scope, and stores only the digest. A
+missing address or database failure returns 503 before identity issuance or
+Reaction mutation; exhaustion returns 429 with a positive `Retry-After`.
+
+CI runs `npm run phase9:focus:reaction-http` after the production build. It
+replays the real Reaction PostgreSQL/crypto suite, then exercises the built
+Next.js route over loopback HTTP with two application servers and isolated
+Supabase PostgreSQL. Sanitized reports are retained as
+`phase7-reactions-190.json` and `phase9-reaction-http-303.json`; the Phase 9
+report records per-AC test names, source and bundle identities, migration
+checksums, truthful result counts, and verified cleanup.
