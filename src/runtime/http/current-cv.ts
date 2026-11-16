@@ -154,7 +154,12 @@ function streamBytes(bytes: AsyncIterable<Uint8Array>): ReadableStream<Uint8Arra
     }
 
     if (!result.ok) {
-      const rejection = rejectionToProblem(result.error, traceId, instance);
+      // The public Current CV contract exposes generic Problem categories;
+      // keep the resource-specific domain code inside the application boundary.
+      const publicRejection = result.error.kind === "not_found"
+        ? { ...result.error, code: "NOT_FOUND" }
+        : result.error;
+      const rejection = rejectionToProblem(publicRejection, traceId, instance);
       // Rejection codes are stable machine values (never secrets), so the
       // code is safe to log with correlation for diagnostics.
       logger?.warn("request.rejected", {

@@ -109,9 +109,9 @@ export function rejectionToProblem(
         status: 404,
         detail: "The requested resource is not available.",
         instance,
-        // The public Problem contract exposes the category, not domain-specific
-        // resource codes, so missing resources use its declared generic value.
-        code: "not_found",
+        // Preserve the two cross-module resource codes required by Media/CV
+        // consumers while retaining the legacy generic code for other reads.
+        code: rejection.code === "CURRENT_CV_NOT_FOUND" ? rejection.code : "not_found",
         traceId,
       });
     case "conflict":
