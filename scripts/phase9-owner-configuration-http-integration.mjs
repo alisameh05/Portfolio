@@ -140,6 +140,7 @@ async function main() {
     const appBase = `http://127.0.0.1:${appPorts[0]}`;
     const serverEnv = {
       ...env, NODE_ENV: "production", NODE_OPTIONS: "", NEXT_TELEMETRY_DISABLED: "1",
+      PHASE9_REQUIRE_OWNER_HTTP: "1",
       APP_BASE_URL: appBase, DATABASE_URL: restricted.toString(), PORTFOLIO_ID: portfolioId, OWNER_ID: ownerId,
       SUPABASE_URL: status.API_URL, SUPABASE_ANON_KEY: status.ANON_KEY,
       // The only service credential here belongs to this disposable local

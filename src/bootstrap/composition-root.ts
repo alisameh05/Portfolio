@@ -462,7 +462,7 @@ export async function initializeDatabaseRuntime(
                     storage: createSupabaseCurrentCvDelivery({
                       storageUrl: env["SUPABASE_URL"]!,
                       serviceRoleKey: env["SUPABASE_SERVICE_ROLE_KEY"]!,
-                      mode: env["NODE_ENV"] === "test" ? "test" : "deployed",
+                      mode: env["NODE_ENV"] === "test" || env["PHASE9_REQUIRE_OWNER_HTTP"] === "1" ? "test" : "deployed",
                       ...(env["MEDIA_PROCESSED_BUCKET"] === undefined ? {} : { processedBucket: env["MEDIA_PROCESSED_BUCKET"] }),
                     }),
                   });
@@ -838,7 +838,7 @@ export async function initializeDatabaseRuntime(
             ? (await import("../runtime/adapters/supabase-current-cv-delivery.js")).createSupabaseCurrentCvDelivery({
                 storageUrl: env["SUPABASE_URL"],
                 serviceRoleKey: env["SUPABASE_SERVICE_ROLE_KEY"],
-                mode: env["NODE_ENV"] === "test" ? "test" : "deployed",
+                mode: env["NODE_ENV"] === "test" || env["PHASE9_REQUIRE_OWNER_HTTP"] === "1" ? "test" : "deployed",
                 ...(env["MEDIA_PROCESSED_BUCKET"] === undefined ? {} : { processedBucket: env["MEDIA_PROCESSED_BUCKET"] }),
               })
             : {
@@ -903,7 +903,7 @@ export async function initializeDatabaseRuntime(
               storageUrl: env["SUPABASE_URL"],
               serviceRoleKey: env["SUPABASE_SERVICE_ROLE_KEY"],
               portfolioId: scope.portfolioId,
-              mode: env["NODE_ENV"] === "test" ? "test" : "deployed",
+              mode: env["NODE_ENV"] === "test" || env["PHASE9_REQUIRE_OWNER_HTTP"] === "1" ? "test" : "deployed",
               ...(env["MEDIA_CANDIDATE_BUCKET"] === undefined ? {} : { candidateBucket: env["MEDIA_CANDIDATE_BUCKET"] }),
               ...(env["MEDIA_PROCESSED_BUCKET"] === undefined ? {} : { processedBucket: env["MEDIA_PROCESSED_BUCKET"] }),
             })
