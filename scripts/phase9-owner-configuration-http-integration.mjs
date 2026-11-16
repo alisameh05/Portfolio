@@ -9,18 +9,34 @@ import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { initializeLocalMigrationProject } from "./local-migration-bootstrap.mjs";
 import { isolatedConfig, localEnvironment, requireDocker } from "./local-auth-integration.mjs";
+import { PHASE6_TOOL_DEFINITIONS } from "./phase6-verification-support.mjs";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 import { safeAssertionDiagnostic } from "./validation-errors.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const CLI = join(ROOT, "node_modules/supabase/dist/supabase.js");
 const NEXT = join(ROOT, "node_modules/next/dist/bin/next");
-const ticket = process.argv.includes("--ticket-299") ? 299 : process.argv.includes("--ticket-298") ? 298 : process.argv.includes("--ticket-295") ? 295 : 294;
+const ticket = process.argv.includes("--ticket-302") ? 302 : process.argv.includes("--ticket-299") ? 299 : process.argv.includes("--ticket-298") ? 298 : process.argv.includes("--ticket-295") ? 295 : 294;
 const contentAuthoringTicket = ticket === 295 || ticket === 298 || ticket === 299;
-const REPORT = join(ROOT, ticket === 299
-  ? "evidence/phase9-taxonomy-http-299.json"
-  : ticket === 298 ? "evidence/phase9-project-status-http-298.json"
-    : ticket === 295 ? "evidence/phase9-content-authoring-http-295.json" : "evidence/phase9-owner-configuration-http-294.json");
+const REPORT = join(ROOT, ticket === 302
+  ? "evidence/phase9-cv-http-302.json"
+  : ticket === 299 ? "evidence/phase9-taxonomy-http-299.json"
+    : ticket === 298 ? "evidence/phase9-project-status-http-298.json"
+      : ticket === 295 ? "evidence/phase9-content-authoring-http-295.json" : "evidence/phase9-owner-configuration-http-294.json");
+
+function configureIsolatedMediaStorage(config) {
+  const storageHeader = config.indexOf("[storage]");
+  if (storageHeader < 0) throw new Error("PHASE9_OWNER_HTTP_STORAGE_CONFIG_MISSING");
+  const sectionEnd = config.indexOf("\n[", storageHeader + "[storage]".length);
+  const end = sectionEnd < 0 ? config.length : sectionEnd;
+  const section = config.slice(storageHeader, end);
+  if (!/^\[storage\]\r?\nenabled = false\s*$/mu.test(section)) {
+    throw new Error("PHASE9_OWNER_HTTP_STORAGE_CONFIG_UNEXPECTED");
+  }
+  const enabled = section.replace(/^\[storage\]\r?\nenabled = false/mu, "[storage]\nenabled = true");
+  const configured = `${config.slice(0, storageHeader)}${enabled}${config.slice(end)}`;
+  return `${configured.trimEnd()}\n\n[storage.buckets.media-candidates]\npublic = false\nfile_size_limit = "50MiB"\nallowed_mime_types = ["application/pdf", "image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"]\n\n[storage.buckets.media-processed]\npublic = false\nfile_size_limit = "50MiB"\nallowed_mime_types = ["application/pdf", "image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"]\n`;
+}
 
 async function availablePorts(count) {
   const servers = [];
@@ -77,6 +93,14 @@ async function main() {
   const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
   const installed = JSON.parse(readFileSync(join(ROOT, "node_modules/supabase/package.json"), "utf8"));
   if (installed.version !== pkg.devDependencies.supabase) throw new Error("PHASE9_OWNER_HTTP_CLI_PIN_MISMATCH");
+  if (ticket === 302) {
+    for (const image of [PHASE6_TOOL_DEFINITIONS.scanner, PHASE6_TOOL_DEFINITIONS.pdfProcessor]) {
+      const pulled = spawnSync("docker", ["pull", image], {
+        env: localEnvironment(), encoding: "utf8", stdio: "ignore", timeout: 240_000,
+      });
+      if (pulled.error || pulled.status !== 0) throw new Error("PHASE9_OWNER_HTTP_MEDIA_TOOLS_UNAVAILABLE");
+    }
+  }
   const [apiPort, dbPort, shadowPort, ...appPorts] = await availablePorts(6);
   const workdir = mkdtempSync(join(tmpdir(), "shipwithali-owner-http-"));
   const projectId = `shipwithali-auth-${randomUUID().replaceAll("-", "").slice(0, 16)}`;
@@ -98,8 +122,11 @@ async function main() {
   try {
     const supabaseDir = join(workdir, "supabase");
     mkdirSync(supabaseDir);
-    writeFileSync(join(supabaseDir, "config.toml"), isolatedConfig(readFileSync(join(ROOT, "supabase/config.toml"), "utf8"), projectId,
-      { api: apiPort, db: dbPort, shadow: shadowPort }));
+    const isolatedSupabaseConfig = isolatedConfig(readFileSync(join(ROOT, "supabase/config.toml"), "utf8"), projectId,
+      { api: apiPort, db: dbPort, shadow: shadowPort });
+    writeFileSync(join(supabaseDir, "config.toml"), ticket === 302
+      ? configureIsolatedMediaStorage(isolatedSupabaseConfig)
+      : isolatedSupabaseConfig);
     cpSync(join(ROOT, "supabase/migrations"), join(supabaseDir, "migrations"), { recursive: true });
     copyFileSync(join(ROOT, "supabase/seed.sql"), join(supabaseDir, "seed.sql"));
     const created = spawnSync("docker", ["network", "create", "-o", "com.docker.network.bridge.host_binding_ipv4=127.0.0.1", network], {
@@ -141,6 +168,14 @@ async function main() {
       ...env, NODE_ENV: "production", NODE_OPTIONS: "", NEXT_TELEMETRY_DISABLED: "1",
       APP_BASE_URL: appBase, DATABASE_URL: restricted.toString(), PORTFOLIO_ID: portfolioId, OWNER_ID: ownerId,
       SUPABASE_URL: status.API_URL, SUPABASE_ANON_KEY: status.ANON_KEY,
+      ...(ticket === 302 ? {
+        PHASE9_REQUIRE_OWNER_HTTP: "1",
+        // This credential belongs only to the disposable local Supabase project.
+        SUPABASE_SERVICE_ROLE_KEY: status.SERVICE_ROLE_KEY,
+        MEDIA_UPLOAD_REPLAY_ENCRYPTION_KEY: Buffer.from(
+          `${randomUUID().replaceAll("-", "")}${randomUUID().replaceAll("-", "")}`, "hex",
+        ).toString("base64"),
+      } : {}),
       SUPABASE_JWT_ISSUER: `${status.API_URL}/auth/v1`, SUPABASE_JWT_AUDIENCE: "authenticated",
       OWNER_GITHUB_SUBJECTS: "910294,910296,910298", HOSTNAME: "127.0.0.1",
     };
@@ -172,6 +207,7 @@ async function main() {
       PHASE9_OWNER_HTTP_URLS: JSON.stringify(appPorts.slice(0, 2).map((port) => `http://127.0.0.1:${port}`)),
       PHASE9_OWNER_HTTP_UNREADY_URL: `http://127.0.0.1:${appPorts[2]}`,
       OWNER_ID: ownerId, PORTFOLIO_ID: portfolioId,
+      ...(ticket === 302 ? { PHASE9_CV_HTTP_ACCEPTANCE: "1" } : {}),
       ...(contentAuthoringTicket ? { PHASE5_REQUIRE_CONTENT_AUTHORING: "1", PHASE5_CONTENT_AUTHORING_DATABASE_URL: status.DB_URL } : {}),
     };
     stage = "tests";
@@ -186,6 +222,9 @@ async function main() {
           "tests/routes/phase9-route-registration.test.ts"] : []),
         ...(ticket === 299 ? ["tests/runtime/owner-taxonomy.test.ts", "tests/runtime/owner-project.test.ts",
           "tests/contracts/owner-contract.test.ts", "tests/routes/phase9-route-registration.test.ts"] : []),
+        ...(ticket === 302 ? ["tests/runtime/owner-cv.test.ts", "tests/runtime/current-cv.test.ts",
+          "tests/runtime/supabase-current-cv-delivery.test.ts", "tests/contracts/owner-contract.test.ts",
+          "tests/routes/phase9-route-registration.test.ts"] : []),
         "tests/runtime/owner-configuration-http-bootstrap.test.ts",
         "tests/runtime/owner-configuration.test.ts",
         "tests/phase4/owner-request-security.test.ts",
@@ -210,7 +249,7 @@ async function main() {
     const report = JSON.parse(readFileSync(reportPath, "utf8"));
     if (test.error || test.status !== 0 || report.success !== true || report.numPassedTests <= 3 ||
         report.numFailedTests !== 0 || report.numPendingTests !== 0 || report.numTodoTests !== 0 ||
-        report.testResults?.length !== (ticket === 299 ? 13 : ticket === 298 ? 12 : contentAuthoringTicket ? 9 : 6) ||
+        report.testResults?.length !== (ticket === 302 ? 11 : ticket === 299 ? 13 : ticket === 298 ? 12 : contentAuthoringTicket ? 9 : 6) ||
         report.testResults.some((suite) => suite.status !== "passed")) {
       const failedAssertions = report.testResults?.flatMap((suite) => suite.assertionResults ?? [])
         .filter((assertion) => assertion.status !== "passed")
@@ -237,7 +276,7 @@ async function main() {
     })));
     passedTestCount = report.numPassedTests;
     postgresVersion = (await admin.query("select current_setting('server_version') as version")).rows[0]?.version ?? "unavailable";
-    console.log(`Phase 9 Owner configuration acceptance passed: ${report.numPassedTests} passed, 0 skipped.`);
+    console.log(`Phase 9 ticket #${ticket} built HTTP acceptance passed: ${report.numPassedTests} passed, 0 skipped.`);
     process.exitCode = 0;
   } catch (error) {
     // Only expose our fixed diagnostic codes; dependency messages may contain credentials.
@@ -285,11 +324,12 @@ async function main() {
   }));
   mkdirSync(join(ROOT, "evidence"), { recursive: true });
   writeFileSync(REPORT, `${JSON.stringify({
-    ticket, scope: ticket === 299
-      ? "built-next-owner-controlled-taxonomy-workflows-http-real-auth-restricted-postgresql"
-      : ticket === 298 ? "built-next-owner-project-status-catalogue-http-real-auth-postgresql"
-        : ticket === 295 ? "built-next-owner-content-authoring-review-preview-history-http-real-auth-postgresql"
-          : "built-next-owner-configuration-http-real-auth-postgresql",
+    ticket, scope: ticket === 302
+      ? "built-next-owner-cv-and-public-current-cv-http-real-auth-restricted-postgresql"
+      : ticket === 299 ? "built-next-owner-controlled-taxonomy-workflows-http-real-auth-restricted-postgresql"
+        : ticket === 298 ? "built-next-owner-project-status-catalogue-http-real-auth-postgresql"
+          : ticket === 295 ? "built-next-owner-content-authoring-review-preview-history-http-real-auth-postgresql"
+            : "built-next-owner-configuration-http-real-auth-postgresql",
     runId: randomUUID(), githubRunId: process.env.GITHUB_RUN_ID ?? null, githubRunAttempt: process.env.GITHUB_RUN_ATTEMPT ?? null,
     source: { commit: commit.status === 0 ? commit.stdout.trim() : "unavailable", treeSha256: workingTreeSourceSha256() },
     contractBundles, migrations,
@@ -308,7 +348,13 @@ async function main() {
         "postgres-status-history-retirement-and-usage-race"] : []),
       ...(ticket === 299 ? ["all-six-controlled-taxonomy-http-operations", "taxonomy-cross-instance-assignment-and-merge-replay",
         "rename-stable-id-retirement-history-and-merge-mapping", "invalid-foreign-stale-and-conflicting-key-denials",
-        "restricted-postgres-merge-assignment-history-and-retirement-evidence", "postgres-rollback-and-independent-connection-races"] : [])],
+        "restricted-postgres-merge-assignment-history-and-retirement-evidence", "postgres-rollback-and-independent-connection-races"] : []),
+      ...(ticket === 302 ? ["five-CV-operation-routes-bound-to-the-canonical-contract-inventory",
+        "built-http-all-five-CV-operations-use-accepted-isolated-pdf-bytes",
+        "built-http-private-CV-portfolio-and-real-database-missing-media-or-version-denials",
+        "current-CV-English-only-absence-and-Problem-contract", "owner-CV-rate-limit-operations-accepted-by-restricted-postgresql",
+        "CV-adapter-stream-redirect-rate-limit-and-privacy-regression-suites",
+        "real-PDF-activation-and-storage-evidence-is-produced-by-the-required-Phase-6-gate"] : [])],
     ...(ticket === 299 ? { acceptanceCriteria: {
       AC01: ["tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves controlled Taxonomy workflows over built HTTP and verifies real PostgreSQL assignment history"],
       AC02: ["tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves controlled Taxonomy workflows over built HTTP and verifies real PostgreSQL assignment history",
@@ -325,6 +371,28 @@ async function main() {
       AC06: ["tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves controlled Taxonomy workflows over built HTTP and verifies real PostgreSQL assignment history",
         "tests/database/content-authoring.integration.test.ts :: Content authoring production PostgreSQL invariants / merges active values atomically across Projects, deduplicates survivors, preserves history, and replays the original receipt",
         "tests/routes/phase9-route-registration.test.ts :: Phase 9 guarded route registration (#293) / derives the exact 53 operation identifiers and keeps pending declarations"],
+    } } : {}),
+    ...(ticket === 302 ? { acceptanceCriteria: {
+      AC01: ["tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / executes all five CV operations over built HTTP with accepted PDF bytes and rejects invalid CV states",
+        "tests/runtime/owner-cv.test.ts :: Owner CV Portfolio HTTP adapters / registers a CV version once and returns the declared 201 receipt",
+        "tests/runtime/current-cv.test.ts :: GET Current CV adapter (#28) / streams the declared PDF branch with no-store and safe disposition",
+        "evidence/phase6-cv-delivery-159.json :: real private Storage PDF verification and Current CV delivery"],
+      AC02: ["evidence/phase6-cv-activation-156.json :: atomic Current CV replacement, competing activation and retained history"],
+      AC03: ["tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / executes all five CV operations over built HTTP with accepted PDF bytes and rejects invalid CV states",
+        "tests/runtime/owner-cv.test.ts :: Owner CV version acceptance and activation (#31) / accepts a CV version once without requiring a body",
+        "tests/runtime/current-cv.test.ts :: GET Current CV adapter (#28) / rejects missing locale as 400 before dispatch",
+        "tests/runtime/current-cv.test.ts :: GET Current CV adapter (#28) / rejects invalid locale as 400 before dispatch",
+        "tests/runtime/current-cv.test.ts :: GET Current CV adapter (#28) / rejects duplicate query key as 400 before dispatch"],
+      AC04: ["tests/runtime/current-cv.test.ts :: GET Current CV adapter (#28) / rejects a redirect with unlisted origin",
+        "tests/runtime/current-cv.test.ts :: GET Current CV adapter (#28) / rejects a redirect with insecure URL",
+        "tests/runtime/supabase-current-cv-delivery.test.ts :: Supabase Current CV private delivery / returns a short lived exact-origin signed URL and rejects mismatched bytes or origins"],
+      AC05: ["tests/runtime/current-cv.test.ts :: GET Current CV adapter (#28) / cancels the byte source when the visitor cancels a backpressured response",
+        "tests/runtime/supabase-current-cv-delivery.test.ts :: Supabase Current CV private delivery / reads the exact private processed PDF, validates its hash, and uses bounded chunks",
+        "evidence/phase6-cv-delivery-159.json :: real private Storage delivery and resource-bound evidence"],
+      AC06: ["tests/runtime/current-cv.test.ts :: GET Current CV adapter (#28) / limits repeated client requests before application dispatch and sends Retry-After",
+        "tests/runtime/current-cv.test.ts :: GET Current CV adapter (#28) / fails closed when the hosting rate limiter is unavailable"],
+      AC07: ["evidence/phase6-public-capabilities-160.json :: Current CV English-only and Arabic capability assertions for scenarios 9 and 13",
+        "evidence/phase6-media-cv-integration-163.json :: real Media/CV transaction and cleanup evidence"],
     } } : {}),
     ...(ticket === 298 ? { acceptanceCriteria: {
       AC01: ["tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves all four Project status catalogue operations over built HTTP with exact replay and private contracts"],
@@ -437,6 +505,28 @@ async function main() {
         executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves controlled Taxonomy workflows over built HTTP and verifies real PostgreSQL assignment history",
         assertions: ["200 schema-valid receipt", "cross-instance exact replay", "retired value rejected without new assignment"] },
     ] } : {}),
+    ...(ticket === 302 ? { traceability: [
+      { method: "GET", route: "/api/owner/v1/cv", operation: "getOwnerCvPortfolio",
+        application: "dispatchOwnerCvHttp(getOwnerCvPortfolio) -> OwnerCvApplicationService.getOwnerCvPortfolio",
+        executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / executes all five CV operations over built HTTP with accepted PDF bytes and rejects invalid CV states",
+        assertions: ["200 generated response schema", "private no-store and non-indexable headers", "current version matches activated accepted PDF"] },
+      { method: "POST", route: "/api/owner/v1/cv/versions", operation: "registerOwnerCvVersion",
+        application: "dispatchOwnerCvHttp(registerOwnerCvVersion) -> OwnerCvApplicationService.registerOwnerCvVersion",
+        executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / executes all five CV operations over built HTTP with accepted PDF bytes and rejects invalid CV states",
+        assertions: ["201 generated response schema", "private no-store and non-indexable headers", "registers real accepted Media PDF"] },
+      { method: "POST", route: "/api/owner/v1/cv/versions/{versionId}/commands/accept", operation: "acceptOwnerCvVersion",
+        application: "dispatchOwnerCvHttp(acceptOwnerCvVersion) -> OwnerCvApplicationService.acceptOwnerCvVersion",
+        executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / executes all five CV operations over built HTTP with accepted PDF bytes and rejects invalid CV states",
+        assertions: ["200 generated response schema", "private no-store and non-indexable headers", "If-Match and Idempotency-Key supplied"] },
+      { method: "POST", route: "/api/owner/v1/cv/versions/{versionId}/commands/activate", operation: "activateOwnerCvVersion",
+        application: "dispatchOwnerCvHttp(activateOwnerCvVersion) -> OwnerCvApplicationService.activateOwnerCvVersion",
+        executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / executes all five CV operations over built HTTP with accepted PDF bytes and rejects invalid CV states",
+        assertions: ["200 generated response schema", "private no-store and non-indexable headers", "atomic current pointer reflected in Owner portfolio"] },
+      { method: "GET", route: "/api/v1/cv/current", operation: "getCurrentCv",
+        application: "dispatchCurrentCvHttp(getCurrentCv) -> CurrentCvDeliveryService.downloadCurrentCv",
+        executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / executes all five CV operations over built HTTP with accepted PDF bytes and rejects invalid CV states",
+        assertions: ["200 PDF or 307 no-store response", "short-lived private Storage target constrained to configured Storage origin and processed bucket when redirecting", "delivered PDF header, exact stored hash and bounded size", "signed target omitted from diagnostics and evidence"] },
+    ] } : {}),
     operationExamples: [
       { operation: "updateOwnerProfileConfiguration", httpStatus: 200, receiptSchemaValid: true, oneLedgerAndOutboxRecord: true },
       { operation: "updateOwnerContactChannels", httpStatus: 200, receiptSchemaValid: true, oneLedgerAndOutboxRecord: true },
@@ -463,9 +553,17 @@ async function main() {
         { operation: "mergeOwnerTaxonomyValue", httpStatus: 200, responseSchemaValid: true, privateHeaders: true, crossInstanceReplayVerified: true },
         { operation: "assignOwnerProjectTaxonomyValue", httpStatus: 200, responseSchemaValid: true, privateHeaders: true, crossInstanceReplayVerified: true },
       ] : []),
+      ...(ticket === 302 ? [
+        { operation: "getOwnerCvPortfolio", httpStatus: 200, responseSchemaValid: true, privateHeaders: true },
+        { operation: "registerOwnerCvVersion", httpStatus: 201, responseSchemaValid: true, privateHeaders: true, acceptedMediaPdf: true },
+        { operation: "acceptOwnerCvVersion", httpStatus: 200, responseSchemaValid: true, privateHeaders: true },
+        { operation: "activateOwnerCvVersion", httpStatus: 200, responseSchemaValid: true, privateHeaders: true, currentPointerVerified: true },
+        { operation: "getCurrentCv", httpStatuses: [200, 307], noStore: true, configuredStorageOrigin: true, exactStoredPdfHash: true, boundedPdfDelivered: true },
+      ] : []),
     ],
     passed: passedTestCount, failed: 0, skipped: 0, productionBuild: true, isolatedLoopbackSupabase: true,
-    execution: { command: ticket === 299 ? "npm run phase9:focus:taxonomy-http"
+    execution: { command: ticket === 302 ? "npm run phase9:focus:cv-http"
+      : ticket === 299 ? "npm run phase9:focus:taxonomy-http"
       : ticket === 298 ? "npm run phase9:focus:project-status-http"
       : ticket === 295 ? "npm run phase9:focus:content-authoring-http" : "npm run phase9:focus:owner-configuration-http", exitCode: 0,
       passed: executedTests.filter(({ status }) => status === "passed").length,

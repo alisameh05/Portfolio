@@ -122,6 +122,28 @@ describe("GET Current CV adapter (#28)", () => {
     expect(Array.from(new Uint8Array(await response.arrayBuffer()))).toEqual([37, 80, 68, 70]);
   });
 
+  it("cancels the byte source when the visitor cancels a backpressured response", async () => {
+    let released = false;
+    async function* source() {
+      try {
+        yield new Uint8Array([37, 80, 68, 70, 45]);
+        yield new Uint8Array([99, 118]);
+      } finally {
+        released = true;
+      }
+    }
+    const response = await handleCurrentCv(getCvRequest(), {
+      service: { async downloadCurrentCv() {
+        return { ok: true as const, value: { kind: "stream" as const, disposition: "inline" as const, bytes: source() } };
+      } },
+    });
+    const reader = response.body?.getReader();
+    expect(reader).toBeDefined();
+    await reader?.read();
+    await reader?.cancel();
+    expect(released).toBe(true);
+  });
+
   it("limits repeated client requests before application dispatch and sends Retry-After", async () => {
     const fake = createCurrentCvTestFake({ type: "stream", chunks: [new Uint8Array([37, 80, 68, 70, 45])] });
     const limiter = createBoundedCurrentCvRateLimit({
