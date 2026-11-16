@@ -33,6 +33,12 @@ import {
   zRelateOwnerProjectsResponse,
   zGetOwnerTaxonomyAggregateResponse,
   zGetOwnerCvPortfolioResponse,
+  zCreateOwnerMediaUploadIntentResponse,
+  zRecordOwnerMediaProcessingResponse,
+  zAcceptOwnerMediaAssetResponse,
+  zRegisterOwnerCvVersionResponse,
+  zAcceptOwnerCvVersionResponse,
+  zActivateOwnerCvVersionResponse,
   zCreateOwnerTaxonomyValueResponse,
   zRenameOwnerTaxonomyValueResponse,
   zRetireOwnerTaxonomyValueResponse,
@@ -63,6 +69,30 @@ const foreignGithubSubject = "910295";
 const sentinel = "SHOULD_NEVER_APPEAR_PHASE9_SECRET_7d0b0a";
 const urls = JSON.parse(process.env["PHASE9_OWNER_HTTP_URLS"] ?? "[]") as string[];
 const unavailableUrl = process.env["PHASE9_OWNER_HTTP_UNREADY_URL"];
+
+function createCvPdfFixture(): Buffer {
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 72 72] /Resources << >> /Contents 4 0 R >>",
+    "<< /Length 0 >>\nstream\n\nendstream",
+  ];
+  const chunks = [Buffer.from("%PDF-1.4\n")];
+  const offsets = [0];
+  let cursor = chunks[0]!.length;
+  for (let index = 0; index < objects.length; index += 1) {
+    offsets.push(cursor);
+    const chunk = Buffer.from(`${index + 1} 0 obj\n${objects[index]}\nendobj\n`);
+    chunks.push(chunk);
+    cursor += chunk.length;
+  }
+  const xref = cursor;
+  let trailer = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets.slice(1)) trailer += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  trailer += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  chunks.push(Buffer.from(trailer));
+  return Buffer.concat(chunks);
+}
 
 // Both listeners model replicas behind one ingress and receive its canonical Host.
 function fetch(input: string, init?: RequestInit): Promise<Response> {
@@ -188,7 +218,7 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     if (admin !== undefined) await admin.end();
   });
 
-  it("serves the Owner CV portfolio over built HTTP and safely rejects missing or unsupported CV states", async () => {
+  it("executes all five CV operations over built HTTP with accepted PDF bytes and rejects invalid CV states", async () => {
     const ownerHeaders = {
       origin: new URL(urls[0]!).origin,
       cookie: `sw_owner_session=${owner.token}`,
@@ -236,7 +266,118 @@ suite("Phase 9 #294 production-built Owner configuration network acceptance", ()
     });
     expect(arabicCurrent.status).toBe(400);
     expect(zProblem.safeParse(await arabicCurrent.json() as unknown).success).toBe(true);
-  }, 60_000);
+
+    const pdf = createCvPdfFixture();
+    const sha256 = createHash("sha256").update(pdf).digest("hex");
+    const uploadResponse = await fetch(`${urls[1]}/api/owner/v1/media/upload-intents`, {
+      method: "POST", headers: { host: new URL(urls[0]!).host, ...ownerHeaders,
+        "content-type": "application/json", "idempotency-key": `phase9-cv-media-upload-${randomUUID()}` },
+      body: JSON.stringify({ kind: "document", originalFileName: "accepted-cv.pdf", declaredMediaType: "application/pdf",
+        byteLength: pdf.byteLength, sha256 }), signal: AbortSignal.timeout(30_000),
+    });
+    expect(uploadResponse.status).toBe(201);
+    const upload = zCreateOwnerMediaUploadIntentResponse.safeParse(await uploadResponse.json() as unknown);
+    expect(upload.success).toBe(true);
+    if (!upload.success) throw new Error("PHASE9_CV_MEDIA_UPLOAD_HTTP_INVALID");
+
+    const uploaded = await globalThis.fetch(upload.data.uploadTarget, {
+      method: "PUT", headers: { "content-type": "application/pdf", "x-upsert": "false" }, body: pdf,
+      signal: AbortSignal.timeout(30_000),
+    });
+    expect([200, 201]).toContain(uploaded.status);
+    await uploaded.body?.cancel();
+
+    const processing = await fetch(`${urls[0]}/api/owner/v1/media/${upload.data.mediaId}/commands/record-processing`, {
+      method: "POST", headers: { host: new URL(urls[0]!).host, ...ownerHeaders,
+        "content-type": "application/json", "idempotency-key": `phase9-cv-media-processing-${randomUUID()}`, "if-match": '"1"' },
+      body: JSON.stringify({ result: "passed", detectedMediaType: "application/pdf", detectedByteLength: pdf.byteLength, sha256 }),
+      signal: AbortSignal.timeout(120_000),
+    });
+    expect(processing.status).toBe(200);
+    const processed = zRecordOwnerMediaProcessingResponse.safeParse(await processing.json() as unknown);
+    expect(processed.success).toBe(true);
+    if (!processed.success) throw new Error("PHASE9_CV_MEDIA_PROCESSING_HTTP_INVALID");
+
+    const mediaAcceptance = await fetch(`${urls[1]}/api/owner/v1/media/${upload.data.mediaId}/commands/accept`, {
+      method: "POST", headers: { host: new URL(urls[0]!).host, ...ownerHeaders,
+        "content-type": "application/json", "idempotency-key": `phase9-cv-media-accept-${randomUUID()}`, "if-match": '"2"' },
+      body: JSON.stringify({ accessibilityMetadata: { kind: "document", summary: "A one page CV PDF." } }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    expect(mediaAcceptance.status).toBe(200);
+    const acceptedMedia = zAcceptOwnerMediaAssetResponse.safeParse(await mediaAcceptance.json() as unknown);
+    expect(acceptedMedia.success).toBe(true);
+    if (!acceptedMedia.success) throw new Error("PHASE9_CV_MEDIA_ACCEPTANCE_HTTP_INVALID");
+
+    const registerResponse = await fetch(`${urls[0]}/api/owner/v1/cv/versions`, {
+      method: "POST", headers: { host: new URL(urls[0]!).host, ...ownerHeaders,
+        "content-type": "application/json", "idempotency-key": `phase9-cv-register-accepted-${randomUUID()}`, "if-match": '"1"' },
+      body: JSON.stringify({ mediaId: upload.data.mediaId, locale: "en", label: "Current CV" }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    expect(registerResponse.status).toBe(201);
+    expect(registerResponse.headers.get("cache-control")).toBe("private, no-store");
+    expect(registerResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    const registered = zRegisterOwnerCvVersionResponse.safeParse(await registerResponse.json() as unknown);
+    expect(registered.success).toBe(true);
+    if (!registered.success) throw new Error("PHASE9_CV_REGISTER_HTTP_INVALID");
+
+    const acceptCv = await fetch(`${urls[1]}/api/owner/v1/cv/versions/${registered.data.versionId}/commands/accept`, {
+      method: "POST", headers: { host: new URL(urls[0]!).host, ...ownerHeaders,
+        "idempotency-key": `phase9-cv-accept-${randomUUID()}`, "if-match": '"2"' }, signal: AbortSignal.timeout(30_000),
+    });
+    expect(acceptCv.status).toBe(200);
+    expect(acceptCv.headers.get("cache-control")).toBe("private, no-store");
+    expect(acceptCv.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(zAcceptOwnerCvVersionResponse.safeParse(await acceptCv.json() as unknown).success).toBe(true);
+
+    const activateCv = await fetch(`${urls[0]}/api/owner/v1/cv/versions/${registered.data.versionId}/commands/activate`, {
+      method: "POST", headers: { host: new URL(urls[0]!).host, ...ownerHeaders,
+        "idempotency-key": `phase9-cv-activate-${randomUUID()}`, "if-match": '"3"' }, signal: AbortSignal.timeout(30_000),
+    });
+    expect(activateCv.status).toBe(200);
+    expect(activateCv.headers.get("cache-control")).toBe("private, no-store");
+    expect(activateCv.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(zActivateOwnerCvVersionResponse.safeParse(await activateCv.json() as unknown).success).toBe(true);
+
+    const currentPortfolioResponse = await fetch(`${urls[1]}/api/owner/v1/cv`, {
+      method: "GET", headers: { host: new URL(urls[0]!).host, cookie: ownerHeaders.cookie }, signal: AbortSignal.timeout(15_000),
+    });
+    expect(currentPortfolioResponse.status).toBe(200);
+    expect(currentPortfolioResponse.headers.get("cache-control")).toBe("private, no-store");
+    expect(currentPortfolioResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    const currentPortfolio = zGetOwnerCvPortfolioResponse.safeParse(await currentPortfolioResponse.json() as unknown);
+    expect(currentPortfolio.success && currentPortfolio.data.currentVersionId).toBe(registered.data.versionId);
+
+    const currentPdf = await fetch(`${urls[0]}/api/v1/cv/current?locale=en`, {
+      method: "GET", headers: { host: new URL(urls[0]!).host }, signal: AbortSignal.timeout(30_000),
+    });
+    expect(currentPdf.status).toBe(307);
+    expect(currentPdf.headers.get("cache-control")).toBe("no-store");
+    const location = currentPdf.headers.get("location");
+    expect(location).toBeTruthy();
+    if (location === null) throw new Error("PHASE9_CV_CURRENT_LOCATION_MISSING");
+    const signedLocation = new URL(location);
+    expect(signedLocation.origin).toBe(apiUrl);
+    expect(signedLocation.pathname).toMatch(/^\/storage\/v1\/object\/sign\/media-processed\//u);
+    const deliveredPdf = await globalThis.fetch(signedLocation, { signal: AbortSignal.timeout(30_000) });
+    expect(deliveredPdf.status).toBe(200);
+    expect(deliveredPdf.headers.get("content-type")).toContain("application/pdf");
+    const deliveredBytes = Buffer.from(await deliveredPdf.arrayBuffer());
+    expect(deliveredBytes.subarray(0, 5).toString("ascii")).toBe("%PDF-");
+    expect(deliveredBytes.byteLength).toBeGreaterThan(0);
+    expect(deliveredBytes.byteLength).toBeLessThanOrEqual(50 * 1024 * 1024);
+    const storedPdf = await admin.query<{ sha256: string; byte_length: number }>(
+      `select sha256, byte_length from media.processed_objects
+       where media_id = $1::uuid and portfolio_id = $2::uuid and owner_id = $3::uuid and mime_type = 'application/pdf'`,
+      [upload.data.mediaId, portfolioId, ownerId],
+    );
+    expect(storedPdf.rowCount).toBe(1);
+    expect(createHash("sha256").update(deliveredBytes).digest("hex")).toBe(storedPdf.rows[0]?.sha256);
+    expect(deliveredBytes.byteLength).toBe(Number(storedPdf.rows[0]?.byte_length));
+    // The capability is used only in memory and is intentionally absent from assertions and diagnostics.
+    await currentPdf.body?.cancel();
+  }, 240_000);
 
   it("admits all Media adapters through the restricted PostgreSQL limiter and returns 429 on exhaustion", async () => {
     const rateLimit = createPostgresOwnerConfigurationRateLimit(appDatabase.database);
