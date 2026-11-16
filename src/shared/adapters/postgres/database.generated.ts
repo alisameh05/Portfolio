@@ -403,13 +403,6 @@ export interface IdentityAccessOwnerConfigurationLimitWindows {
   window_started_at: Timestamp;
 }
 
-export interface IdentityAccessPublicRateLimitWindows {
-  operation: string;
-  request_count: number;
-  subject_hash: string;
-  window_started_at: Timestamp;
-}
-
 export interface IdentityAccessOwnerLinks {
   created_at: Generated<Timestamp>;
   /**
@@ -421,6 +414,13 @@ export interface IdentityAccessOwnerLinks {
    * Stable domain Owner identity; unchanged by session or provider refresh.
    */
   owner_id: string;
+}
+
+export interface IdentityAccessPublicRateLimitWindows {
+  operation: string;
+  request_count: number;
+  subject_hash: string;
+  window_started_at: Timestamp;
 }
 
 export interface MediaAcceptanceCommands {
@@ -935,8 +935,8 @@ export interface DB {
   "cv_portfolio.registration_commands": CvPortfolioRegistrationCommands;
   "cv_portfolio.versions": CvPortfolioVersions;
   "identity_access.owner_configuration_limit_windows": IdentityAccessOwnerConfigurationLimitWindows;
-  "identity_access.public_rate_limit_windows": IdentityAccessPublicRateLimitWindows;
   "identity_access.owner_links": IdentityAccessOwnerLinks;
+  "identity_access.public_rate_limit_windows": IdentityAccessPublicRateLimitWindows;
   "media.acceptance_commands": MediaAcceptanceCommands;
   "media.assets": MediaAssets;
   "media.decision_history": MediaDecisionHistory;

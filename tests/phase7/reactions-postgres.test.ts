@@ -14,6 +14,7 @@ import { createIdentityAccessService } from "../../src/modules/identity-access/a
 import { AesGcmPseudonymousTokenAdapter, StubAuthProvider } from "../../src/modules/identity-access/adapters/index.js";
 import { createSystemIdGenerator, createTestLogger } from "../../src/runtime/ports.js";
 import { handlePutProjectReaction } from "../../src/runtime/http/reaction.js";
+import type { ReactionAdapterDeps } from "../../src/runtime/http/reaction.js";
 import { initializeDatabaseRuntime, getReactionRuntimeServices, resetRuntimeForTests } from "../../src/bootstrap/composition-root.js";
 import { getLifecycleCoordinator } from "../../src/runtime/lifecycle.js";
 import { createPostgresReactionRateLimit } from "../../src/modules/identity-access/adapters/postgres-reaction-rate-limit.js";
@@ -58,10 +59,14 @@ describe.runIf(Boolean(url))("real PostgreSQL Reaction acceptance", () => {
   async function actor(projectId: StableId<"Project">) {
     const result = await prepare(projectId); if (!result.ok) throw new Error("identity"); return result.value.actor;
   }
-  function http(projectId: StableId<"Project">, choice = "like", cookie?: string, idempotency = key(), dependencies = deps) {
+  function http(projectId: StableId<"Project">, choice = "like", cookie?: string, idempotency = key(), dependencies: ReactionAdapterDeps = deps, address = clientAddress(projectId)) {
     return handlePutProjectReaction(new Request("https://example.com/api/v1/projects/" + projectId + "/reaction", {
-      method: "PUT", headers: { "Idempotency-Key": idempotency, "x-vercel-forwarded-for": clientAddress(projectId), ...(cookie === undefined ? {} : { cookie }) },
+      method: "PUT", headers: { "Idempotency-Key": idempotency, "x-vercel-forwarded-for": address, ...(cookie === undefined ? {} : { cookie }) },
       body: JSON.stringify({ reaction: choice }) }), { projectId }, dependencies);
+  }
+  async function currentLimiterWindow() {
+    const result = await admin.query("select floor(extract(epoch from clock_timestamp()) / 60)::bigint::text as window");
+    return result.rows[0]?.window as string;
   }
   async function counts(projectId: StableId<"Project">) {
     return (await admin.query("select kind, count(*)::int as count from interaction.reactions where project_id=$1 group by kind order by kind", [projectId])).rows;
@@ -180,15 +185,23 @@ describe.runIf(Boolean(url))("real PostgreSQL Reaction acceptance", () => {
   });
   it("T03-06 enforces 30 requests per client-minute across independent PostgreSQL instances", async () => {
     const projectId = await seed();
-    const address = clientAddress(projectId);
-    for (let attempt = 0; attempt < 30; attempt++) {
-      const verdict = await (attempt % 2 === 0 ? rateLimit : independentRateLimit).check(address);
-      expect(verdict.allowed).toBe(true);
+    let containedSequence: { readonly allowed: readonly boolean[]; readonly limited: Response } | undefined;
+    for (let retry = 0; retry < 5 && !containedSequence; retry++) {
+      const address = `192.0.2.${20 + retry}`;
+      const startingWindow = await currentLimiterWindow();
+      const allowed: boolean[] = [];
+      for (let attempt = 0; attempt < 30; attempt++) {
+        const verdict = await (attempt % 2 === 0 ? rateLimit : independentRateLimit).check(address);
+        allowed.push(verdict.allowed);
+      }
+      const limited = await http(projectId, "like", undefined, key(), deps, address);
+      if (startingWindow === await currentLimiterWindow()) containedSequence = { allowed, limited };
     }
-    const response = await http(projectId);
-    expect(response.status).toBe(429);
-    expect(Number(response.headers.get("retry-after"))).toBeGreaterThan(0);
-    expect(response.headers.get("set-cookie")).toBeNull();
+    expect(containedSequence).toBeDefined();
+    expect(containedSequence!.allowed).toEqual(Array.from({ length: 30 }, () => true));
+    expect(containedSequence!.limited.status).toBe(429);
+    expect(Number(containedSequence!.limited.headers.get("retry-after"))).toBeGreaterThan(0);
+    expect(containedSequence!.limited.headers.get("set-cookie")).toBeNull();
     expect(await counts(projectId)).toEqual([]);
     expect(await events(projectId)).toHaveLength(0);
   });

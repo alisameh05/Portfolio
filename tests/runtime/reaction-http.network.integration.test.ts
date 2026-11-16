@@ -72,6 +72,11 @@ describe.runIf(baseUrls.length === 2 && Boolean(adminUrl) && Boolean(portfolioId
       });
     }
 
+    async function currentLimiterWindow() {
+      const result = await admin.query("select floor(extract(epoch from clock_timestamp()) / 60)::bigint::text as window");
+      return result.rows[0]?.window as string;
+    }
+
     it("AC01 returns a schema-valid personalized receipt and secure functional cookie over the built route", async () => {
       const projectId = await seed();
       const response = await put({ projectId });
@@ -157,14 +162,22 @@ describe.runIf(baseUrls.length === 2 && Boolean(adminUrl) && Boolean(portfolioId
       const projectId = await seed();
       const initial = await put({ projectId });
       const cookie = (initial.headers.get("set-cookie") ?? "").split(";")[0]!;
-      for (let attempt = 0; attempt < 30; attempt++) {
-        const response = await put({ projectId, cookie, ip: "198.51.100.45", server: attempt % 2 });
-        expect(response.status).toBe(200);
+      let containedSequence: { readonly responses: readonly Response[]; readonly limited: Response } | undefined;
+      for (let retry = 0; retry < 5 && !containedSequence; retry++) {
+        const ip = `198.51.100.${50 + retry}`;
+        const startingWindow = await currentLimiterWindow();
+        const responses: Response[] = [];
+        for (let attempt = 0; attempt < 30; attempt++) {
+          responses.push(await put({ projectId, cookie, ip, server: attempt % 2 }));
+        }
+        const limited = await put({ projectId, cookie, ip, server: 1 });
+        if (startingWindow === await currentLimiterWindow()) containedSequence = { responses, limited };
       }
-      const limited = await put({ projectId, cookie, ip: "198.51.100.45", server: 1 });
-      expect(limited.status).toBe(429);
-      expect(Number(limited.headers.get("retry-after"))).toBeGreaterThan(0);
-      expect(limited.headers.get("set-cookie")).toBeNull();
+      expect(containedSequence).toBeDefined();
+      expect(containedSequence!.responses.map((response) => response.status)).toEqual(Array.from({ length: 30 }, () => 200));
+      expect(containedSequence!.limited.status).toBe(429);
+      expect(Number(containedSequence!.limited.headers.get("retry-after"))).toBeGreaterThan(0);
+      expect(containedSequence!.limited.headers.get("set-cookie")).toBeNull();
 
       await admin.query("revoke execute on function identity_access.check_public_reaction_rate_limit(text,text) from shipwithali_application");
       try {
