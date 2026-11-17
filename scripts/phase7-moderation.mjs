@@ -13,7 +13,7 @@ const summaries = process.argv.includes("--summaries");
 const suppression = summaries || process.argv.includes("--suppression");
 const evidencePath = summaries ? "evidence/phase7-summaries-195.json" : suppression ? "evidence/phase7-suppression-194.json" : "evidence/phase7-moderation-193.json";
 // Includes the four Owner ingress and limiter regressions added by #294.
-const expectedTests = summaries ? 136 : suppression ? 97 : 84;
+const expectedTests = summaries ? 137 : suppression ? 97 : 84;
 const discoveredBin = process.platform === "win32" ? "C:/Program Files/PostgreSQL/18/bin" :
   spawnSync("pg_config", ["--bindir"], { encoding: "utf8", timeout: 5_000 }).stdout?.trim();
 const bin = process.env.PHASE7_POSTGRES_BIN ?? discoveredBin ?? "";
