@@ -50,6 +50,7 @@ export interface ReactionRuntimeServices {
   readonly scope: { readonly kind: "portfolio"; readonly portfolioId: StableId<"Portfolio"> };
   readonly service: Pick<InteractionModerationService, "submitReaction">;
   readonly functionalIdentity: FunctionalInteractionContextPort;
+  readonly rateLimit: import("../modules/identity-access/index.js").PublicRateLimitCheck;
 }
 
 export interface FeedbackRuntimeServices {
@@ -554,7 +555,7 @@ export async function initializeDatabaseRuntime(
         if (runtimeKind === "application" && configuredScope?.portfolioId.ok && configuredScope.ownerId.ok && env["FUNCTIONAL_ID_HASH_KEY"]) {
           const [{ createReactionApplicationService, createRatingApplicationService, createFunctionalInteractionContext }, { createPostgresReactionRepository }, { createPostgresRatingRepository },
             { createPostgresProjectInteractionFacts }, { createIdentityAccessService },
-            { AesGcmPseudonymousTokenAdapter, createFunctionalPseudonymousIdentityConfig, StubAuthProvider }] = await Promise.all([
+            { AesGcmPseudonymousTokenAdapter, createFunctionalPseudonymousIdentityConfig, StubAuthProvider, createPostgresReactionRateLimit }] = await Promise.all([
             import("../modules/interaction-moderation/index.js"),
             import("../modules/interaction-moderation/adapters/postgres-reactions.js"),
             import("../modules/interaction-moderation/adapters/postgres-ratings.js"),
@@ -570,7 +571,9 @@ export async function initializeDatabaseRuntime(
           reaction = { scope: { kind: "portfolio", portfolioId: scope.portfolioId },
             service: createReactionApplicationService({ portfolioId: scope.portfolioId, content, operations,
               repository: createPostgresReactionRepository(), clock: createSystemClock(), ids: createSystemIdGenerator() }),
-            functionalIdentity: createFunctionalInteractionContext({ portfolioId: scope.portfolioId, transactions: operations.transactions, content, identity }) };
+            functionalIdentity: createFunctionalInteractionContext({ portfolioId: scope.portfolioId, transactions: operations.transactions, content, identity }),
+            rateLimit: createPostgresReactionRateLimit({ database: database.database, portfolioId: scope.portfolioId,
+              hashKey: env["FUNCTIONAL_ID_HASH_KEY"]! }) };
           rating = { scope: reaction.scope,
             service: createRatingApplicationService({ portfolioId: scope.portfolioId, content, operations,
               repository: createPostgresRatingRepository(), clock: createSystemClock(), ids: createSystemIdGenerator() }),
@@ -1228,6 +1231,10 @@ export function getRuntimeConfig(): RuntimeConfig {
 
 export function isRuntimeInitialized(): boolean {
   return current !== undefined;
+}
+
+export function isDatabaseRuntimeInitialized(): boolean {
+  return currentOperations !== undefined;
 }
 
 /** Trusted future consent presentation and the existing event edge share this boundary. */

@@ -1,4 +1,5 @@
 import type { PortfolioRequestScope } from "@shared/application";
+import { isIP } from "node:net";
 import { observeHttpRequest } from "./observe-request.js";
 
 /**
@@ -27,6 +28,7 @@ import type {
   SubmitReactionCommand,
   FunctionalInteractionContextPort,
 } from "../../modules/interaction-moderation/index.js";
+import type { PublicRateLimitCheck } from "../../modules/identity-access/index.js";
 import type {
   IdempotencyKey,
   StableId,
@@ -41,6 +43,7 @@ import {
 export interface ReactionAdapterDeps {
   readonly scope?: PortfolioRequestScope;
   readonly functionalIdentity?: FunctionalInteractionContextPort;
+  readonly rateLimit?: PublicRateLimitCheck;
   service: Pick<InteractionModerationService, "submitReaction">;
   logger?: Logger;
 }
@@ -94,6 +97,22 @@ function requestInstance(request: Request): string {
     if (!bodyResult.success) {
       logger?.warn("request.rejected", { traceId, status: 400 });
       return transportProblem("Invalid request body.", traceId, instance);
+    }
+
+    let rateVerdict: Awaited<ReturnType<PublicRateLimitCheck["check"]>>;
+    try {
+      const forwardedFor = request.headers.get("x-vercel-forwarded-for")?.trim();
+      if (!forwardedFor || forwardedFor.includes(",") || isIP(forwardedFor) === 0 || !deps.rateLimit) {
+        throw new Error("REACTION_RATE_LIMIT_SUBJECT_UNAVAILABLE");
+      }
+      rateVerdict = await deps.rateLimit.check(forwardedFor);
+    } catch {
+      return rejectionToProblem({ kind: "temporarily_unavailable", code: "REACTION_RATE_LIMIT_UNAVAILABLE" }, traceId, instance);
+    }
+    if (!rateVerdict.allowed) {
+      const retryAfterSeconds = Number.isSafeInteger(rateVerdict.retryAfterSeconds) &&
+        (rateVerdict.retryAfterSeconds ?? -1) >= 1 ? rateVerdict.retryAfterSeconds as number : 60;
+      return rejectionToProblem({ kind: "rate_limited", code: "REACTION_RATE_LIMITED", retryAfterSeconds }, traceId, instance);
     }
 
     const scope = deps.scope ?? { kind: "unconfigured" as const };
@@ -159,5 +178,10 @@ function requestInstance(request: Request): string {
 
 
 export function handlePutProjectReaction(request: Request, params: { projectId: string }, deps: ReactionAdapterDeps): Promise<Response> {
-  return observeHttpRequest("public-reaction", () => handlePutProjectReactionUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("public-reaction", () => handlePutProjectReactionUnobserved(request, params, deps), deps.logger)
+    .then(response => {
+      response.headers.set("cache-control", "no-store");
+      response.headers.set("x-robots-tag", "noindex, nofollow");
+      return response;
+    });
 }

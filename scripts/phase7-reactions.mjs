@@ -62,7 +62,7 @@ try {
   const tests = JSON.parse(readFileSync(reportPath, "utf8"));
   const assertions = tests.testResults.flatMap(s => s.assertionResults ?? []);
   if (!tests.success || tests.numFailedTestSuites || tests.numFailedTests || tests.numPendingTests || tests.numTodoTests ||
-      tests.numPassedTests !== 16 || assertions.length !== 16 || tests.testResults.length !== 2 ||
+      tests.numPassedTests !== 17 || assertions.length !== 17 || tests.testResults.length !== 2 ||
       tests.testResults.some(s => s.status !== "passed") || assertions.some(a => a.status !== "passed")) throw new Error("REACTION_ACCEPTANCE_INCOMPLETE");
   if (workingTreeSourceSha256() !== testedSource) throw new Error("REACTION_SOURCE_CHANGED_DURING_RUN");
   result = { runId, sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(), sourceTreeSha256: testedSource, version,
