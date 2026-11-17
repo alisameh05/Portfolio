@@ -159,11 +159,12 @@ test("catalog proof restricts Owner configuration definers to exact signatures a
     { name: "owner_session_is_active", argument_types: "uuid", result_type: "boolean", config: ["search_path=pg_catalog, auth"] },
     { name: "resolve_owner_session_identity", argument_types: "uuid, uuid", result_type: "record", config: ["search_path=pg_catalog, auth, identity_access"] },
     { name: "check_owner_configuration_rate_limit", argument_types: "text, text", result_type: "record", config: ["search_path=pg_catalog, identity_access"] },
+    { name: "check_public_reaction_rate_limit", argument_types: "text, text", result_type: "record", config: ["search_path=pg_catalog, identity_access"] },
   ];
   for (const signature of functions) {
     const valid = { ...base, ...signature };
     assert.equal(phase6DefinerFunctionProof(valid), true);
-    assert.equal(phase6DefinerFunctionProof({ ...valid, config: ["search_path=pg_catalog"] }), signature.name !== "check_owner_configuration_rate_limit");
+    assert.equal(phase6DefinerFunctionProof({ ...valid, config: ["search_path=pg_catalog"] }), ["owner_session_is_active", "resolve_owner_session_identity"].includes(signature.name));
     for (const changed of [{ name: "unreviewed" }, { argument_types: "text" }, { result_type: "text" },
       { owner: "postgres" }, { owner_can_login: true }, { owner_superuser: true }, { owner_bypass_rls: true },
       { config: ["search_path=public"] }, { config: [...valid.config, "row_security=off"] },

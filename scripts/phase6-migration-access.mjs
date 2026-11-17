@@ -155,6 +155,7 @@ export function phase6DefinerFunctionProof(row) {
       owner_session_is_active: { arguments: "uuid", result: "boolean", path: "pg_catalog, auth" },
       resolve_owner_session_identity: { arguments: "uuid, uuid", result: "record", path: "pg_catalog, auth, identity_access" },
       check_owner_configuration_rate_limit: { arguments: "text, text", result: "record", path: "pg_catalog, identity_access" },
+      check_public_reaction_rate_limit: { arguments: "text, text", result: "record", path: "pg_catalog, identity_access" },
     };
     const signature = Object.hasOwn(signatures, row.name) ? signatures[row.name] : undefined;
     return signature !== undefined && row.security_definer === true &&
@@ -163,7 +164,7 @@ export function phase6DefinerFunctionProof(row) {
       row.owner_superuser === false && row.owner_bypass_rls === false &&
       Array.isArray(row.config) && row.config.length === 1 &&
       (row.config[0] === `search_path=${signature.path}` ||
-        (row.name !== "check_owner_configuration_rate_limit" && row.config[0] === "search_path=pg_catalog")) &&
+        (["owner_session_is_active", "resolve_owner_session_identity"].includes(row.name) && row.config[0] === "search_path=pg_catalog")) &&
       row.application_execute === true &&
       ["anon_execute", "authenticated_execute", "service_role_execute", "worker_execute", "backup_execute"].every(key => row[key] === false);
   }
