@@ -22,7 +22,7 @@ import { observeHttpRequest } from "./observe-request.js";
  * origin plus CSRF proof before dispatch. Unauthenticated and forbidden
  * translation is exercised through fakes. Moderation decisions, retention,
  * persistence, and scoped authorization are provider-neutral application behavior.
- * Inspection, approval and rejection use real persistence; suppression is the next ticket.
+ * Inspection, approval, rejection, and suppression use real persistence.
  *
  * Generated transport types and validators remain confined to this HTTP
  * layer. Commands, queries, results, and rejections crossing the application

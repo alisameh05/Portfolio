@@ -16,10 +16,11 @@ import { safeAssertionDiagnostic } from "./validation-errors.mjs";
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const CLI = join(ROOT, "node_modules/supabase/dist/supabase.js");
 const NEXT = join(ROOT, "node_modules/next/dist/bin/next");
-const ticket = process.argv.includes("--ticket-305") ? 305 : process.argv.includes("--ticket-304") ? 304 : process.argv.includes("--ticket-303") ? 303 : process.argv.includes("--ticket-302") ? 302 : process.argv.includes("--ticket-299") ? 299 : process.argv.includes("--ticket-298") ? 298 : process.argv.includes("--ticket-295") ? 295 : 294;
+const ticket = process.argv.includes("--ticket-306") ? 306 : process.argv.includes("--ticket-305") ? 305 : process.argv.includes("--ticket-304") ? 304 : process.argv.includes("--ticket-303") ? 303 : process.argv.includes("--ticket-302") ? 302 : process.argv.includes("--ticket-299") ? 299 : process.argv.includes("--ticket-298") ? 298 : process.argv.includes("--ticket-295") ? 295 : 294;
 const contentAuthoringTicket = ticket === 295 || ticket === 298 || ticket === 299;
 const REPORT = join(ROOT, ticket === 305
   ? "evidence/phase9-feedback-http-305.json"
+  : ticket === 306 ? "evidence/phase9-feedback-moderation-http-306.json"
   : ticket === 304
   ? "evidence/phase9-rating-http-304.json"
   : ticket === 303
@@ -132,6 +133,24 @@ async function main() {
       throw new Error("PHASE9_FEEDBACK_PHASE7_EVIDENCE_STALE_OR_INCOMPLETE");
     }
   }
+  let moderationPrerequisiteEvidence;
+  if (ticket === 306) {
+    try {
+      moderationPrerequisiteEvidence = Object.fromEntries([
+        ["moderation", "evidence/phase7-moderation-193.json"],
+        ["suppression", "evidence/phase7-suppression-194.json"],
+        ["retention", "evidence/phase7-feedback-retention-205.json"],
+      ].map(([name, path]) => [name, { path, ...JSON.parse(readFileSync(join(ROOT, path), "utf8")) }]));
+    } catch { throw new Error("PHASE9_MODERATION_PHASE7_EVIDENCE_MISSING"); }
+    const currentSource = workingTreeSourceSha256();
+    for (const [name, evidence] of Object.entries(moderationPrerequisiteEvidence)) {
+      if (evidence.cleanup !== true || evidence.sourceTreeSha256 !== currentSource ||
+          evidence.required?.success !== true || evidence.required?.failed !== 0 || evidence.required?.skipped !== 0 ||
+          !Number.isSafeInteger(evidence.required?.passed) || evidence.required.passed < 1) {
+        throw new Error(`PHASE9_MODERATION_PHASE7_EVIDENCE_STALE_OR_INCOMPLETE:${name}`);
+      }
+    }
+  }
   const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
   const installed = JSON.parse(readFileSync(join(ROOT, "node_modules/supabase/package.json"), "utf8"));
   if (installed.version !== pkg.devDependencies.supabase) throw new Error("PHASE9_OWNER_HTTP_CLI_PIN_MISMATCH");
@@ -227,7 +246,7 @@ async function main() {
         FUNCTIONAL_ID_HASH_KEY_VERSION: "1",
       } : {}),
       SUPABASE_JWT_ISSUER: `${status.API_URL}/auth/v1`, SUPABASE_JWT_AUDIENCE: "authenticated",
-      OWNER_GITHUB_SUBJECTS: "910294,910296,910298", HOSTNAME: "127.0.0.1",
+      OWNER_GITHUB_SUBJECTS: ticket === 306 ? "910294,910296,910298,910306" : "910294,910296,910298", HOSTNAME: "127.0.0.1",
     };
     stage = "server";
     for (const port of appPorts) {
@@ -270,6 +289,10 @@ async function main() {
         PHASE9_FEEDBACK_HTTP_ADMIN_DATABASE_URL: status.DB_URL,
         PHASE9_FEEDBACK_HTTP_URLS: JSON.stringify(appPorts.slice(0, 2).map((port) => `http://127.0.0.1:${port}`)),
       } : {}),
+      ...(ticket === 306 ? {
+        PHASE9_MODERATION_HTTP_ADMIN_DATABASE_URL: status.DB_URL,
+        PHASE9_MODERATION_HTTP_URLS: JSON.stringify(appPorts.slice(0, 2).map((port) => `http://127.0.0.1:${port}`)),
+      } : {}),
       ...(contentAuthoringTicket ? { PHASE5_REQUIRE_CONTENT_AUTHORING: "1", PHASE5_CONTENT_AUTHORING_DATABASE_URL: status.DB_URL } : {}),
     };
     stage = "tests";
@@ -277,7 +300,11 @@ async function main() {
     // Blocking this event loop can fill a server's stdout pipe on Linux and
     // stall its responses until the test's request deadline expires.
     const test = await new Promise((resolve) => {
-      const suites = ticket === 305 ? [
+      const suites = ticket === 306 ? [
+        "tests/runtime/owner-moderation.test.ts",
+        "tests/runtime/owner-moderation-http.network.integration.test.ts",
+        "tests/routes/phase9-route-registration.test.ts",
+      ] : ticket === 305 ? [
         "tests/runtime/feedback.test.ts",
         "tests/runtime/feedback-limits.test.ts",
         "tests/runtime/feedback-http.network.integration.test.ts",
@@ -324,7 +351,7 @@ async function main() {
     const report = JSON.parse(readFileSync(reportPath, "utf8"));
     if (test.error || test.status !== 0 || report.success !== true || report.numPassedTests <= 3 ||
         report.numFailedTests !== 0 || report.numPendingTests !== 0 || report.numTodoTests !== 0 ||
-        report.testResults?.length !== (ticket === 305 ? 4 : ticket === 304 ? 3 : ticket === 303 ? 3 : ticket === 302 ? 11 : ticket === 299 ? 13 : ticket === 298 ? 12 : contentAuthoringTicket ? 9 : 6) ||
+        report.testResults?.length !== (ticket === 306 ? 3 : ticket === 305 ? 4 : ticket === 304 ? 3 : ticket === 303 ? 3 : ticket === 302 ? 11 : ticket === 299 ? 13 : ticket === 298 ? 12 : contentAuthoringTicket ? 9 : 6) ||
         report.testResults.some((suite) => suite.status !== "passed")) {
       const failedAssertions = report.testResults?.flatMap((suite) => suite.assertionResults ?? [])
         .filter((assertion) => assertion.status !== "passed")
@@ -350,6 +377,10 @@ async function main() {
       name: [...(assertion.ancestorTitles ?? []), assertion.title].join(" / "), status: assertion.status,
     })));
     passedTestCount = report.numPassedTests;
+    if (ticket === 306 && /PRIVATE_MODERATION_(?:NAME|PARAGRAPH|REASON)_SENTINEL_306/u.test(
+      [...logs, test.stdout, test.stderr].join("\n"))) {
+      throw new Error("PHASE9_MODERATION_PRIVATE_TEST_DATA_LEAK");
+    }
     postgresVersion = (await admin.query("select current_setting('server_version') as version")).rows[0]?.version ?? "unavailable";
     console.log(`Phase 9 ticket #${ticket} built HTTP acceptance passed: ${report.numPassedTests} passed, 0 skipped.`);
     process.exitCode = 0;
@@ -399,7 +430,9 @@ async function main() {
   }));
   mkdirSync(join(ROOT, "evidence"), { recursive: true });
     writeFileSync(REPORT, `${JSON.stringify({
-    ticket, scope: ticket === 305
+    ticket, scope: ticket === 306
+      ? "built-next-owner-feedback-moderation-http-real-auth-restricted-postgresql-public-projection-suppression"
+      : ticket === 305
       ? "built-next-public-identity-free-feedback-http-real-postgresql-replay-privacy-and-lifecycle"
       : ticket === 304
       ? "built-next-public-rating-http-real-postgresql-functional-identity-and-shared-rate-limit"
@@ -431,18 +464,31 @@ async function main() {
       required: feedbackPrerequisiteEvidence.required,
       cleanupVerified: feedbackPrerequisiteEvidence.cleanup,
     } } : {}),
+    ...(ticket === 306 ? { phase7Prerequisites: Object.fromEntries(Object.entries(moderationPrerequisiteEvidence)
+      .map(([name, evidence]) => [name, { artifact: evidence.path, sourceTreeSha256: evidence.sourceTreeSha256,
+        required: evidence.required, cleanupVerified: evidence.cleanup }])) } : {}),
     contractBundles, migrations,
     toolIdentity: { node: process.version, npm: npmVersion.status === 0 ? npmVersion.stdout.trim() : "unavailable",
       next: nextVersion, supabaseCli: supabaseVersion, postgres: postgresVersion },
     databaseRole: "restricted login granted shipwithali_application; bypassrls=false",
-    fixtures: ticket === 305
+    fixtures: ticket === 306
+      ? { owner: "synthetic linked GitHub test identity", portfolio: "synthetic configured test portfolio", projects: "synthetic Published English Projects", feedback: "synthetic private submissions created through public HTTP", sessions: "temporary Auth sessions" }
+      : ticket === 305
       ? { portfolio: "synthetic isolated test portfolio", projects: "synthetic Published, Hidden, foreign and unavailable Projects", identity: "none", measurementConsent: "none" }
       : ticket === 304
       ? { portfolio: "synthetic isolated test portfolio", projects: "synthetic Published, Hidden and Archived Projects", measurementConsent: "none" }
       : ticket === 303
       ? { portfolio: "synthetic isolated test portfolio", projects: "synthetic Published, Hidden and Archived Projects", measurementConsent: "none" }
       : { owner: "synthetic linked GitHub test identity", portfolio: "synthetic configured test portfolio", session: "temporary Auth sessions" },
-    verdict: "passed", namedChecks: ticket === 305 ? [
+    verdict: "passed", namedChecks: ticket === 306 ? [
+      "all-four-owner-feedback-moderation-operations-registered-and-served-by-built-next",
+      "private-schema-valid-owner-view-and-approval-rejection-suppression-receipts",
+      "only-approved-submitted-locale-feedback-enters-the-real-public-query",
+      "suppression-atomically-removes-public-eligibility-and-retains-decision-history",
+      "exact-cross-instance-replay-preserves-receipts-and-changed-key-conflicts",
+      "unauthenticated-missing-stale-and-invalid-transition-requests-have-no-effects",
+      "phase7-postgresql-moderation-suppression-retention-and-cleanup-gates",
+    ] : ticket === 305 ? [
       "built-next-public-feedback-route-and-production-composition",
       "201-schema-valid-minimal-pending-receipt-and-private-version-one-row",
       "no-functional-or-measurement-cookies-or-subjects-created-or-required",
@@ -487,7 +533,14 @@ async function main() {
         "current-CV-English-only-absence-and-Problem-contract", "owner-CV-rate-limit-operations-accepted-by-restricted-postgresql",
         "CV-adapter-stream-redirect-rate-limit-and-privacy-regression-suites",
         "real-PDF-activation-and-storage-evidence-is-produced-by-the-required-Phase-6-gate"] : [])],
-    ...(ticket === 305 ? { acceptanceCriteria: {
+    ...(ticket === 306 ? { acceptanceCriteria: {
+      AC01: ["tests/runtime/owner-moderation-http.network.integration.test.ts :: AC01-04 serves GET, approve, reject and suppress over the production-built network boundary with generated response schemas, private headers and committed aggregate versions"],
+      AC02: ["tests/runtime/owner-moderation-http.network.integration.test.ts :: pending and rejected Feedback remain absent from the real approved query while approved submitted-locale Feedback appears; suppression removes it"],
+      AC03: ["tests/runtime/owner-moderation-http.network.integration.test.ts :: suppression removes public eligibility while the private row and approved/suppressed decision history remain", "evidence/phase7-suppression-194.json :: atomic suppression projection and retained moderation history"],
+      AC04: ["tests/runtime/owner-moderation-http.network.integration.test.ts :: cross-server exact retries preserve approval and suppression receipts; changed-key reuse conflicts", "evidence/phase7-moderation-193.json :: moderation authorization/version/state/race checks", "evidence/phase7-suppression-194.json :: independent-connection suppression and replay race checks", "evidence/phase7-feedback-retention-205.json :: retention serialization and private-history cleanup eligibility"],
+      AC05: ["tests/runtime/owner-moderation-http.network.integration.test.ts :: unauthenticated and missing IDs are denied before inspection; stale If-Match returns 412 without changing the row", "tests/phase7/suppression-postgres.test.ts :: foreign scope, revoked authorization, invalid transitions and stale version leave state unchanged"],
+      AC06: ["tests/runtime/owner-moderation-http.network.integration.test.ts :: Owner HTTP decisions plus the real restricted-role approved-public query prove scenarios 5/11 and cleanup is performed by the isolated loopback Supabase teardown", "tests/phase7/suppression-postgres.test.ts :: Feedback redaction and public projection privacy"],
+    } } : ticket === 305 ? { acceptanceCriteria: {
       AC01: ["tests/runtime/feedback-http.network.integration.test.ts :: AC01-02 stores a private pending version-1 row through the built route with a schema-valid 201 receipt"],
       AC02: ["tests/runtime/feedback-http.network.integration.test.ts :: AC01-02 proves no Set-Cookie or Measurement consent row; production composition requires no functional identity"],
       AC03: ["tests/runtime/feedback-http.network.integration.test.ts :: AC03 rejects malformed, unknown, oversized, blank, control, and unpublished-locale input",
@@ -692,7 +745,24 @@ async function main() {
         executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves controlled Taxonomy workflows over built HTTP and verifies real PostgreSQL assignment history",
         assertions: ["200 schema-valid receipt", "cross-instance exact replay", "retired value rejected without new assignment"] },
     ] } : {}),
-    ...(ticket === 305 ? { traceability: [
+    ...(ticket === 306 ? { traceability: [
+      { method: "GET", route: "/api/owner/v1/feedback/{feedbackId}", operation: "getOwnerFeedbackModeration",
+        application: "dispatchOwnerModerationHttp -> getOwnerModerationRuntimeServices -> handleGetOwnerFeedbackModeration -> OwnerModerationApplicationService.getOwnerFeedbackModeration",
+        executedTest: "tests/runtime/owner-moderation-http.network.integration.test.ts :: Phase 9 #306 production-built Owner Feedback Moderation HTTP acceptance",
+        assertions: ["200 generated schema-valid private view", "pending and rejected state remain absent from approved public query"] },
+      { method: "POST", route: "/api/owner/v1/feedback/{feedbackId}/commands/approve", operation: "approveOwnerFeedback",
+        application: "dispatchOwnerModerationHttp -> handleApproveOwnerFeedback -> OwnerModerationApplicationService.approveOwnerFeedback",
+        executedTest: "tests/runtime/owner-moderation-http.network.integration.test.ts :: AC01-04",
+        assertions: ["200 schema-valid versioned receipt", "approved exact submitted locale appears in real public query", "exact replay preserved and changed request conflicts"] },
+      { method: "POST", route: "/api/owner/v1/feedback/{feedbackId}/commands/reject", operation: "rejectOwnerFeedback",
+        application: "dispatchOwnerModerationHttp -> handleRejectOwnerFeedback -> OwnerModerationApplicationService.rejectOwnerFeedback",
+        executedTest: "tests/runtime/owner-moderation-http.network.integration.test.ts :: AC01-04",
+        assertions: ["200 schema-valid versioned receipt", "rejected Feedback remains absent from real public query"] },
+      { method: "POST", route: "/api/owner/v1/feedback/{feedbackId}/commands/suppress", operation: "suppressOwnerFeedback",
+        application: "dispatchOwnerModerationHttp -> handleSuppressOwnerFeedback -> OwnerModerationApplicationService.suppressOwnerFeedback",
+        executedTest: "tests/runtime/owner-moderation-http.network.integration.test.ts :: AC01-04",
+        assertions: ["200 schema-valid versioned receipt", "public eligibility removed", "approved and suppression decisions remain in private history", "exact cross-instance retry adds no duplicate decision"] },
+    ] } : ticket === 305 ? { traceability: [
       { method: "POST", route: "/api/v1/projects/{projectId}/feedback", operation: "postProjectFeedback",
         application: "dispatchPostProjectFeedbackHttp -> getFeedbackRuntimeServices -> handlePostProjectFeedback -> InteractionModerationService.submitFeedback",
         executedTest: "tests/runtime/feedback-http.network.integration.test.ts :: Phase 9 #305 production-built Feedback HTTP acceptance",
@@ -731,7 +801,16 @@ async function main() {
         executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / executes all five CV operations over built HTTP with accepted PDF bytes and rejects invalid CV states",
         assertions: ["200 PDF or 307 no-store response", "short-lived private Storage target constrained to configured Storage origin and processed bucket when redirecting", "delivered PDF header, exact stored hash and bounded size", "signed target omitted from diagnostics and evidence"] },
     ] } : {}),
-    operationExamples: ticket === 305 ? [
+    operationExamples: ticket === 306 ? [
+      { operation: "getOwnerFeedbackModeration", httpStatus: 200, responseSchemaValid: true, privateHeaders: true, privateFieldsOwnerOnly: true },
+      { operation: "approveOwnerFeedback", httpStatus: 200, responseSchemaValid: true, aggregateVersion: 2, publicQueryEligibility: true, exactReplayVerified: true },
+      { operation: "rejectOwnerFeedback", httpStatus: 200, responseSchemaValid: true, aggregateVersion: 2, publicQueryExcluded: true },
+      { operation: "suppressOwnerFeedback", httpStatus: 200, responseSchemaValid: true, aggregateVersion: 3, publicQueryExcluded: true, historyRetained: true, exactReplayVerified: true },
+      { operation: "suppressOwnerFeedback", httpStatus: 412, staleVersionNoEffects: true },
+      { operation: "approveOwnerFeedback", httpStatus: 409, changedIdempotencyPayloadConflict: true },
+      { operation: "getOwnerFeedbackModeration", httpStatus: 401, unauthenticatedNoInspection: true },
+      { operation: "getOwnerFeedbackModeration", httpStatus: 404, missingFeedbackNoExistenceLeak: true },
+    ] : ticket === 305 ? [
       { operation: "postProjectFeedback", httpStatus: 201, responseSchemaValid: true, pendingOnly: true,
         noFunctionalCookie: true, noMeasurementSubject: true, privateTextConfinedToRow: true, exactReplayVerified: true },
       { operation: "postProjectFeedback", httpStatus: 409, changedKeyPayloadConflict: true },
@@ -783,7 +862,8 @@ async function main() {
       ] : []),
     ],
     passed: passedTestCount, failed: 0, skipped: 0, productionBuild: true, isolatedLoopbackSupabase: true,
-    execution: { command: ticket === 305 ? "npm run phase9:focus:feedback-http"
+    execution: { command: ticket === 306 ? "npm run phase9:focus:moderation-http"
+      : ticket === 305 ? "npm run phase9:focus:feedback-http"
       : ticket === 304 ? "npm run phase9:focus:rating-http"
       : ticket === 303 ? "npm run phase9:focus:reaction-http"
       : ticket === 302 ? "npm run phase9:focus:cv-http"
