@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createHmac } from "node:crypto";
 import { Client } from "pg";
 import { createConsentApplicationService } from "../../src/modules/measurement/application/consent.js";
 import { createPostgresConsentRepository } from "../../src/modules/measurement/adapters/postgres-consent.js";
@@ -22,13 +21,10 @@ const noticeVersion = (process.env["MEASUREMENT_CONSENT_NOTICE_VERSIONS"] ?? "")
 
 let admin: Client;
 let database: ReturnType<typeof createPostgresRuntimeDatabase>;
-let projectId: string;
 let routeId: string;
 let consent: ReturnType<typeof createConsentApplicationService>;
 let consentId: string;
 let consentToken: string;
-let foreignPortfolioId: string;
-let foreignConsentId: string;
 let foreignConsentToken: string;
 
 function validEvent(overrides: Record<string, unknown> = {}) {
@@ -78,41 +74,31 @@ suite("Phase 9 #307 production-built public Measurement HTTP acceptance", () => 
     if (!granted.ok || !granted.value.evidence) throw new Error("PHASE9_EVENT_CONSENT_FIXTURE_FAILED");
     consentId = granted.value.consentId;
     consentToken = granted.value.evidence;
-    foreignPortfolioId = createStableId("Portfolio");
+    const foreignPortfolioId = createStableId("Portfolio");
     const foreignGrant = await consent.recordConsent({ scope: { kind: "portfolio", portfolioId: foreignPortfolioId as never },
       correlationId: "phase9-event-foreign-grant", consent: "granted", noticeVersion, expectedRevision: 0 });
     if (!foreignGrant.ok || !foreignGrant.value.evidence) throw new Error("PHASE9_EVENT_FOREIGN_CONSENT_FIXTURE_FAILED");
-    foreignConsentId = foreignGrant.value.consentId;
     foreignConsentToken = foreignGrant.value.evidence;
-    projectId = createStableId("Project");
+    const projectId = createStableId("Project");
     routeId = createStableId("PublicRoute");
     const publishedAt = new Date().toISOString();
+    await admin.query(
+      "insert into portfolio_config.settings (portfolio_id,owner_id,display_name,headline,bio,global_cta_label,global_cta_destination,global_cta_unavailable_fallback) values ($1,$2,'Owner','Headline','Bio','Contact','https://example.com','Unavailable') on conflict (portfolio_id) do nothing",
+      [portfolioId, ownerId],
+    );
     await admin.query("insert into content.items (content_id,portfolio_id,content_type,lifecycle) values ($1,$2,'project','published')", [projectId, portfolioId]);
     await admin.query("insert into content.public_routes (route_identity,content_id,portfolio_id,content_type,current_slug,first_published_at) values ($1,$2,$3,'project',$4,$5)", [routeId, projectId, portfolioId, `event-${projectId}`, publishedAt]);
     const revisionId = createStableId("Revision");
     const reviewId = createStableId("ContentReview");
-    await admin.query("insert into content.revisions (revision_id,content_id,portfolio_id,content_type,locale,stream_sequence,aggregate_version,title,summary,body,payload,saved_at) values ($1,$2,$3,'project','en',1,1,'Synthetic event project','Synthetic summary','Synthetic body',$4,$5)", [revisionId, projectId, portfolioId, { contentType: "project", locale: "en", title: "Synthetic event project" }, publishedAt]);
+    const payload = { contentType: "project", locale: "en", title: "Synthetic event project", summary: "Synthetic summary", body: "Synthetic body" };
+    await admin.query("insert into content.revisions (revision_id,content_id,portfolio_id,content_type,locale,stream_sequence,aggregate_version,title,summary,body,payload,saved_at) values ($1,$2,$3,'project','en',1,1,'Synthetic event project','Synthetic summary','Synthetic body',$4,$5)", [revisionId, projectId, portfolioId, payload, publishedAt]);
     await admin.query("insert into content.revision_reviews (review_id,content_id,portfolio_id,content_type,revision_id,locale,review_sequence,snapshot_hash,evidence_version,reviewer_id,decision,reviewed_at) values ($1,$2,$3,'project',$4,'en',1,$5,1,$6,'accepted',$7)", [reviewId, projectId, portfolioId, revisionId, "a".repeat(64), ownerId, publishedAt]);
     await admin.query("insert into content.language_publications (content_id,portfolio_id,content_type,locale,revision_id,review_id,route_identity,publication_sequence,published_at) values ($1,$2,'project','en',$3,$4,$5,1,$6)", [projectId, portfolioId, revisionId, reviewId, routeId, publishedAt]);
   }, 30_000);
 
   afterAll(async () => {
-    if (database) await database.resource.close();
-    if (admin) {
-      try {
-        if (portfolioId) {
-          await admin.query("delete from operations.idempotency_records where operation_scope=$1", [`measurement.public-event:${portfolioId}`]);
-          await admin.query("delete from operations.jobs where job_type='measurement.public-event-received.v1' and payload->'value'->>'portfolioId'=$1", [portfolioId]);
-          const limiterHashes = ["198.51.100.1", "198.51.100.77"].map(address => createHmac("sha256", process.env["FUNCTIONAL_ID_HASH_KEY"] ?? "")
-            .update("shipwithali:public-rate-limit:v1\0", "utf8").update(portfolioId!).update("\0", "utf8").update(address).digest("hex"));
-          await admin.query("delete from identity_access.public_rate_limit_windows where operation='postPublicEvent' and subject_hash = any($1::text[])", [limiterHashes]);
-          if (routeId) await admin.query("delete from measurement.public_events where portfolio_id=$1 and page_route_identity=$2", [portfolioId, routeId]);
-        }
-        if (projectId) await admin.query("delete from content.items where portfolio_id=$1 and content_id=$2", [portfolioId, projectId]);
-        if (consentId) await admin.query("delete from measurement.consents where portfolio_id=$1 and consent_id=$2", [portfolioId, consentId]);
-        if (foreignPortfolioId && foreignConsentId) await admin.query("delete from measurement.consents where portfolio_id=$1 and consent_id=$2", [foreignPortfolioId, foreignConsentId]);
-      } finally { await admin.end(); }
-    }
+    // The runner destroys the isolated database, including immutable review fixtures.
+    await Promise.all([database?.resource.close(), admin?.end()]);
   });
 
   it("AC01 accepts only a currently consented minimized observation and persists one event/job", async () => {
@@ -127,7 +113,7 @@ suite("Phase 9 #307 production-built public Measurement HTTP acceptance", () => 
     expect(JSON.stringify(receipt)).not.toContain(row.rows[0]?.measurement_subject);
     const after = await admin.query("select count(*)::int as count from measurement.public_events where portfolio_id=$1", [portfolioId]);
     expect(after.rows[0]?.count).toBe(before.rows[0]?.count + 1);
-    const jobs = await admin.query("select count(*)::int as count from operations.jobs where job_type='measurement.public-event-received.v1' and payload->'value'->>'eventId'=$1", [(receipt as { eventId: string }).eventId]);
+    const jobs = await admin.query("select count(*)::int as count from operations.jobs where job_type='measurement.public-event-received.v1' and payload->>'eventId'=$1", [(receipt as { eventId: string }).eventId]);
     expect(jobs.rows[0]?.count).toBe(1);
   });
 

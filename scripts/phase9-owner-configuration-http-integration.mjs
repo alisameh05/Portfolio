@@ -227,8 +227,17 @@ async function main() {
     const portfolioId = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea1";
     const ownerId = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea2";
     const appBase = `http://127.0.0.1:${appPorts[0]}`;
+    const measurementEnv = ticket === 307 ? {
+      FUNCTIONAL_ID_HASH_KEY: randomBytes(32).toString("base64url"),
+      FUNCTIONAL_ID_HASH_KEY_VERSION: "1",
+      FUNCTIONAL_ID_HASH_PREVIOUS_KEYS: "",
+      MEASUREMENT_ID_HASH_KEY: randomBytes(32).toString("base64url"),
+      MEASUREMENT_ID_HASH_KEY_VERSION: "1",
+      MEASUREMENT_ID_HASH_PREVIOUS_KEYS: "",
+      MEASUREMENT_CONSENT_NOTICE_VERSIONS: "notice-v1",
+    } : {};
     const serverEnv = {
-      ...env, NODE_ENV: "production", NODE_OPTIONS: "", NEXT_TELEMETRY_DISABLED: "1",
+      ...env, ...measurementEnv, NODE_ENV: "production", NODE_OPTIONS: "", NEXT_TELEMETRY_DISABLED: "1",
       APP_BASE_URL: appBase, DATABASE_URL: restricted.toString(), PORTFOLIO_ID: portfolioId, OWNER_ID: ownerId,
       SUPABASE_URL: status.API_URL, SUPABASE_ANON_KEY: status.ANON_KEY,
       ...(ticket === 302 ? {
@@ -272,7 +281,7 @@ async function main() {
     await waitForServer(unavailableServer, appPorts[2]);
     const reportPath = join(workdir, "vitest-report.json");
     const testEnv = {
-      ...env, PHASE9_REQUIRE_OWNER_HTTP: "1", PHASE9_OWNER_HTTP_ADMIN_DATABASE_URL: status.DB_URL,
+      ...env, ...measurementEnv, PHASE9_REQUIRE_OWNER_HTTP: "1", PHASE9_OWNER_HTTP_ADMIN_DATABASE_URL: status.DB_URL,
       PHASE9_OWNER_HTTP_DATABASE_URL: restricted.toString(), PHASE9_OWNER_HTTP_SUPABASE_URL: status.API_URL,
       PHASE9_OWNER_HTTP_ANON_KEY: status.ANON_KEY, PHASE9_OWNER_HTTP_SERVICE_KEY: status.SERVICE_ROLE_KEY,
       PHASE9_OWNER_HTTP_URLS: JSON.stringify(appPorts.slice(0, 2).map((port) => `http://127.0.0.1:${port}`)),

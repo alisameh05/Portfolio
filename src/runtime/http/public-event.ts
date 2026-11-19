@@ -1,6 +1,12 @@
 import type { PortfolioRequestScope } from "@shared/application";
 import { isIP } from "node:net";
-import { getConsentApplicationService, getMeasurementEventIngestionService } from "../../bootstrap/composition-root.js";
+import {
+  getConsentApplicationService,
+  getMeasurementEventIngestionService,
+  getRuntimeEnvironmentSnapshot,
+  initializeDatabaseRuntime,
+  isDatabaseRuntimeInitialized,
+} from "../../bootstrap/composition-root.js";
 /**
  * public-event.ts — Phase 2 #28 consented Public event adapter.
  *
@@ -57,6 +63,8 @@ const acceptedActions = new Set([
   "page-viewed", "project-viewed", "active-engagement-sampled", "media-engaged", "related-project-opened",
   "testimonial-engaged", "contact-channel-opened", "external-project-link-opened", "global-project-cta-opened",
 ]);
+
+let initialization: ReturnType<typeof initializeDatabaseRuntime> | undefined;
 
 export interface PublicEventAdapterDeps {
   readonly consent?: Pick<ConsentApplicationService, "verifyEvidence">;
@@ -150,9 +158,6 @@ async function handlePostPublicEventUnobserved(
       } catch {
         return rejectionToProblem({ kind: "temporarily_unavailable", code: "PUBLIC_EVENT_RATE_LIMIT_UNAVAILABLE" }, traceId, instance);
       }
-    } else if (deps.service === undefined) {
-      await emitOperationsSignal(logger, deps.operationsObservations, { kind: "event-intake", outcome: "unavailable" });
-      return rejectionToProblem({ kind: "temporarily_unavailable", code: "PUBLIC_EVENT_RATE_LIMIT_UNAVAILABLE" }, traceId, instance);
     }
     const scope = deps.scope ?? runtime?.scope ?? { kind: "unconfigured" as const };
     const consent = deps.consent ?? getConsentApplicationService();
@@ -167,6 +172,10 @@ async function handlePostPublicEventUnobserved(
         kind: "event-intake", outcome: verified.error.kind === "temporarily_unavailable" ? "unavailable" : "rejected",
       });
       return rejectionToProblem(verified.error, traceId, instance);
+    }
+    if (rateLimit === undefined && deps.service === undefined) {
+      await emitOperationsSignal(logger, deps.operationsObservations, { kind: "event-intake", outcome: "unavailable" });
+      return rejectionToProblem({ kind: "temporarily_unavailable", code: "PUBLIC_EVENT_RATE_LIMIT_UNAVAILABLE" }, traceId, instance);
     }
     const service = deps.service ?? runtime?.service;
     if (!service) {
@@ -249,4 +258,20 @@ export async function handlePostPublicEvent(
       kind: "http-request", route: "public-event", statusClass, durationMs,
     });
   }
+}
+
+/** Initialize the application runtime when event intake is the first request. */
+export async function dispatchPostPublicEventHttp(request: Request): Promise<Response> {
+  if (!isDatabaseRuntimeInitialized()) {
+    initialization ??= initializeDatabaseRuntime(getRuntimeEnvironmentSnapshot(), "application");
+    const current = initialization;
+    try {
+      await current;
+    } catch {
+      if (initialization === current) initialization = undefined;
+      const { traceId } = createCorrelation(request.headers.get("x-request-id") ?? request.headers.get("x-correlation-id"));
+      return rejectionToProblem({ kind: "temporarily_unavailable", code: "MEASUREMENT_UNAVAILABLE" }, traceId, requestInstance(request));
+    }
+  }
+  return handlePostPublicEvent(request, {});
 }
