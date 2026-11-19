@@ -111,7 +111,7 @@ describe("Phase 9 guarded route registration (#293)", () => {
       expect.objectContaining({ method: "PUT", path: "/api/v1/projects/{projectId}/rating", operationId: "putProjectRating",
         file: "src/app/api/v1/projects/[projectId]/rating/route.ts" }),
     ]));
-    expect(report.pending).toHaveLength(11);
+    expect(report.pending).toHaveLength(7);
     expect(report.registered.filter((entry: { operationId: string }) =>
       ["getOwnerProjectAggregate", "changeOwnerProjectStatus", "setOwnerProjectFeatured", "changeOwnerProjectPublicSlug",
         "correctOwnerProjectCandidateSlug", "relateOwnerProjects"].includes(entry.operationId)))
