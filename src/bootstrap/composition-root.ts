@@ -63,6 +63,7 @@ export interface RatingRuntimeServices {
   readonly scope: ReactionRuntimeServices["scope"];
   readonly service: Pick<InteractionModerationService, "submitRating">;
   readonly functionalIdentity: FunctionalInteractionContextPort;
+  readonly rateLimit: import("../modules/identity-access/index.js").PublicRateLimitCheck;
 }
 
 export interface MeasurementEventRuntimeServices {
@@ -555,7 +556,7 @@ export async function initializeDatabaseRuntime(
         if (runtimeKind === "application" && configuredScope?.portfolioId.ok && configuredScope.ownerId.ok && env["FUNCTIONAL_ID_HASH_KEY"]) {
           const [{ createReactionApplicationService, createRatingApplicationService, createFunctionalInteractionContext }, { createPostgresReactionRepository }, { createPostgresRatingRepository },
             { createPostgresProjectInteractionFacts }, { createIdentityAccessService },
-            { AesGcmPseudonymousTokenAdapter, createFunctionalPseudonymousIdentityConfig, StubAuthProvider, createPostgresReactionRateLimit }] = await Promise.all([
+            { AesGcmPseudonymousTokenAdapter, createFunctionalPseudonymousIdentityConfig, StubAuthProvider, createPostgresReactionRateLimit, createPostgresRatingRateLimit }] = await Promise.all([
             import("../modules/interaction-moderation/index.js"),
             import("../modules/interaction-moderation/adapters/postgres-reactions.js"),
             import("../modules/interaction-moderation/adapters/postgres-ratings.js"),
@@ -577,7 +578,9 @@ export async function initializeDatabaseRuntime(
           rating = { scope: reaction.scope,
             service: createRatingApplicationService({ portfolioId: scope.portfolioId, content, operations,
               repository: createPostgresRatingRepository(), clock: createSystemClock(), ids: createSystemIdGenerator() }),
-            functionalIdentity: reaction.functionalIdentity };
+            functionalIdentity: reaction.functionalIdentity,
+            rateLimit: createPostgresRatingRateLimit({ database: database.database, portfolioId: scope.portfolioId,
+              hashKey: env["FUNCTIONAL_ID_HASH_KEY"]! }) };
         }
         // Optional Measurement capability does not become a global readiness dependency.
         if (runtimeKind === "application" && env["MEASUREMENT_CONSENT_NOTICE_VERSIONS"]) {
@@ -1253,9 +1256,12 @@ export async function getReactionRuntimeServices(): Promise<ReactionRuntimeServi
   return { service: unavailableReactionService };
 }
 
-export async function getRatingRuntimeServices(): Promise<RatingRuntimeServices | { readonly service: Pick<InteractionModerationService, "submitRating"> }> {
+export async function getRatingRuntimeServices(): Promise<RatingRuntimeServices | {
+  readonly service: Pick<InteractionModerationService, "submitRating">;
+  readonly rateLimit: RatingRuntimeServices["rateLimit"];
+}> {
   if (currentRating) return currentRating;
-  return { service: unavailableRatingService };
+  return { service: unavailableRatingService, rateLimit: { check: async () => { throw new Error("RATING_NOT_CONFIGURED"); } } };
 }
 
 /** Existing Feedback HTTP edge obtains persistence and abuse control here. */

@@ -16,9 +16,11 @@ import { safeAssertionDiagnostic } from "./validation-errors.mjs";
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const CLI = join(ROOT, "node_modules/supabase/dist/supabase.js");
 const NEXT = join(ROOT, "node_modules/next/dist/bin/next");
-const ticket = process.argv.includes("--ticket-303") ? 303 : process.argv.includes("--ticket-302") ? 302 : process.argv.includes("--ticket-299") ? 299 : process.argv.includes("--ticket-298") ? 298 : process.argv.includes("--ticket-295") ? 295 : 294;
+const ticket = process.argv.includes("--ticket-304") ? 304 : process.argv.includes("--ticket-303") ? 303 : process.argv.includes("--ticket-302") ? 302 : process.argv.includes("--ticket-299") ? 299 : process.argv.includes("--ticket-298") ? 298 : process.argv.includes("--ticket-295") ? 295 : 294;
 const contentAuthoringTicket = ticket === 295 || ticket === 298 || ticket === 299;
-const REPORT = join(ROOT, ticket === 303
+const REPORT = join(ROOT, ticket === 304
+  ? "evidence/phase9-rating-http-304.json"
+  : ticket === 303
   ? "evidence/phase9-reaction-http-303.json"
   : ticket === 302
   ? "evidence/phase9-cv-http-302.json"
@@ -102,6 +104,18 @@ async function main() {
         reactionPrerequisiteEvidence.required?.skipped !== 0 ||
         reactionPrerequisiteEvidence.sourceTreeSha256 !== workingTreeSourceSha256()) {
       throw new Error("PHASE9_REACTION_PHASE7_EVIDENCE_STALE_OR_INCOMPLETE");
+    }
+  }
+  let ratingPrerequisiteEvidence;
+  if (ticket === 304) {
+    try {
+      ratingPrerequisiteEvidence = JSON.parse(readFileSync(join(ROOT, "evidence/phase7-ratings-191.json"), "utf8"));
+    } catch { throw new Error("PHASE9_RATING_PHASE7_EVIDENCE_MISSING"); }
+    if (ratingPrerequisiteEvidence.cleanup !== true || ratingPrerequisiteEvidence.required?.success !== true ||
+        ratingPrerequisiteEvidence.required?.passed !== 34 || ratingPrerequisiteEvidence.required?.failed !== 0 ||
+        ratingPrerequisiteEvidence.required?.skipped !== 0 ||
+        ratingPrerequisiteEvidence.sourceTreeSha256 !== workingTreeSourceSha256()) {
+      throw new Error("PHASE9_RATING_PHASE7_EVIDENCE_STALE_OR_INCOMPLETE");
     }
   }
   const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
@@ -194,6 +208,10 @@ async function main() {
         FUNCTIONAL_ID_HASH_KEY: randomBytes(32).toString("base64url"),
         FUNCTIONAL_ID_HASH_KEY_VERSION: "1",
       } : {}),
+      ...(ticket === 304 ? {
+        FUNCTIONAL_ID_HASH_KEY: randomBytes(32).toString("base64url"),
+        FUNCTIONAL_ID_HASH_KEY_VERSION: "1",
+      } : {}),
       SUPABASE_JWT_ISSUER: `${status.API_URL}/auth/v1`, SUPABASE_JWT_AUDIENCE: "authenticated",
       OWNER_GITHUB_SUBJECTS: "910294,910296,910298", HOSTNAME: "127.0.0.1",
     };
@@ -230,6 +248,10 @@ async function main() {
         PHASE9_REACTION_HTTP_ADMIN_DATABASE_URL: status.DB_URL,
         PHASE9_REACTION_HTTP_URLS: JSON.stringify(appPorts.slice(0, 2).map((port) => `http://127.0.0.1:${port}`)),
       } : {}),
+      ...(ticket === 304 ? {
+        PHASE9_RATING_HTTP_ADMIN_DATABASE_URL: status.DB_URL,
+        PHASE9_RATING_HTTP_URLS: JSON.stringify(appPorts.slice(0, 2).map((port) => `http://127.0.0.1:${port}`)),
+      } : {}),
       ...(contentAuthoringTicket ? { PHASE5_REQUIRE_CONTENT_AUTHORING: "1", PHASE5_CONTENT_AUTHORING_DATABASE_URL: status.DB_URL } : {}),
     };
     stage = "tests";
@@ -237,7 +259,11 @@ async function main() {
     // Blocking this event loop can fill a server's stdout pipe on Linux and
     // stall its responses until the test's request deadline expires.
     const test = await new Promise((resolve) => {
-      const suites = ticket === 303 ? [
+      const suites = ticket === 304 ? [
+        "tests/runtime/rating.test.ts",
+        "tests/runtime/rating-http.network.integration.test.ts",
+        "tests/routes/phase9-route-registration.test.ts",
+      ] : ticket === 303 ? [
         "tests/runtime/reaction.test.ts",
         "tests/runtime/reaction-http.network.integration.test.ts",
         "tests/routes/phase9-route-registration.test.ts",
@@ -275,7 +301,7 @@ async function main() {
     const report = JSON.parse(readFileSync(reportPath, "utf8"));
     if (test.error || test.status !== 0 || report.success !== true || report.numPassedTests <= 3 ||
         report.numFailedTests !== 0 || report.numPendingTests !== 0 || report.numTodoTests !== 0 ||
-        report.testResults?.length !== (ticket === 303 ? 3 : ticket === 302 ? 11 : ticket === 299 ? 13 : ticket === 298 ? 12 : contentAuthoringTicket ? 9 : 6) ||
+        report.testResults?.length !== (ticket === 304 ? 3 : ticket === 303 ? 3 : ticket === 302 ? 11 : ticket === 299 ? 13 : ticket === 298 ? 12 : contentAuthoringTicket ? 9 : 6) ||
         report.testResults.some((suite) => suite.status !== "passed")) {
       const failedAssertions = report.testResults?.flatMap((suite) => suite.assertionResults ?? [])
         .filter((assertion) => assertion.status !== "passed")
@@ -350,7 +376,9 @@ async function main() {
   }));
   mkdirSync(join(ROOT, "evidence"), { recursive: true });
   writeFileSync(REPORT, `${JSON.stringify({
-    ticket, scope: ticket === 303
+    ticket, scope: ticket === 304
+      ? "built-next-public-rating-http-real-postgresql-functional-identity-and-shared-rate-limit"
+      : ticket === 303
       ? "built-next-public-reaction-http-real-postgresql-functional-identity-and-shared-rate-limit"
       : ticket === 302
       ? "built-next-owner-cv-and-public-current-cv-http-real-auth-restricted-postgresql"
@@ -360,6 +388,12 @@ async function main() {
             : "built-next-owner-configuration-http-real-auth-postgresql",
     runId: randomUUID(), githubRunId: process.env.GITHUB_RUN_ID ?? null, githubRunAttempt: process.env.GITHUB_RUN_ATTEMPT ?? null,
     source: { commit: commit.status === 0 ? commit.stdout.trim() : "unavailable", treeSha256: workingTreeSourceSha256() },
+    ...(ticket === 304 ? { phase7Prerequisite: {
+      artifact: "evidence/phase7-ratings-191.json",
+      sourceTreeSha256: ratingPrerequisiteEvidence.sourceTreeSha256,
+      required: ratingPrerequisiteEvidence.required,
+      cleanupVerified: ratingPrerequisiteEvidence.cleanup,
+    } } : {}),
     ...(ticket === 303 ? { phase7Prerequisite: {
       artifact: "evidence/phase7-reactions-190.json",
       sourceTreeSha256: reactionPrerequisiteEvidence.sourceTreeSha256,
@@ -370,10 +404,21 @@ async function main() {
     toolIdentity: { node: process.version, npm: npmVersion.status === 0 ? npmVersion.stdout.trim() : "unavailable",
       next: nextVersion, supabaseCli: supabaseVersion, postgres: postgresVersion },
     databaseRole: "restricted login granted shipwithali_application; bypassrls=false",
-    fixtures: ticket === 303
+    fixtures: ticket === 304
+      ? { portfolio: "synthetic isolated test portfolio", projects: "synthetic Published, Hidden and Archived Projects", measurementConsent: "none" }
+      : ticket === 303
       ? { portfolio: "synthetic isolated test portfolio", projects: "synthetic Published, Hidden and Archived Projects", measurementConsent: "none" }
       : { owner: "synthetic linked GitHub test identity", portfolio: "synthetic configured test portfolio", session: "temporary Auth sessions" },
-    verdict: "passed", namedChecks: ticket === 303 ? [
+    verdict: "passed", namedChecks: ticket === 304 ? [
+      "built-next-public-rating-route-and-production-composition",
+      "valid-200-rating-receipt-shared-secure-host-only-functional-cookie-no-store-non-indexable",
+      "one-current-rater-row-and-one-aggregate-contribution-after-change",
+      "concurrent-exact-retry-original-safe-receipt-and-changed-key-conflict",
+      "functional-rating-independent-of-measurement-events-across-languages",
+      "invalid-input-and-ineligible-projects-rejected-before-effects",
+      "shared-postgresql-rating-budget-fail-closed-outage-and-lost-cookie-limit",
+      "rating-crypto-lifecycle-race-and-subject-redaction-phase7-regressions",
+    ] : ticket === 303 ? [
       "built-next-public-reaction-route-and-production-composition",
       "valid-200-receipt-secure-host-only-functional-cookie-no-store-non-indexable",
       "language-independent-current-row-and-idempotency-replay-across-servers",
@@ -400,6 +445,28 @@ async function main() {
         "current-CV-English-only-absence-and-Problem-contract", "owner-CV-rate-limit-operations-accepted-by-restricted-postgresql",
         "CV-adapter-stream-redirect-rate-limit-and-privacy-regression-suites",
         "real-PDF-activation-and-storage-evidence-is-produced-by-the-required-Phase-6-gate"] : [])],
+    ...(ticket === 304 ? { acceptanceCriteria: {
+      AC01: ["tests/runtime/rating-http.network.integration.test.ts :: AC01 returns a schema-valid current Rating receipt and shared secure functional cookie"],
+      AC02: ["tests/runtime/rating-http.network.integration.test.ts :: AC02 changes one current row and one aggregate contribution instead of adding a rater",
+        "tests/phase7/ratings-postgres.test.ts :: T04-01 returns strict HTTP 200, secure cookie and one replacement row with reconciled counts",
+        "tests/runtime/rating-http.network.integration.test.ts :: AC02 changes one current row and one aggregate contribution instead of adding a rater (restricted summary view returns average null below five raters)"],
+      AC03: ["tests/runtime/rating-http.network.integration.test.ts :: AC03 preserves original safe receipts for concurrent exact retry and conflicts on changed-key reuse",
+        "tests/phase7/ratings-postgres.test.ts :: T04-04 new-key same-value is a no-op; exact retry retains original safe result; conflicting reuse changes nothing",
+        "tests/phase7/ratings-postgres.test.ts :: T04-05 same-key races across independent pools yield one effect; differing payload yields one conflict"],
+      AC04: ["tests/runtime/rating-http.network.integration.test.ts :: AC04 keeps a functional Rating across language requests without Measurement identity or event joins",
+        "tests/phase7/ratings-postgres.test.ts :: T04-03 consent denial/unknown permits functional use and non-interaction issuance rejects",
+        "tests/phase7/ratings-postgres.test.ts :: T04-03 Rating and Reaction preserve each other across language views and operation-scoped replay"],
+      AC05: ["tests/runtime/rating-http.network.integration.test.ts :: AC05 rejects invalid cookie, transport, and ineligible Projects before Rating state or cookie issuance",
+        "tests/runtime/rating.test.ts :: fails closed when the limiter or trusted client address is unavailable",
+        "tests/phase7/ratings-postgres.test.ts :: T04-06 withdrawal-first serialization rejects preflight-authorized submission and retained replay",
+        "tests/phase7/ratings-postgres.test.ts :: T04-06 submission-first holds real lifecycle withdrawal until commit; later writes reject"],
+      AC06: ["tests/runtime/rating-http.network.integration.test.ts :: AC06 applies the shared per-operation limiter, fails closed on outage, and preserves the lost-first-cookie limit",
+        "tests/runtime/rating.test.ts :: returns 429 with Retry-After before application dispatch when the shared limiter denies",
+        "tests/phase7/ratings-postgres.test.ts :: T04-07 actual crypto rejects tampered/expired/wrong-purpose/retired tokens; rotation preserves subject",
+        "tests/phase7/ratings-postgres.test.ts :: T04-03 losing the initial cookie creates independent actors even for the same key",
+        "tests/phase7/ratings-postgres.test.ts :: restricted principal RLS scopes votes and pooled settings; no anonymous/worker grants or subject leakage",
+        "evidence/phase7-ratings-191.json :: actual assertion results, sanitized environment identity and verified cleanup"],
+    } } : {}),
     ...(ticket === 303 ? { acceptanceCriteria: {
       AC01: ["tests/runtime/reaction-http.network.integration.test.ts :: AC01 returns a schema-valid personalized receipt and secure functional cookie over the built route"],
       AC02: ["tests/runtime/reaction-http.network.integration.test.ts :: AC02-03 shares one language-independent subject and preserves replay and current-row semantics across servers",
@@ -571,6 +638,12 @@ async function main() {
         executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves controlled Taxonomy workflows over built HTTP and verifies real PostgreSQL assignment history",
         assertions: ["200 schema-valid receipt", "cross-instance exact replay", "retired value rejected without new assignment"] },
     ] } : {}),
+    ...(ticket === 304 ? { traceability: [
+      { method: "PUT", route: "/api/v1/projects/{projectId}/rating", operation: "putProjectRating",
+        application: "dispatchPutProjectRatingHttp -> getRatingRuntimeServices -> handlePutProjectRating -> InteractionModerationService.submitRating",
+        executedTest: "tests/runtime/rating-http.network.integration.test.ts :: Phase 9 #304 production-built Rating HTTP acceptance",
+        assertions: ["200 generated response schema", "shared secure host-only functional cookie", "Cache-Control no-store", "X-Robots-Tag noindex", "functional subject redacted"] },
+    ] } : {}),
     ...(ticket === 303 ? { traceability: [
       { method: "PUT", route: "/api/v1/projects/{projectId}/reaction", operation: "putProjectReaction",
         application: "dispatchPutProjectReactionHttp -> getReactionRuntimeServices -> handlePutProjectReaction -> InteractionModerationService.submitReaction",
@@ -599,7 +672,12 @@ async function main() {
         executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / executes all five CV operations over built HTTP with accepted PDF bytes and rejects invalid CV states",
         assertions: ["200 PDF or 307 no-store response", "short-lived private Storage target constrained to configured Storage origin and processed bucket when redirecting", "delivered PDF header, exact stored hash and bounded size", "signed target omitted from diagnostics and evidence"] },
     ] } : {}),
-    operationExamples: ticket === 303 ? [
+    operationExamples: ticket === 304 ? [
+      { operation: "putProjectRating", httpStatus: 200, responseSchemaValid: true, secureFunctionalCookie: true,
+        noStore: true, noIndex: true, sameSubjectCurrentRow: true, exactReplayVerified: true },
+      { operation: "putProjectRating", httpStatus: 429, positiveRetryAfter: true, sharedPostgresLimiter: true },
+      { operation: "putProjectRating", httpStatus: 503, limiterOutageFailsClosed: true, noCookieReleased: true },
+    ] : ticket === 303 ? [
       { operation: "putProjectReaction", httpStatus: 200, responseSchemaValid: true, secureFunctionalCookie: true,
         noStore: true, noIndex: true, sameSubjectCurrentRow: true, exactReplayVerified: true },
       { operation: "putProjectReaction", httpStatus: 429, positiveRetryAfter: true, sharedPostgresLimiter: true },
@@ -639,7 +717,8 @@ async function main() {
       ] : []),
     ],
     passed: passedTestCount, failed: 0, skipped: 0, productionBuild: true, isolatedLoopbackSupabase: true,
-    execution: { command: ticket === 303 ? "npm run phase9:focus:reaction-http"
+    execution: { command: ticket === 304 ? "npm run phase9:focus:rating-http"
+      : ticket === 303 ? "npm run phase9:focus:reaction-http"
       : ticket === 302 ? "npm run phase9:focus:cv-http"
       : ticket === 299 ? "npm run phase9:focus:taxonomy-http"
       : ticket === 298 ? "npm run phase9:focus:project-status-http"

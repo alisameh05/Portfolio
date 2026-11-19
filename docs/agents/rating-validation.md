@@ -35,6 +35,9 @@ consent/configuration has no dependency on functional interaction success.
 
 Migration rollback: disable Rating composition, retain existing rows and repair
 through a new expand-compatible migration. There is no production migration
-execution, new route, Rating removal or Measurement consumer. Integrated
-clean-versus-prior-release qualification remains #208; current public summaries
-and Low-sample presentation remain #195.
+execution, Rating removal or Measurement consumer. Public Rating HTTP acceptance
+uses `npm run phase9:focus:rating-http`, which refreshes this gate and starts
+two production-built loopback servers against an isolated Supabase/PostgreSQL
+project. CI publishes sanitized Phase 7 prerequisite and Phase 9 network
+reports. Integrated clean-versus-prior-release qualification remains #208;
+current public summaries and Low-sample presentation remain #195.

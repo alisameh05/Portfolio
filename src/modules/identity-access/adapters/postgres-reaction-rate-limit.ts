@@ -3,13 +3,14 @@ import { sql, type Kysely } from "kysely";
 import type { DB } from "../../../shared/adapters/postgres/database.generated.js";
 import type { PublicRateLimitCheck } from "../ports/public-rate-limit.js";
 
-const REACTION_OPERATION = "putProjectReaction";
+export type PublicRateLimitOperation = "putProjectReaction" | "putProjectRating";
 
-/** Shared fixed-window policy: 30 Reaction requests per trusted client and minute. */
-export function createPostgresReactionRateLimit(input: {
+/** Shared fixed-window policy: 30 requests per operation, trusted client and minute. */
+export function createPostgresPublicRateLimit(input: {
   readonly database: Kysely<DB>;
   readonly portfolioId: string;
   readonly hashKey: string;
+  readonly operation: PublicRateLimitOperation;
 }): PublicRateLimitCheck {
   if (input.hashKey.trim() === "" || input.portfolioId.trim() === "") {
     throw new TypeError("Reaction rate-limit configuration is incomplete.");
@@ -26,7 +27,7 @@ export function createPostgresReactionRateLimit(input: {
         .digest("hex");
       const result = await sql<{ readonly allowed: boolean; readonly retry_after_seconds: number }>`
         select allowed, retry_after_seconds
-        from identity_access.check_public_reaction_rate_limit(${subjectHash}, ${REACTION_OPERATION})
+        from identity_access.check_public_reaction_rate_limit(${subjectHash}, ${input.operation})
       `.execute(input.database);
       const verdict = result.rows[0];
       if (verdict === undefined || typeof verdict.allowed !== "boolean" ||
@@ -36,4 +37,12 @@ export function createPostgresReactionRateLimit(input: {
       return { allowed: verdict.allowed, retryAfterSeconds: verdict.retry_after_seconds };
     },
   };
+}
+
+export function createPostgresReactionRateLimit(input: Omit<Parameters<typeof createPostgresPublicRateLimit>[0], "operation">): PublicRateLimitCheck {
+  return createPostgresPublicRateLimit({ ...input, operation: "putProjectReaction" });
+}
+
+export function createPostgresRatingRateLimit(input: Omit<Parameters<typeof createPostgresPublicRateLimit>[0], "operation">): PublicRateLimitCheck {
+  return createPostgresPublicRateLimit({ ...input, operation: "putProjectRating" });
 }
