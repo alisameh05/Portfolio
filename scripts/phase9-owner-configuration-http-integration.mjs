@@ -126,7 +126,8 @@ async function main() {
       feedbackPrerequisiteEvidence = JSON.parse(readFileSync(join(ROOT, "evidence/phase7-feedback-192.json"), "utf8"));
     } catch { throw new Error("PHASE9_FEEDBACK_PHASE7_EVIDENCE_MISSING"); }
     if (feedbackPrerequisiteEvidence.cleanup !== true || feedbackPrerequisiteEvidence.required?.success !== true ||
-        feedbackPrerequisiteEvidence.required?.failed !== 0 || feedbackPrerequisiteEvidence.required?.skipped !== 0 ||
+        feedbackPrerequisiteEvidence.required?.passed !== 57 || feedbackPrerequisiteEvidence.required?.failed !== 0 ||
+        feedbackPrerequisiteEvidence.required?.skipped !== 0 || feedbackPrerequisiteEvidence.required?.failedSuites !== 0 ||
         feedbackPrerequisiteEvidence.sourceTreeSha256 !== workingTreeSourceSha256()) {
       throw new Error("PHASE9_FEEDBACK_PHASE7_EVIDENCE_STALE_OR_INCOMPLETE");
     }
