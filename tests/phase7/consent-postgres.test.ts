@@ -141,7 +141,7 @@ describe.runIf(Boolean(url))("real PostgreSQL consent boundary", () => {
     const issued = await grant(); if (!issued.ok) throw new Error("grant");
     const event = { action: "page-viewed", context: { occurredAt: now, locale: "en", pageRouteIdentity: createStableId("PublicRoute"), consentVersion: "2026-10" } };
     const request = (token?: string, noticeVersion = "2026-10") => new Request("https://example.com/api/v1/events", {
-      method: "POST", headers: { "Idempotency-Key": "consent-189", ...(token ? { cookie: `sw_analytics_consent=${token}` } : {}) },
+      method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": "consent-189", ...(token ? { cookie: `sw_analytics_consent=${token}` } : {}) },
       body: JSON.stringify({ ...event, context: { ...event.context, consentVersion: noticeVersion } }) });
     const fake = createPublicEventTestFake({ type: "success" }), logger = createTestLogger();
     for (const token of [undefined, "granted", "forged"]) {
@@ -163,7 +163,7 @@ describe.runIf(Boolean(url))("real PostgreSQL consent boundary", () => {
     const env = { NODE_ENV: "test", APP_BASE_URL: "https://example.com", DATABASE_URL: url! };
     const dependencies = { operations: createPostgresOperationsPersistence(runtime.database), resource: runtime.resource, identityReadiness: { name: "isolated-test-identity", async check() { return true; } }, readiness: runtime.readiness };
     const request = () => new Request("https://example.com/api/v1/events", { method: "POST", headers: {
-      "Idempotency-Key": "assembled-consent", cookie: `sw_analytics_consent=${issued.value.evidence}` }, body: JSON.stringify({ action: "page-viewed",
+      "Content-Type": "application/json", "Idempotency-Key": "assembled-consent", cookie: `sw_analytics_consent=${issued.value.evidence}` }, body: JSON.stringify({ action: "page-viewed",
         context: { occurredAt: now, locale: "en", pageRouteIdentity: createStableId("PublicRoute"), consentVersion: "2026-10" } }) });
     try {
       resetRuntimeForTests();
