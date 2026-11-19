@@ -64,14 +64,14 @@ describe("Phase 9 guarded route registration (#293)", () => {
     expect(report.declared.filter((entry: { surface: string }) => entry.surface === "public")).toHaveLength(5);
     expect(report.declared.filter((entry: { surface: string }) => entry.surface === "owner")).toHaveLength(48);
     expect(report.registered.map((entry: { operationId: string }) => entry.operationId)).toEqual([
-      "acceptOwnerCvVersion", "acceptOwnerMediaAsset", "activateOwnerCvVersion",
+      "acceptOwnerCvVersion", "acceptOwnerMediaAsset", "activateOwnerCvVersion", "approveOwnerFeedback",
       "archiveOwnerContent",
       "assignOwnerProjectTaxonomyValue",
       "changeOwnerProjectPublicSlug", "changeOwnerProjectStatus", "correctOwnerProjectCandidateSlug",
-      "createOwnerContent", "createOwnerMediaUploadIntent", "createOwnerProjectStatusValue", "createOwnerTaxonomyValue", "getCurrentCv", "getOwnerContentAggregate", "getOwnerContentHistory", "getOwnerCvPortfolio", "getOwnerMediaAggregate", "getOwnerProjectAggregate", "getOwnerTaxonomyAggregate",
+      "createOwnerContent", "createOwnerMediaUploadIntent", "createOwnerProjectStatusValue", "createOwnerTaxonomyValue", "getCurrentCv", "getOwnerContentAggregate", "getOwnerContentHistory", "getOwnerCvPortfolio", "getOwnerFeedbackModeration", "getOwnerMediaAggregate", "getOwnerProjectAggregate", "getOwnerTaxonomyAggregate",
       "hideOwnerContent", "listOwnerProjectStatusValues", "mergeOwnerTaxonomyValue", "postProjectFeedback", "previewOwnerContentRevision", "publishOwnerContentLanguage",
-      "putProjectRating", "putProjectReaction", "recordOwnerMediaProcessing", "registerOwnerCvVersion", "rejectOwnerMediaAsset", "relateOwnerProjects", "renameOwnerProjectStatusValue", "renameOwnerTaxonomyValue", "restoreOwnerContent", "retireOwnerProjectStatusValue", "retireOwnerTaxonomyValue", "reviewOwnerContentRevision", "saveOwnerContentRevision",
-      "setOwnerProjectFeatured",
+      "putProjectRating", "putProjectReaction", "recordOwnerMediaProcessing", "registerOwnerCvVersion", "rejectOwnerFeedback", "rejectOwnerMediaAsset", "relateOwnerProjects", "renameOwnerProjectStatusValue", "renameOwnerTaxonomyValue", "restoreOwnerContent", "retireOwnerProjectStatusValue", "retireOwnerTaxonomyValue", "reviewOwnerContentRevision", "saveOwnerContentRevision",
+      "setOwnerProjectFeatured", "suppressOwnerFeedback",
       "updateOwnerContactChannels", "updateOwnerGlobalProjectCta", "updateOwnerProfileConfiguration",
     ]);
     const lifecycleOperations = new Set(["archiveOwnerContent", "hideOwnerContent", "publishOwnerContentLanguage", "restoreOwnerContent"]);

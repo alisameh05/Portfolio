@@ -21,7 +21,7 @@ export type OwnerModerationHttpOperation =
 
 type FeedbackParams = { readonly feedbackId: string };
 
-let initialization: Promise<void> | undefined;
+let initialization: ReturnType<typeof initializeDatabaseRuntime> | undefined;
 
 async function ensureRuntime(): Promise<void> {
   initialization ??= initializeDatabaseRuntime(getRuntimeEnvironmentSnapshot(), "application");
