@@ -156,6 +156,8 @@ describe("Owner Feedback Moderation retrieval (#32)", () => {
         { service: fake, security: ownerTestSecurity(), logger },
       );
       expect(response.status).toBe(status);
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
+      expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
       expect(fake.calls.getOwnerFeedbackModeration).toHaveLength(1);
       const body = (await response.json()) as Record<string, unknown>;
       expect(zProblem.safeParse(body).success).toBe(true);
@@ -328,6 +330,8 @@ describe("Owner Feedback approval, rejection, and suppression (#32)", () => {
       for (const run of handlers) {
         const response = await run();
         expect(response.status).toBe(status);
+        expect(response.headers.get("cache-control")).toBe("private, no-store");
+        expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
         const body = (await response.json()) as Record<string, unknown>;
         expect(body["code"]).toBe(problemCode);
         if (status === 429) {

@@ -22,7 +22,7 @@ import { observeHttpRequest } from "./observe-request.js";
  * origin plus CSRF proof before dispatch. Unauthenticated and forbidden
  * translation is exercised through fakes. Moderation decisions, retention,
  * persistence, and scoped authorization are provider-neutral application behavior.
- * Inspection, approval and rejection use real persistence; suppression is the next ticket.
+ * Inspection, approval, rejection, and suppression use real persistence.
  *
  * Generated transport types and validators remain confined to this HTTP
  * layer. Commands, queries, results, and rejections crossing the application
@@ -56,7 +56,7 @@ import type {
 import { createCorrelation, type Logger } from "../ports.js";
 import {
   guardOwnerRequest,
-  OWNER_PRIVATE_RESPONSE_HEADERS,
+  withOwnerPrivateResponseHeaders,
   type OwnerRequestSecurity,
 } from "./owner-security.js";
 import {
@@ -199,7 +199,7 @@ function commandHeaders(request: Request): Record<string, string | undefined> {
       );
     }
     logger?.info("request.completed", { traceId, status: 200 });
-    return Response.json(parsed.data, { status: 200, headers: OWNER_PRIVATE_RESPONSE_HEADERS });
+    return Response.json(parsed.data, { status: 200 });
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }
@@ -310,7 +310,7 @@ async function handleModerationCommand(
       );
     }
     logger?.info("request.completed", { traceId, status: 200 });
-    return Response.json(parsed.data, { status: 200, headers: OWNER_PRIVATE_RESPONSE_HEADERS });
+    return Response.json(parsed.data, { status: 200 });
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }
@@ -408,17 +408,17 @@ async function handleModerationCommand(
 
 
 export function handleGetOwnerFeedbackModeration(request: Request, params: { feedbackId: string }, deps: OwnerModerationAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-moderation", () => handleGetOwnerFeedbackModerationUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-moderation", () => withOwnerPrivateResponseHeaders(handleGetOwnerFeedbackModerationUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleApproveOwnerFeedback(request: Request, params: { feedbackId: string }, deps: OwnerModerationAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-moderation", () => handleApproveOwnerFeedbackUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-moderation", () => withOwnerPrivateResponseHeaders(handleApproveOwnerFeedbackUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleRejectOwnerFeedback(request: Request, params: { feedbackId: string }, deps: OwnerModerationAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-moderation", () => handleRejectOwnerFeedbackUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-moderation", () => withOwnerPrivateResponseHeaders(handleRejectOwnerFeedbackUnobserved(request, params, deps)), deps.logger);
 }
 
 export function handleSuppressOwnerFeedback(request: Request, params: { feedbackId: string }, deps: OwnerModerationAdapterDeps): Promise<Response> {
-  return observeHttpRequest("owner-moderation", () => handleSuppressOwnerFeedbackUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("owner-moderation", () => withOwnerPrivateResponseHeaders(handleSuppressOwnerFeedbackUnobserved(request, params, deps)), deps.logger);
 }
