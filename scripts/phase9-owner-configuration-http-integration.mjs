@@ -495,7 +495,7 @@ async function main() {
         "tests/phase7/feedback-postgres.test.ts :: T05-05 independent-pool same-key races produce one row/fact; changed payload conflicts"],
       AC05: ["tests/runtime/feedback-http.network.integration.test.ts :: AC04-05 rechecks Project lifecycle before replay; AC05 rejects unavailable and foreign Projects",
         "tests/phase7/feedback-postgres.test.ts :: T05-07 hide-first and submit-first real lifecycle races; T05-06 limiter outage has no effects"],
-      AC06: ["tests/runtime/feedback-http.network.integration.test.ts :: receipt contains only the contracted pending fields and rows stay in private interaction.feedback",
+      AC06: ["tests/runtime/feedback-http.network.integration.test.ts :: receipt contains only contracted fields, the real approved public projection excludes pending Feedback, and outbox payload omits private text",
         "tests/phase7/feedback-postgres.test.ts :: T05-08 Feedback text exists only in the private row; outbox, ledger, Measurement and logs are redacted",
         "isolated loopback Supabase cleanup :: disposable PostgreSQL and application instances removed after suite"],
     } } : ticket === 304 ? { acceptanceCriteria: {
