@@ -133,7 +133,8 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
   async function countJobs() { return Number((await admin.query("select count(*)::int as count from operations.jobs where job_type='measurement.public-event-received.v1'")).rows[0].count); }
   function request(token: string | undefined, event: unknown, keyValue = "http-event-key-01") {
     return new Request("https://example.com/api/v1/events", { method: "POST", headers: {
-      "Idempotency-Key": keyValue, "content-type": "application/json", ...(token === undefined ? {} : { cookie: `sw_analytics_consent=${token}` }),
+      "Idempotency-Key": keyValue, "content-type": "application/json", "x-vercel-forwarded-for": "198.51.100.33",
+      ...(token === undefined ? {} : { cookie: `sw_analytics_consent=${token}` }),
     }, body: JSON.stringify(event) });
   }
   beforeAll(async () => {
@@ -596,7 +597,7 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
       expect(unavailable.status).toBe(503);
       resetRuntimeForTests();
       await initializeDatabaseRuntime(env, "application", () => ({ operations: runtimeOps, resource: runtime.resource, identityReadiness: { name: "isolated-test-identity", async check() { return true; } }, readiness: runtime.readiness,
-        consent, eventIngestion: { scope, service } }));
+        consent, eventIngestion: { scope, service, rateLimit: { async check() { return { allowed: true, retryAfterSeconds: 60 }; } } } }));
       expect(getMeasurementEventIngestionService()?.service).toBe(service);
       const response = await handlePostPublicEvent(request(evidence.token, pageEvent(routeId), "assembled-event-service"), { logger: createTestLogger() });
       expect(response.status).toBe(202);

@@ -16,9 +16,11 @@ import { safeAssertionDiagnostic } from "./validation-errors.mjs";
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const CLI = join(ROOT, "node_modules/supabase/dist/supabase.js");
 const NEXT = join(ROOT, "node_modules/next/dist/bin/next");
-const ticket = process.argv.includes("--ticket-306") ? 306 : process.argv.includes("--ticket-305") ? 305 : process.argv.includes("--ticket-304") ? 304 : process.argv.includes("--ticket-303") ? 303 : process.argv.includes("--ticket-302") ? 302 : process.argv.includes("--ticket-299") ? 299 : process.argv.includes("--ticket-298") ? 298 : process.argv.includes("--ticket-295") ? 295 : 294;
+const ticket = process.argv.includes("--ticket-307") ? 307 : process.argv.includes("--ticket-306") ? 306 : process.argv.includes("--ticket-305") ? 305 : process.argv.includes("--ticket-304") ? 304 : process.argv.includes("--ticket-303") ? 303 : process.argv.includes("--ticket-302") ? 302 : process.argv.includes("--ticket-299") ? 299 : process.argv.includes("--ticket-298") ? 298 : process.argv.includes("--ticket-295") ? 295 : 294;
 const contentAuthoringTicket = ticket === 295 || ticket === 298 || ticket === 299;
-const REPORT = join(ROOT, ticket === 305
+const REPORT = join(ROOT, ticket === 307
+  ? "evidence/phase9-measurement-http-307.json"
+  : ticket === 305
   ? "evidence/phase9-feedback-http-305.json"
   : ticket === 306 ? "evidence/phase9-feedback-moderation-http-306.json"
   : ticket === 304
@@ -293,6 +295,12 @@ async function main() {
         PHASE9_MODERATION_HTTP_ADMIN_DATABASE_URL: status.DB_URL,
         PHASE9_MODERATION_HTTP_URLS: JSON.stringify(appPorts.slice(0, 2).map((port) => `http://127.0.0.1:${port}`)),
       } : {}),
+      ...(ticket === 307 ? {
+        PHASE9_REQUIRE_PUBLIC_EVENT_HTTP: "1",
+        PHASE9_EVENT_HTTP_ADMIN_DATABASE_URL: status.DB_URL,
+        PHASE9_EVENT_HTTP_DATABASE_URL: restricted.toString(),
+        PHASE9_EVENT_HTTP_URLS: JSON.stringify(appPorts.slice(0, 2).map((port) => `http://127.0.0.1:${port}`)),
+      } : {}),
       ...(contentAuthoringTicket ? { PHASE5_REQUIRE_CONTENT_AUTHORING: "1", PHASE5_CONTENT_AUTHORING_DATABASE_URL: status.DB_URL } : {}),
     };
     stage = "tests";
@@ -300,7 +308,12 @@ async function main() {
     // Blocking this event loop can fill a server's stdout pipe on Linux and
     // stall its responses until the test's request deadline expires.
     const test = await new Promise((resolve) => {
-      const suites = ticket === 306 ? [
+      const suites = ticket === 307 ? [
+        "tests/runtime/public-event.test.ts",
+        "tests/runtime/public-event-http.network.integration.test.ts",
+        "tests/routes/phase9-route-registration.test.ts",
+        "tests/phase8/operations-observability.test.ts",
+      ] : ticket === 306 ? [
         "tests/runtime/owner-moderation.test.ts",
         "tests/runtime/owner-moderation-http.network.integration.test.ts",
         "tests/routes/phase9-route-registration.test.ts",
@@ -351,7 +364,7 @@ async function main() {
     const report = JSON.parse(readFileSync(reportPath, "utf8"));
     if (test.error || test.status !== 0 || report.success !== true || report.numPassedTests <= 3 ||
         report.numFailedTests !== 0 || report.numPendingTests !== 0 || report.numTodoTests !== 0 ||
-        report.testResults?.length !== (ticket === 306 ? 3 : ticket === 305 ? 4 : ticket === 304 ? 3 : ticket === 303 ? 3 : ticket === 302 ? 11 : ticket === 299 ? 13 : ticket === 298 ? 12 : contentAuthoringTicket ? 9 : 6) ||
+        report.testResults?.length !== (ticket === 307 ? 4 : ticket === 306 ? 3 : ticket === 305 ? 4 : ticket === 304 ? 3 : ticket === 303 ? 3 : ticket === 302 ? 11 : ticket === 299 ? 13 : ticket === 298 ? 12 : contentAuthoringTicket ? 9 : 6) ||
         report.testResults.some((suite) => suite.status !== "passed")) {
       const failedAssertions = report.testResults?.flatMap((suite) => suite.assertionResults ?? [])
         .filter((assertion) => assertion.status !== "passed")
@@ -430,7 +443,9 @@ async function main() {
   }));
   mkdirSync(join(ROOT, "evidence"), { recursive: true });
     writeFileSync(REPORT, `${JSON.stringify({
-    ticket, scope: ticket === 306
+    ticket, scope: ticket === 307
+      ? "built-next-public-consent-verified-measurement-http-real-consent-postgresql-replay-and-privacy"
+      : ticket === 306
       ? "built-next-owner-feedback-moderation-http-real-auth-restricted-postgresql-public-projection-suppression"
       : ticket === 305
       ? "built-next-public-identity-free-feedback-http-real-postgresql-replay-privacy-and-lifecycle"
@@ -471,7 +486,9 @@ async function main() {
     toolIdentity: { node: process.version, npm: npmVersion.status === 0 ? npmVersion.stdout.trim() : "unavailable",
       next: nextVersion, supabaseCli: supabaseVersion, postgres: postgresVersion },
     databaseRole: "restricted login granted shipwithali_application; bypassrls=false",
-    fixtures: ticket === 306
+    fixtures: ticket === 307
+      ? { portfolio: "synthetic isolated test portfolio", project: "synthetic Published English Project", consent: "real persisted grant, token, withdrawal and cleanup", measurementSubject: "pseudonymous and omitted from transport" }
+      : ticket === 306
       ? { owner: "synthetic linked GitHub test identity", portfolio: "synthetic configured test portfolio", projects: "synthetic Published English Projects", feedback: "synthetic private submissions created through public HTTP", sessions: "temporary Auth sessions" }
       : ticket === 305
       ? { portfolio: "synthetic isolated test portfolio", projects: "synthetic Published, Hidden, foreign and unavailable Projects", identity: "none", measurementConsent: "none" }
@@ -480,7 +497,15 @@ async function main() {
       : ticket === 303
       ? { portfolio: "synthetic isolated test portfolio", projects: "synthetic Published, Hidden and Archived Projects", measurementConsent: "none" }
       : { owner: "synthetic linked GitHub test identity", portfolio: "synthetic configured test portfolio", session: "temporary Auth sessions" },
-    verdict: "passed", namedChecks: ticket === 306 ? [
+    verdict: "passed", namedChecks: ticket === 307 ? [
+      "postPublicEvent-registered-and-served-by-production-built-next",
+      "only-current-persisted-affirmative-consent-accepts-strict-allowlisted-minimized-events",
+      "event-and-due-job-commit-atomically-with-safe-schema-valid-202-receipt",
+      "missing-denied-tampered-withdrawn-wrong-notice-and-wrong-purpose-evidence-have-no-event-effects",
+      "unknown-actions-fields-and-out-of-bounds-journey-inputs-reject-before-dispatch",
+      "cross-replica-exact-replay-returns-original-receipt-and-changed-key-payload-conflicts",
+      "real-consent-locking-and-event-privacy-regressions-run-with-cleanup",
+    ] : ticket === 306 ? [
       "all-four-owner-feedback-moderation-operations-registered-and-served-by-built-next",
       "private-schema-valid-owner-view-and-approval-rejection-suppression-receipts",
       "only-approved-submitted-locale-feedback-enters-the-real-public-query",
@@ -533,7 +558,14 @@ async function main() {
         "current-CV-English-only-absence-and-Problem-contract", "owner-CV-rate-limit-operations-accepted-by-restricted-postgresql",
         "CV-adapter-stream-redirect-rate-limit-and-privacy-regression-suites",
         "real-PDF-activation-and-storage-evidence-is-produced-by-the-required-Phase-6-gate"] : [])],
-    ...(ticket === 306 ? { acceptanceCriteria: {
+    ...(ticket === 307 ? { acceptanceCriteria: {
+      AC01: ["tests/runtime/public-event-http.network.integration.test.ts :: accepts a consented minimized observation over built HTTP and verifies one authorized raw record and one queued job"],
+      AC02: ["tests/runtime/public-event-http.network.integration.test.ts :: missing, tampered, withdrawn and wrong-notice consent evidence causes no writes"],
+      AC03: ["tests/runtime/public-event-http.network.integration.test.ts :: functional-cookie-only authority is denied; current consent is verified from signed evidence and persisted state"],
+      AC04: ["tests/runtime/public-event-http.network.integration.test.ts :: unknown event action/fields and out-of-bounds journey are rejected before effects", "tests/phase7/events-postgres.test.ts :: validates all nine allowlisted action-specific event facts and time bounds"],
+      AC05: ["tests/runtime/public-event-http.network.integration.test.ts :: cross-replica exact replay, payload conflict and withdrawal preserve row counts", "tests/phase7/events-postgres.test.ts :: independent-connection consent withdrawal and idempotency races"],
+      AC06: ["tests/phase8/operations-observability.test.ts :: observer and optional intake failures remain isolated and emit only bounded safe signals", "tests/runtime/public-event-http.network.integration.test.ts :: receipts and persisted event rows omit consent tokens and raw subject from HTTP output"],
+    } } : ticket === 306 ? { acceptanceCriteria: {
       AC01: ["tests/runtime/owner-moderation-http.network.integration.test.ts :: AC01-04 serves GET, approve, reject and suppress over the production-built network boundary with generated response schemas, private headers and committed aggregate versions"],
       AC02: ["tests/runtime/owner-moderation-http.network.integration.test.ts :: pending and rejected Feedback remain absent from the real approved query while approved submitted-locale Feedback appears; suppression removes it"],
       AC03: ["tests/runtime/owner-moderation-http.network.integration.test.ts :: suppression removes public eligibility while the private row and approved/suppressed decision history remain", "evidence/phase7-suppression-194.json :: atomic suppression projection and retained moderation history"],
@@ -801,7 +833,13 @@ async function main() {
         executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / executes all five CV operations over built HTTP with accepted PDF bytes and rejects invalid CV states",
         assertions: ["200 PDF or 307 no-store response", "short-lived private Storage target constrained to configured Storage origin and processed bucket when redirecting", "delivered PDF header, exact stored hash and bounded size", "signed target omitted from diagnostics and evidence"] },
     ] } : {}),
-    operationExamples: ticket === 306 ? [
+    operationExamples: ticket === 307 ? [
+      { operation: "postPublicEvent", httpStatus: 202, responseSchemaValid: true, persistedConsentVerified: true, minimizedEventPersisted: true, exactlyOneDueJob: true },
+      { operation: "postPublicEvent", httpStatus: 403, missingOrTamperedOrWithdrawnConsentHasNoEffects: true },
+      { operation: "postPublicEvent", httpStatus: 400, unknownFieldsActionsAndOutOfBoundsJourneyRejected: true },
+      { operation: "postPublicEvent", httpStatus: 202, crossReplicaExactReplayReturnsOriginalReceipt: true },
+      { operation: "postPublicEvent", httpStatus: 409, changedKeyPayloadConflict: true },
+    ] : ticket === 306 ? [
       { operation: "getOwnerFeedbackModeration", httpStatus: 200, responseSchemaValid: true, privateHeaders: true, privateFieldsOwnerOnly: true },
       { operation: "approveOwnerFeedback", httpStatus: 200, responseSchemaValid: true, aggregateVersion: 2, publicQueryEligibility: true, exactReplayVerified: true },
       { operation: "rejectOwnerFeedback", httpStatus: 200, responseSchemaValid: true, aggregateVersion: 2, publicQueryExcluded: true },
@@ -862,7 +900,8 @@ async function main() {
       ] : []),
     ],
     passed: passedTestCount, failed: 0, skipped: 0, productionBuild: true, isolatedLoopbackSupabase: true,
-    execution: { command: ticket === 306 ? "npm run phase9:focus:moderation-http"
+    execution: { command: ticket === 307 ? "npm run phase9:focus:measurement-http"
+      : ticket === 306 ? "npm run phase9:focus:moderation-http"
       : ticket === 305 ? "npm run phase9:focus:feedback-http"
       : ticket === 304 ? "npm run phase9:focus:rating-http"
       : ticket === 303 ? "npm run phase9:focus:reaction-http"
