@@ -13,7 +13,7 @@ import { createRatingApplicationService, createFunctionalInteractionContext } fr
 import { createIdentityAccessService } from "../../src/modules/identity-access/application/policy.js";
 import { AesGcmPseudonymousTokenAdapter, StubAuthProvider } from "../../src/modules/identity-access/adapters/index.js";
 import { createSystemIdGenerator, createTestLogger } from "../../src/runtime/ports.js";
-import { handlePutProjectRating } from "../../src/runtime/http/rating.js";
+import { handlePutProjectRating, type RatingAdapterDeps } from "../../src/runtime/http/rating.js";
 import { initializeDatabaseRuntime, getRatingRuntimeServices, resetRuntimeForTests } from "../../src/bootstrap/composition-root.js";
 import { getLifecycleCoordinator } from "../../src/runtime/lifecycle.js";
 import { createReactionApplicationService } from "../../src/modules/interaction-moderation/index.js";
@@ -40,7 +40,7 @@ describe.runIf(Boolean(url))("real PostgreSQL Rating acceptance", () => {
   const repository = createPostgresRatingRepository();
   const service = createRatingApplicationService({ portfolioId, content, operations, repository, clock: { now: () => now }, ids: createSystemIdGenerator() });
   const functionalIdentity = createFunctionalInteractionContext({ portfolioId, content, transactions: operations.transactions, identity });
-  const deps = { scope, service, functionalIdentity, rateLimit: { async check() { return { allowed: true, retryAfterSeconds: 60 }; } } };
+  const deps: RatingAdapterDeps = { scope, service, functionalIdentity, rateLimit: { async check() { return { allowed: true, retryAfterSeconds: 60 }; } } };
   const key = (text = createStableId("Key")) => { const result = parseIdempotencyKey(text); if (!result.ok) throw new Error("key"); return result.value; };
   const prepare = (projectId: StableId<"Project">, tokenString?: string, consent: "unknown" | "denied" = "unknown") => functionalIdentity.prepare({
     scope, correlationId: "rating-test", projectId, interaction: "rating", consent, ...(tokenString === undefined ? {} : { tokenString }) });
@@ -134,7 +134,7 @@ describe.runIf(Boolean(url))("real PostgreSQL Rating acceptance", () => {
     expect((await http(projectId, 5, cookie)).status).toBe(200);
     expect((await admin.query("select kind from interaction.reactions where project_id=$1", [projectId])).rows).toEqual([{ kind: "like" }]);
     const arabic = await handlePutProjectRating(new Request("https://example.com/ar/projects/" + projectId + "/rating", {
-      method: "PUT", headers: { cookie, "Idempotency-Key": key(), "accept-language": "ar" }, body: '{"rating":5}',
+      method: "PUT", headers: { cookie, "Idempotency-Key": key(), "accept-language": "ar", "x-vercel-forwarded-for": "198.51.100.25" }, body: '{"rating":5}',
     }), { projectId }, deps);
     expect(arabic.status).toBe(200); expect(arabic.headers.get("set-cookie")).toBeNull();
     expect((await reaction("dislike", cookie)).status).toBe(200);
