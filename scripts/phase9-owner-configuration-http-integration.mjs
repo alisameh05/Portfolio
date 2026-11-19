@@ -16,9 +16,11 @@ import { safeAssertionDiagnostic } from "./validation-errors.mjs";
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const CLI = join(ROOT, "node_modules/supabase/dist/supabase.js");
 const NEXT = join(ROOT, "node_modules/next/dist/bin/next");
-const ticket = process.argv.includes("--ticket-304") ? 304 : process.argv.includes("--ticket-303") ? 303 : process.argv.includes("--ticket-302") ? 302 : process.argv.includes("--ticket-299") ? 299 : process.argv.includes("--ticket-298") ? 298 : process.argv.includes("--ticket-295") ? 295 : 294;
+const ticket = process.argv.includes("--ticket-305") ? 305 : process.argv.includes("--ticket-304") ? 304 : process.argv.includes("--ticket-303") ? 303 : process.argv.includes("--ticket-302") ? 302 : process.argv.includes("--ticket-299") ? 299 : process.argv.includes("--ticket-298") ? 298 : process.argv.includes("--ticket-295") ? 295 : 294;
 const contentAuthoringTicket = ticket === 295 || ticket === 298 || ticket === 299;
-const REPORT = join(ROOT, ticket === 304
+const REPORT = join(ROOT, ticket === 305
+  ? "evidence/phase9-feedback-http-305.json"
+  : ticket === 304
   ? "evidence/phase9-rating-http-304.json"
   : ticket === 303
   ? "evidence/phase9-reaction-http-303.json"
@@ -116,6 +118,18 @@ async function main() {
         ratingPrerequisiteEvidence.required?.skipped !== 0 ||
         ratingPrerequisiteEvidence.sourceTreeSha256 !== workingTreeSourceSha256()) {
       throw new Error("PHASE9_RATING_PHASE7_EVIDENCE_STALE_OR_INCOMPLETE");
+    }
+  }
+  let feedbackPrerequisiteEvidence;
+  if (ticket === 305) {
+    try {
+      feedbackPrerequisiteEvidence = JSON.parse(readFileSync(join(ROOT, "evidence/phase7-feedback-192.json"), "utf8"));
+    } catch { throw new Error("PHASE9_FEEDBACK_PHASE7_EVIDENCE_MISSING"); }
+    if (feedbackPrerequisiteEvidence.cleanup !== true || feedbackPrerequisiteEvidence.required?.success !== true ||
+        feedbackPrerequisiteEvidence.required?.passed !== 57 || feedbackPrerequisiteEvidence.required?.failed !== 0 ||
+        feedbackPrerequisiteEvidence.required?.skipped !== 0 || feedbackPrerequisiteEvidence.required?.failedSuites !== 0 ||
+        feedbackPrerequisiteEvidence.sourceTreeSha256 !== workingTreeSourceSha256()) {
+      throw new Error("PHASE9_FEEDBACK_PHASE7_EVIDENCE_STALE_OR_INCOMPLETE");
     }
   }
   const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
@@ -252,6 +266,10 @@ async function main() {
         PHASE9_RATING_HTTP_ADMIN_DATABASE_URL: status.DB_URL,
         PHASE9_RATING_HTTP_URLS: JSON.stringify(appPorts.slice(0, 2).map((port) => `http://127.0.0.1:${port}`)),
       } : {}),
+      ...(ticket === 305 ? {
+        PHASE9_FEEDBACK_HTTP_ADMIN_DATABASE_URL: status.DB_URL,
+        PHASE9_FEEDBACK_HTTP_URLS: JSON.stringify(appPorts.slice(0, 2).map((port) => `http://127.0.0.1:${port}`)),
+      } : {}),
       ...(contentAuthoringTicket ? { PHASE5_REQUIRE_CONTENT_AUTHORING: "1", PHASE5_CONTENT_AUTHORING_DATABASE_URL: status.DB_URL } : {}),
     };
     stage = "tests";
@@ -259,7 +277,12 @@ async function main() {
     // Blocking this event loop can fill a server's stdout pipe on Linux and
     // stall its responses until the test's request deadline expires.
     const test = await new Promise((resolve) => {
-      const suites = ticket === 304 ? [
+      const suites = ticket === 305 ? [
+        "tests/runtime/feedback.test.ts",
+        "tests/runtime/feedback-limits.test.ts",
+        "tests/runtime/feedback-http.network.integration.test.ts",
+        "tests/routes/phase9-route-registration.test.ts",
+      ] : ticket === 304 ? [
         "tests/runtime/rating.test.ts",
         "tests/runtime/rating-http.network.integration.test.ts",
         "tests/routes/phase9-route-registration.test.ts",
@@ -301,7 +324,7 @@ async function main() {
     const report = JSON.parse(readFileSync(reportPath, "utf8"));
     if (test.error || test.status !== 0 || report.success !== true || report.numPassedTests <= 3 ||
         report.numFailedTests !== 0 || report.numPendingTests !== 0 || report.numTodoTests !== 0 ||
-        report.testResults?.length !== (ticket === 304 ? 3 : ticket === 303 ? 3 : ticket === 302 ? 11 : ticket === 299 ? 13 : ticket === 298 ? 12 : contentAuthoringTicket ? 9 : 6) ||
+        report.testResults?.length !== (ticket === 305 ? 4 : ticket === 304 ? 3 : ticket === 303 ? 3 : ticket === 302 ? 11 : ticket === 299 ? 13 : ticket === 298 ? 12 : contentAuthoringTicket ? 9 : 6) ||
         report.testResults.some((suite) => suite.status !== "passed")) {
       const failedAssertions = report.testResults?.flatMap((suite) => suite.assertionResults ?? [])
         .filter((assertion) => assertion.status !== "passed")
@@ -357,7 +380,7 @@ async function main() {
       try { rmSync(absoluteWorkdir, { recursive: true, force: true }); } catch { cleanupFailed = true; }
     }
     const capturedLogs = logs.join("");
-    if (/eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}|SERVICE_ROLE_KEY\s*[=:]\s*\S+|password\s*[=:]\s*\S+|SHOULD_NEVER_APPEAR_PHASE9_SECRET_7d0b0a/i.test(capturedLogs)) {
+    if (/eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}|SERVICE_ROLE_KEY\s*[=:]\s*\S+|password\s*[=:]\s*\S+|SHOULD_NEVER_APPEAR_PHASE9_SECRET_7d0b0a|PRIVATE_FEEDBACK_(?:NAME|TEXT)_SENTINEL_305/i.test(capturedLogs)) {
       failure = new Error("PHASE9_OWNER_HTTP_LOG_PRIVACY_FAILED");
     }
     if (cleanupFailed) failure = new Error("PHASE9_OWNER_HTTP_CLEANUP_FAILED: disposable validation resources remain; acceptance failed.");
@@ -375,8 +398,10 @@ async function main() {
     return [name, digest(readFileSync(path))];
   }));
   mkdirSync(join(ROOT, "evidence"), { recursive: true });
-  writeFileSync(REPORT, `${JSON.stringify({
-    ticket, scope: ticket === 304
+    writeFileSync(REPORT, `${JSON.stringify({
+    ticket, scope: ticket === 305
+      ? "built-next-public-identity-free-feedback-http-real-postgresql-replay-privacy-and-lifecycle"
+      : ticket === 304
       ? "built-next-public-rating-http-real-postgresql-functional-identity-and-shared-rate-limit"
       : ticket === 303
       ? "built-next-public-reaction-http-real-postgresql-functional-identity-and-shared-rate-limit"
@@ -400,16 +425,33 @@ async function main() {
       required: reactionPrerequisiteEvidence.required,
       cleanupVerified: reactionPrerequisiteEvidence.cleanup,
     } } : {}),
+    ...(ticket === 305 ? { phase7Prerequisite: {
+      artifact: "evidence/phase7-feedback-192.json",
+      sourceTreeSha256: feedbackPrerequisiteEvidence.sourceTreeSha256,
+      required: feedbackPrerequisiteEvidence.required,
+      cleanupVerified: feedbackPrerequisiteEvidence.cleanup,
+    } } : {}),
     contractBundles, migrations,
     toolIdentity: { node: process.version, npm: npmVersion.status === 0 ? npmVersion.stdout.trim() : "unavailable",
       next: nextVersion, supabaseCli: supabaseVersion, postgres: postgresVersion },
     databaseRole: "restricted login granted shipwithali_application; bypassrls=false",
-    fixtures: ticket === 304
+    fixtures: ticket === 305
+      ? { portfolio: "synthetic isolated test portfolio", projects: "synthetic Published, Hidden, foreign and unavailable Projects", identity: "none", measurementConsent: "none" }
+      : ticket === 304
       ? { portfolio: "synthetic isolated test portfolio", projects: "synthetic Published, Hidden and Archived Projects", measurementConsent: "none" }
       : ticket === 303
       ? { portfolio: "synthetic isolated test portfolio", projects: "synthetic Published, Hidden and Archived Projects", measurementConsent: "none" }
       : { owner: "synthetic linked GitHub test identity", portfolio: "synthetic configured test portfolio", session: "temporary Auth sessions" },
-    verdict: "passed", namedChecks: ticket === 304 ? [
+    verdict: "passed", namedChecks: ticket === 305 ? [
+      "built-next-public-feedback-route-and-production-composition",
+      "201-schema-valid-minimal-pending-receipt-and-private-version-one-row",
+      "no-functional-or-measurement-cookies-or-subjects-created-or-required",
+      "strict-transport-body-byte-text-and-exact-locale-rejection",
+      "cross-server-concurrent-exact-replay-and-changed-input-conflict",
+      "project-lifecycle-rechecked-before-replay-and-unavailable-foreign-denial",
+      "feedback-text-confined-to-private-row-and-redacted-from-events-responses-and-logs",
+      "real-postgresql-rollback-race-and-cleanup-phase7-regressions",
+    ] : ticket === 304 ? [
       "built-next-public-rating-route-and-production-composition",
       "valid-200-rating-receipt-shared-secure-host-only-functional-cookie-no-store-non-indexable",
       "one-current-rater-row-and-one-aggregate-contribution-after-change",
@@ -445,7 +487,19 @@ async function main() {
         "current-CV-English-only-absence-and-Problem-contract", "owner-CV-rate-limit-operations-accepted-by-restricted-postgresql",
         "CV-adapter-stream-redirect-rate-limit-and-privacy-regression-suites",
         "real-PDF-activation-and-storage-evidence-is-produced-by-the-required-Phase-6-gate"] : [])],
-    ...(ticket === 304 ? { acceptanceCriteria: {
+    ...(ticket === 305 ? { acceptanceCriteria: {
+      AC01: ["tests/runtime/feedback-http.network.integration.test.ts :: AC01-02 stores a private pending version-1 row through the built route with a schema-valid 201 receipt"],
+      AC02: ["tests/runtime/feedback-http.network.integration.test.ts :: AC01-02 proves no Set-Cookie or Measurement consent row; production composition requires no functional identity"],
+      AC03: ["tests/runtime/feedback-http.network.integration.test.ts :: AC03 rejects malformed, unknown, oversized, blank, control, and unpublished-locale input",
+        "tests/runtime/feedback-limits.test.ts :: streamed body bound rejects a deceptive Content-Length"],
+      AC04: ["tests/runtime/feedback-http.network.integration.test.ts :: AC04-05 replays the original receipt across servers and conflicts on changed input",
+        "tests/phase7/feedback-postgres.test.ts :: T05-05 independent-pool same-key races produce one row/fact; changed payload conflicts"],
+      AC05: ["tests/runtime/feedback-http.network.integration.test.ts :: AC04-05 rechecks Project lifecycle before replay; AC05 rejects unavailable and foreign Projects",
+        "tests/phase7/feedback-postgres.test.ts :: T05-07 hide-first and submit-first real lifecycle races; T05-06 limiter outage has no effects"],
+      AC06: ["tests/runtime/feedback-http.network.integration.test.ts :: receipt contains only contracted fields, the real approved public projection excludes pending Feedback, and outbox payload omits private text",
+        "tests/phase7/feedback-postgres.test.ts :: T05-08 Feedback text exists only in the private row; outbox, ledger, Measurement and logs are redacted",
+        "isolated loopback Supabase cleanup :: disposable PostgreSQL and application instances removed after suite"],
+    } } : ticket === 304 ? { acceptanceCriteria: {
       AC01: ["tests/runtime/rating-http.network.integration.test.ts :: AC01 returns a schema-valid current Rating receipt and shared secure functional cookie"],
       AC02: ["tests/runtime/rating-http.network.integration.test.ts :: AC02 changes one current row and one aggregate contribution instead of adding a rater",
         "tests/phase7/ratings-postgres.test.ts :: T04-01 returns strict HTTP 200, secure cookie and one replacement row with reconciled counts",
@@ -638,7 +692,12 @@ async function main() {
         executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / serves controlled Taxonomy workflows over built HTTP and verifies real PostgreSQL assignment history",
         assertions: ["200 schema-valid receipt", "cross-instance exact replay", "retired value rejected without new assignment"] },
     ] } : {}),
-    ...(ticket === 304 ? { traceability: [
+    ...(ticket === 305 ? { traceability: [
+      { method: "POST", route: "/api/v1/projects/{projectId}/feedback", operation: "postProjectFeedback",
+        application: "dispatchPostProjectFeedbackHttp -> getFeedbackRuntimeServices -> handlePostProjectFeedback -> InteractionModerationService.submitFeedback",
+        executedTest: "tests/runtime/feedback-http.network.integration.test.ts :: Phase 9 #305 production-built Feedback HTTP acceptance",
+        assertions: ["201 generated response schema", "pending row with original submission facts and aggregateVersion 1", "no functional or Measurement identity", "Cache-Control no-store", "X-Robots-Tag noindex, nofollow", "private text excluded from receipt and durable non-row facts"] },
+    ] } : ticket === 304 ? { traceability: [
       { method: "PUT", route: "/api/v1/projects/{projectId}/rating", operation: "putProjectRating",
         application: "dispatchPutProjectRatingHttp -> getRatingRuntimeServices -> handlePutProjectRating -> InteractionModerationService.submitRating",
         executedTest: "tests/runtime/rating-http.network.integration.test.ts :: Phase 9 #304 production-built Rating HTTP acceptance",
@@ -672,7 +731,14 @@ async function main() {
         executedTest: "tests/runtime/owner-configuration-network.integration.test.ts :: Phase 9 #294 production-built Owner configuration network acceptance / executes all five CV operations over built HTTP with accepted PDF bytes and rejects invalid CV states",
         assertions: ["200 PDF or 307 no-store response", "short-lived private Storage target constrained to configured Storage origin and processed bucket when redirecting", "delivered PDF header, exact stored hash and bounded size", "signed target omitted from diagnostics and evidence"] },
     ] } : {}),
-    operationExamples: ticket === 304 ? [
+    operationExamples: ticket === 305 ? [
+      { operation: "postProjectFeedback", httpStatus: 201, responseSchemaValid: true, pendingOnly: true,
+        noFunctionalCookie: true, noMeasurementSubject: true, privateTextConfinedToRow: true, exactReplayVerified: true },
+      { operation: "postProjectFeedback", httpStatus: 409, changedKeyPayloadConflict: true },
+      { operation: "postProjectFeedback", httpStatus: 404, unavailableProjectOrLocale: true, noNewEffects: true },
+      { operation: "postProjectFeedback", httpStatus: 429, positiveRetryAfter: true, sharedPortfolioLimiter: true },
+      { operation: "postProjectFeedback", httpStatus: 503, limiterOutageFailsClosed: true, noEffects: true },
+    ] : ticket === 304 ? [
       { operation: "putProjectRating", httpStatus: 200, responseSchemaValid: true, secureFunctionalCookie: true,
         noStore: true, noIndex: true, sameSubjectCurrentRow: true, exactReplayVerified: true },
       { operation: "putProjectRating", httpStatus: 429, positiveRetryAfter: true, sharedPostgresLimiter: true },
@@ -717,7 +783,8 @@ async function main() {
       ] : []),
     ],
     passed: passedTestCount, failed: 0, skipped: 0, productionBuild: true, isolatedLoopbackSupabase: true,
-    execution: { command: ticket === 304 ? "npm run phase9:focus:rating-http"
+    execution: { command: ticket === 305 ? "npm run phase9:focus:feedback-http"
+      : ticket === 304 ? "npm run phase9:focus:rating-http"
       : ticket === 303 ? "npm run phase9:focus:reaction-http"
       : ticket === 302 ? "npm run phase9:focus:cv-http"
       : ticket === 299 ? "npm run phase9:focus:taxonomy-http"
