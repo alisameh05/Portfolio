@@ -20,7 +20,7 @@ import type { OwnerIdentity, PseudonymousToken } from "../domain/index.js";
  */
 export { SupabaseOwnerSessionAdapter } from "./supabase-auth.js";
 export { createPostgresOwnerConfigurationRateLimit } from "./postgres-owner-configuration-rate-limit.js";
-export { createPostgresReactionRateLimit } from "./postgres-reaction-rate-limit.js";
+export { createPostgresReactionRateLimit, createPostgresRatingRateLimit } from "./postgres-reaction-rate-limit.js";
 export type { OwnerSessionAdapterDeps, TrustedProviderIdentity } from "./supabase-auth.js";
 export { createOwnerAuthConfig } from "./auth-config.js";
 export { createSupabaseIdentityReadiness } from "./supabase-readiness.js";

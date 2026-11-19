@@ -70,7 +70,7 @@ describe("Phase 9 guarded route registration (#293)", () => {
       "changeOwnerProjectPublicSlug", "changeOwnerProjectStatus", "correctOwnerProjectCandidateSlug",
       "createOwnerContent", "createOwnerMediaUploadIntent", "createOwnerProjectStatusValue", "createOwnerTaxonomyValue", "getCurrentCv", "getOwnerContentAggregate", "getOwnerContentHistory", "getOwnerCvPortfolio", "getOwnerMediaAggregate", "getOwnerProjectAggregate", "getOwnerTaxonomyAggregate",
       "hideOwnerContent", "listOwnerProjectStatusValues", "mergeOwnerTaxonomyValue", "previewOwnerContentRevision", "publishOwnerContentLanguage",
-      "putProjectReaction", "recordOwnerMediaProcessing", "registerOwnerCvVersion", "rejectOwnerMediaAsset", "relateOwnerProjects", "renameOwnerProjectStatusValue", "renameOwnerTaxonomyValue", "restoreOwnerContent", "retireOwnerProjectStatusValue", "retireOwnerTaxonomyValue", "reviewOwnerContentRevision", "saveOwnerContentRevision",
+      "putProjectRating", "putProjectReaction", "recordOwnerMediaProcessing", "registerOwnerCvVersion", "rejectOwnerMediaAsset", "relateOwnerProjects", "renameOwnerProjectStatusValue", "renameOwnerTaxonomyValue", "restoreOwnerContent", "retireOwnerProjectStatusValue", "retireOwnerTaxonomyValue", "reviewOwnerContentRevision", "saveOwnerContentRevision",
       "setOwnerProjectFeatured",
       "updateOwnerContactChannels", "updateOwnerGlobalProjectCta", "updateOwnerProfileConfiguration",
     ]);
@@ -106,8 +106,10 @@ describe("Phase 9 guarded route registration (#293)", () => {
     expect(report.registered).toEqual(expect.arrayContaining([
       expect.objectContaining({ method: "PUT", path: "/api/v1/projects/{projectId}/reaction", operationId: "putProjectReaction",
         file: "src/app/api/v1/projects/[projectId]/reaction/route.ts" }),
+      expect.objectContaining({ method: "PUT", path: "/api/v1/projects/{projectId}/rating", operationId: "putProjectRating",
+        file: "src/app/api/v1/projects/[projectId]/rating/route.ts" }),
     ]));
-    expect(report.pending).toHaveLength(13);
+    expect(report.pending).toHaveLength(12);
     expect(report.registered.filter((entry: { operationId: string }) =>
       ["getOwnerProjectAggregate", "changeOwnerProjectStatus", "setOwnerProjectFeatured", "changeOwnerProjectPublicSlug",
         "correctOwnerProjectCandidateSlug", "relateOwnerProjects"].includes(entry.operationId)))

@@ -137,6 +137,18 @@ jobs:
           path: evidence/phase9-reaction-http-303.json
           if-no-files-found: error
           retention-days: 14
+      - name: Require Issue #304 public Rating identity, replay and PostgreSQL HTTP acceptance
+        run: npm run phase9:focus:rating-http
+      - name: Publish sanitized Issue #304 Rating prerequisite and network evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase9-rating-http-304
+          path: |
+            evidence/phase7-ratings-191.json
+            evidence/phase9-rating-http-304.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Require Issue #302 built CV HTTP and real Auth/PostgreSQL acceptance
         id: cv-http
         run: npm run phase9:focus:cv-http

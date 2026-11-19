@@ -34,6 +34,7 @@ import { handlePutProjectRating } from "../../src/runtime/http/rating.js";
 
 const PROJECT_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7e8f";
 const IDEMPOTENCY_KEY = "test-key-123";
+const allowRateLimit = { async check() { return { allowed: true, retryAfterSeconds: 60 }; } };
 
 function putRatingRequest(options?: {
   projectId?: string;
@@ -43,7 +44,7 @@ function putRatingRequest(options?: {
   inboundTrace?: string;
 }): Request {
   const projectId = options?.projectId ?? PROJECT_ID;
-  const headers: Record<string, string> = { "content-type": "application/json" };
+  const headers: Record<string, string> = { "content-type": "application/json", "x-vercel-forwarded-for": "198.51.100.1" };
   if (options?.idempotencyKey !== null) {
     headers["Idempotency-Key"] = options?.idempotencyKey ?? IDEMPOTENCY_KEY;
   }
@@ -68,7 +69,7 @@ describe("PUT Rating adapter (#28)", () => {
     const response = await handlePutProjectRating(
       putRatingRequest(),
       { projectId: PROJECT_ID },
-      { service: fake, logger },
+      { service: fake, logger, rateLimit: allowRateLimit },
     );
     expect(response.status).toBe(200);
     expect(fake.calls).toHaveLength(1);
@@ -87,7 +88,7 @@ describe("PUT Rating adapter (#28)", () => {
     const response = await handlePutProjectRating(
       putRatingRequest({ body: { rating: 1 } }),
       { projectId: PROJECT_ID },
-      { service: fake, logger },
+      { service: fake, logger, rateLimit: allowRateLimit },
     );
     expect(response.status).toBe(200);
     expect(fake.calls).toHaveLength(1);
@@ -112,7 +113,7 @@ describe("PUT Rating adapter (#28)", () => {
     const response = await handlePutProjectRating(
       putRatingRequest(options),
       { projectId: (options as { projectId?: string }).projectId ?? PROJECT_ID },
-      { service: fake, logger },
+      { service: fake, logger, rateLimit: allowRateLimit },
     );
     expect(response.status).toBe(400);
     expect(fake.calls).toHaveLength(0);
@@ -146,7 +147,7 @@ describe("PUT Rating adapter (#28)", () => {
       const response = await handlePutProjectRating(
         putRatingRequest(),
         { projectId: PROJECT_ID },
-        { service: fake, logger },
+        { service: fake, logger, rateLimit: allowRateLimit },
       );
       expect(response.status).toBe(status);
       expect(fake.calls).toHaveLength(1);
@@ -165,11 +166,35 @@ describe("PUT Rating adapter (#28)", () => {
     const response = await handlePutProjectRating(
       putRatingRequest(),
       { projectId: PROJECT_ID },
-      { service: fake, logger },
+      { service: fake, logger, rateLimit: allowRateLimit },
     );
     expect(response.status).toBe(500);
     const body = (await response.json()) as Record<string, unknown>;
     expect(body["code"]).toBe("internal_error");
+  });
+
+  it("returns 429 with Retry-After before application dispatch when the shared limiter denies", async () => {
+    const fake = createRatingTestFake({ type: "success", value: 5 });
+    const response = await handlePutProjectRating(putRatingRequest(), { projectId: PROJECT_ID }, {
+      service: fake,
+      rateLimit: { async check() { return { allowed: false, retryAfterSeconds: 23 }; } },
+    });
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("23");
+    expect(fake.calls).toHaveLength(0);
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("fails closed when the limiter or trusted client address is unavailable", async () => {
+    const fake = createRatingTestFake({ type: "success", value: 5 });
+    const missingLimiter = await handlePutProjectRating(putRatingRequest(), { projectId: PROJECT_ID }, { service: fake });
+    expect(missingLimiter.status).toBe(503);
+    const missingAddress = await handlePutProjectRating(new Request(
+      `https://example.com/api/v1/projects/${PROJECT_ID}/rating`,
+      { method: "PUT", headers: { "content-type": "application/json", "idempotency-key": IDEMPOTENCY_KEY }, body: '{"rating":5}' },
+    ), { projectId: PROJECT_ID }, { service: fake, rateLimit: allowRateLimit });
+    expect(missingAddress.status).toBe(503);
+    expect(fake.calls).toHaveLength(0);
   });
 
   it("production composition fails closed with 503 RUNTIME_NOT_IMPLEMENTED", async () => {
@@ -189,7 +214,7 @@ describe("PUT Rating adapter (#28)", () => {
     const response = await handlePutProjectRating(
       putRatingRequest(),
       { projectId: PROJECT_ID },
-      { service, logger },
+      { service, logger, rateLimit: allowRateLimit },
     );
     expect(response.status).toBe(503);
     const body = (await response.json()) as Record<string, unknown>;
@@ -206,7 +231,7 @@ describe("PUT Rating adapter (#28)", () => {
     const first = await handlePutProjectRating(
       putRatingRequest({ inboundTrace: "inbound-attacker-value" }),
       { projectId: PROJECT_ID },
-      { service: fake, logger },
+      { service: fake, logger, rateLimit: allowRateLimit },
     );
     const firstBody = (await first.json()) as Record<string, unknown>;
     expect(firstBody["traceId"]).not.toBe("inbound-attacker-value");
@@ -217,7 +242,7 @@ describe("PUT Rating adapter (#28)", () => {
     const second = await handlePutProjectRating(
       putRatingRequest(),
       { projectId: PROJECT_ID },
-      { service: fake, logger: secondLogger },
+      { service: fake, logger: secondLogger, rateLimit: allowRateLimit },
     );
     const secondBody = (await second.json()) as Record<string, unknown>;
     expect(secondBody["traceId"]).not.toBe(firstBody["traceId"]);
@@ -234,7 +259,7 @@ describe("PUT Rating adapter (#28)", () => {
     const response = await handlePutProjectRating(
       putRatingRequest(),
       { projectId: PROJECT_ID },
-      { service: throwing, logger },
+      { service: throwing, logger, rateLimit: allowRateLimit },
     );
     expect(response.status).toBe(500);
     const serialized = JSON.stringify(await response.json());

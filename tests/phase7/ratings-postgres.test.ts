@@ -40,7 +40,7 @@ describe.runIf(Boolean(url))("real PostgreSQL Rating acceptance", () => {
   const repository = createPostgresRatingRepository();
   const service = createRatingApplicationService({ portfolioId, content, operations, repository, clock: { now: () => now }, ids: createSystemIdGenerator() });
   const functionalIdentity = createFunctionalInteractionContext({ portfolioId, content, transactions: operations.transactions, identity });
-  const deps = { scope, service, functionalIdentity };
+  const deps = { scope, service, functionalIdentity, rateLimit: { async check() { return { allowed: true, retryAfterSeconds: 60 }; } } };
   const key = (text = createStableId("Key")) => { const result = parseIdempotencyKey(text); if (!result.ok) throw new Error("key"); return result.value; };
   const prepare = (projectId: StableId<"Project">, tokenString?: string, consent: "unknown" | "denied" = "unknown") => functionalIdentity.prepare({
     scope, correlationId: "rating-test", projectId, interaction: "rating", consent, ...(tokenString === undefined ? {} : { tokenString }) });
