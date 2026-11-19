@@ -184,5 +184,11 @@ function requestInstance(request: Request): string {
 
 
 export function handlePostProjectFeedback(request: Request, params: { projectId: string }, deps: FeedbackAdapterDeps): Promise<Response> {
-  return observeHttpRequest("public-feedback", () => handlePostProjectFeedbackUnobserved(request, params, deps), deps.logger);
+  return observeHttpRequest("public-feedback", async () => {
+    const response = await handlePostProjectFeedbackUnobserved(request, params, deps);
+    const headers = new Headers(response.headers);
+    headers.set("cache-control", "no-store");
+    headers.set("x-robots-tag", "noindex, nofollow");
+    return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+  }, deps.logger);
 }

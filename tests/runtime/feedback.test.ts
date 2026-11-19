@@ -76,6 +76,9 @@ describe("POST Feedback adapter (#28)", () => {
       { rateLimit: { check: async () => ({ allowed: true }) }, service: fake, logger },
     );
     expect(response.status).toBe(201);
+    expect(response.headers.get("set-cookie")).toBeNull();
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(fake.calls).toHaveLength(1);
     const command = fake.calls[0] as {
       projectId: string;
@@ -90,6 +93,8 @@ describe("POST Feedback adapter (#28)", () => {
     const body = (await response.json()) as unknown;
     expect(zPostProjectFeedbackResponse.safeParse(body).success).toBe(true);
     expect(body).toEqual({ feedbackId: FEEDBACK_ID, projectId: PROJECT_ID, status: "pending" });
+    expect(JSON.stringify(body)).not.toContain("Clear explanation");
+    expect(JSON.stringify(body)).not.toContain("Ada");
   });
 
   it.each([
