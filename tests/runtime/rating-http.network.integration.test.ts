@@ -107,7 +107,7 @@ describe.runIf(baseUrls.length === 2 && Boolean(adminUrl) && Boolean(runtimeUrl)
       expect(facts.rows[0]?.count).toBe(2);
       await runtime.query("begin");
       try {
-        await runtime.query("select set_config('shipwithali.portfolio_id',$1,true),set_config('shipwithali.summary_project_id',$2,true),set_config('shipwithali.summary_locale','en',true)", [portfolioId, projectId]);
+        await runtime.query("select set_config('shipwithali.portfolio_id',$1,true),set_config('shipwithali.owner_id',$2,true),set_config('shipwithali.summary_project_id',$3,true),set_config('shipwithali.summary_locale','en',true)", [portfolioId, ownerId, projectId]);
         expect((await runtime.query("select raters, average from interaction.current_rating_summary")).rows)
           .toEqual([{ raters: "1", average: null }]);
       } finally { await runtime.query("rollback"); }
