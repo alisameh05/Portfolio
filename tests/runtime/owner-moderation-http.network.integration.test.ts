@@ -36,6 +36,7 @@ const moderationRepository = createPostgresModerationRepository();
 
 type Login = { readonly userId: string; readonly token: string; readonly sessionId: string };
 let owner: Login;
+let nonOwner: Login;
 let csrf = `phase9-moderation-csrf-${randomUUID()}`;
 let adminConnected = false;
 
@@ -67,7 +68,7 @@ function privateHeaders(response: Response): void {
   expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
 }
 
-async function createOwnerLogin(email: string): Promise<Login> {
+async function createOwnerLogin(email: string, subject = githubSubject): Promise<Login> {
   const createdResponse = await fetch(`${apiUrl}/auth/v1/admin/users`, { method: "POST", headers: {
     apikey: serviceKey!, authorization: `Bearer ${serviceKey!}`, "content-type": "application/json",
   }, body: JSON.stringify({ email, email_confirm: true }), signal: AbortSignal.timeout(10_000) });
@@ -89,8 +90,8 @@ async function createOwnerLogin(email: string): Promise<Login> {
   const claims = JSON.parse(Buffer.from(session.access_token.split(".")[1]!, "base64url").toString("utf8")) as { session_id?: string };
   if (!claims.session_id) throw new Error("PHASE9_MODERATION_SESSION_ID_MISSING");
   await admin.query("insert into auth.identities (user_id, identity_data, provider, provider_id) values ($1::uuid, $2::jsonb, 'github', $3)",
-    [created.id, JSON.stringify({ sub: githubSubject, provider_id: githubSubject }), githubSubject]);
-  await admin.query("insert into identity_access.owner_links (github_subject, owner_id) values ($1, $2::uuid)", [githubSubject, ownerId]);
+    [created.id, JSON.stringify({ sub: subject, provider_id: subject }), subject]);
+  await admin.query("insert into identity_access.owner_links (github_subject, owner_id) values ($1, $2::uuid)", [subject, ownerId]);
   return { userId: created.id, token: session.access_token, sessionId: claims.session_id };
 }
 
@@ -111,6 +112,15 @@ async function seedPublishedProject(): Promise<StableId<"Project">> {
   await admin.query("insert into content.language_publications (content_id,portfolio_id,content_type,locale,revision_id,review_id,route_identity,publication_sequence,published_at) values ($1,$2,'project','en',$3,$4,$5,1,$6)",
     [projectId, portfolioId, revisionId, reviewId, routeId, now]);
   return projectId;
+}
+
+async function seedForeignFeedback(): Promise<StableId<"Feedback">> {
+  const foreignPortfolioId = createStableId("Portfolio");
+  const foreignProjectId = createStableId("Project");
+  const feedbackId = createStableId("Feedback");
+  await admin.query("insert into portfolio_config.settings (portfolio_id,owner_id,display_name,headline,bio,global_cta_label,global_cta_destination,global_cta_unavailable_fallback) values ($1,$2,'Foreign','Headline','Bio','Contact','https://example.com','Unavailable')", [foreignPortfolioId, createStableId("Owner")]);
+  await admin.query("insert into interaction.feedback (feedback_id,portfolio_id,project_id,locale,author_name,paragraph,moderation_state,aggregate_version,submitted_at) values ($1,$2,$3,'en','Foreign name','Foreign private paragraph','pending',1,clock_timestamp())", [feedbackId, foreignPortfolioId, foreignProjectId]);
+  return feedbackId;
 }
 
 async function submit(projectId: StableId<"Project">): Promise<StableId<"Feedback">> {
@@ -157,6 +167,7 @@ suite("Phase 9 #306 production-built Owner Feedback Moderation HTTP acceptance",
     adminConnected = true;
     await admin.query("insert into portfolio_config.settings (portfolio_id,owner_id,display_name,headline,bio,global_cta_label,global_cta_destination,global_cta_unavailable_fallback) values ($1,$2,'Owner','Headline','Bio','Contact','https://example.com','Unavailable') on conflict (portfolio_id) do nothing", [portfolioId, ownerId]);
     owner = await createOwnerLogin(`phase9-moderation-${randomUUID()}@example.test`);
+    nonOwner = await createOwnerLogin(`phase9-moderation-unlisted-${randomUUID()}@example.test`, "910307");
   }, 60_000);
 
   afterAll(async () => {
@@ -176,11 +187,19 @@ suite("Phase 9 #306 production-built Owner Feedback Moderation HTTP acceptance",
     expect((await publicItems(projectId)).items).toEqual([]);
 
     const approveKey = createStableId("Key");
-    const approved = await command("approve", approvedId, 1, approveKey);
+    const [approved, approvedConcurrent] = await Promise.all([
+      command("approve", approvedId, 1, approveKey, 0),
+      command("approve", approvedId, 1, approveKey, 1),
+    ]);
     expect(approved.status).toBe(200);
+    expect(approvedConcurrent.status).toBe(200);
     privateHeaders(approved);
+    privateHeaders(approvedConcurrent);
     const approvedReceipt = await approved.json();
+    const concurrentReceipt = await approvedConcurrent.json();
     expect(zApproveOwnerFeedbackResponse.safeParse(approvedReceipt).success).toBe(true);
+    expect(zApproveOwnerFeedbackResponse.safeParse(concurrentReceipt).success).toBe(true);
+    expect(concurrentReceipt).toEqual(approvedReceipt);
     expect(approvedReceipt).toMatchObject({ aggregateId: approvedId, aggregateVersion: 2, outcome: "feedback-approved" });
     const approvalReplay = await command("approve", approvedId, 1, approveKey, 1);
     expect(approvalReplay.status).toBe(200);
@@ -228,8 +247,10 @@ suite("Phase 9 #306 production-built Owner Feedback Moderation HTTP acceptance",
     ] });
     const privateFacts = await admin.query("select count(*)::int as rows, max(aggregate_version)::text as version from interaction.feedback where feedback_id=$1", [approvedId]);
     expect(privateFacts.rows[0]).toMatchObject({ rows: 1, version: "3" });
+    const decisions = await admin.query("select decision from interaction.moderation_decisions where feedback_id=$1 order by aggregate_version", [approvedId]);
+    expect(decisions.rows.map((row) => row.decision)).toEqual(["approved", "suppressed"]);
     const durableEvents = await admin.query("select payload::text as payload from operations.outbox_events where aggregate_id=$1", [approvedId]);
-    expect(durableEvents.rows).not.toHaveLength(0);
+    expect(durableEvents.rows).toHaveLength(3);
     for (const row of durableEvents.rows) {
       expect(row.payload).not.toContain(privateName);
       expect(row.payload).not.toContain(privateParagraph);
@@ -248,6 +269,36 @@ suite("Phase 9 #306 production-built Owner Feedback Moderation HTTP acceptance",
     expect(missing.status).toBe(404);
     privateHeaders(missing);
     expect(zProblem.safeParse(await missing.json()).success).toBe(true);
+    const nonOwnerRead = await fetchBuilt(`${urls[0]}/api/owner/v1/feedback/${feedbackId}`, {
+      headers: { host: new URL(urls[0]!).host, cookie: `sw_owner_session=${nonOwner.token}` },
+      signal: AbortSignal.timeout(15_000),
+    });
+    expect(nonOwnerRead.status).toBe(403);
+    privateHeaders(nonOwnerRead);
+    expect(zProblem.safeParse(await nonOwnerRead.json()).success).toBe(true);
+    const nonOwnerDecision = await fetchBuilt(`${urls[0]}/api/owner/v1/feedback/${feedbackId}/commands/approve`, {
+      method: "POST", headers: { host: new URL(urls[0]!).host, cookie: `sw_owner_session=${nonOwner.token}`,
+        origin: new URL(urls[0]!).origin, "x-csrf-token": csrf, "content-type": "application/json",
+        "idempotency-key": createStableId("Key"), "if-match": '"1"' },
+      body: JSON.stringify({ reason: privateReason }), signal: AbortSignal.timeout(15_000),
+    });
+    expect(nonOwnerDecision.status).toBe(403);
+    privateHeaders(nonOwnerDecision);
+    expect(zProblem.safeParse(await nonOwnerDecision.json()).success).toBe(true);
+    const foreignId = await seedForeignFeedback();
+    const foreignBefore = await admin.query("select aggregate_version::text, moderation_state from interaction.feedback where feedback_id=$1", [foreignId]);
+    const foreignRead = await inspect(foreignId);
+    expect(foreignRead.status).toBe(404);
+    privateHeaders(foreignRead);
+    expect(zProblem.safeParse(await foreignRead.json()).success).toBe(true);
+    const foreignDecision = await command("approve", foreignId, 1);
+    expect(foreignDecision.status).toBe(404);
+    privateHeaders(foreignDecision);
+    expect(zProblem.safeParse(await foreignDecision.json()).success).toBe(true);
+    const foreignAfter = await admin.query("select aggregate_version::text, moderation_state from interaction.feedback where feedback_id=$1", [foreignId]);
+    expect(foreignAfter.rows).toEqual(foreignBefore.rows);
+    expect((await admin.query("select count(*)::int as count from interaction.moderation_decisions where feedback_id=$1", [foreignId])).rows[0].count).toBe(0);
+    expect((await admin.query("select count(*)::int as count from operations.outbox_events where aggregate_id=$1", [foreignId])).rows[0].count).toBe(0);
     const stale = await command("approve", feedbackId, 2);
     expect(stale.status).toBe(412);
     privateHeaders(stale);
