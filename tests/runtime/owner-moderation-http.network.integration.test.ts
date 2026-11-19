@@ -10,8 +10,12 @@ import {
   zSuppressOwnerFeedbackResponse,
 } from "../../src/contracts/http/owner/v1/generated/zod.gen.js";
 import { zPostProjectFeedbackResponse } from "../../src/contracts/http/v1/generated/zod.gen.js";
+import { createPostgresProjectInteractionFacts } from "../../src/modules/content-publishing/adapters/postgres-interaction-facts.js";
+import { decideAuthorization } from "../../src/modules/identity-access/index.js";
 import { createPostgresModerationRepository } from "../../src/modules/interaction-moderation/adapters/postgres-moderation.js";
+import { createOwnerFeedbackModerationService } from "../../src/modules/interaction-moderation/index.js";
 import { createPostgresOperationsPersistence } from "../../src/modules/portability-operations/adapters/postgres-operations.js";
+import { createSystemClock, createSystemIdGenerator } from "../../src/runtime/ports.js";
 import { createPostgresRuntimeDatabase } from "../../src/shared/adapters/postgres/runtime.js";
 import { createStableId, type StableId } from "../../src/shared/domain/index.js";
 
@@ -31,8 +35,16 @@ const privateParagraph = "PRIVATE_MODERATION_PARAGRAPH_SENTINEL_306";
 const privateReason = "PRIVATE_MODERATION_REASON_SENTINEL_306";
 const admin = new Client({ connectionString: adminUrl });
 const projectionDatabase = createPostgresRuntimeDatabase(appUrl ?? "postgres://invalid");
-const projectionOperations = createPostgresOperationsPersistence(projectionDatabase.database);
-const moderationRepository = createPostgresModerationRepository();
+const projectionScope = { portfolioId: portfolioId as StableId<"Portfolio">, ownerId: ownerId as StableId<"Owner"> };
+const moderation = createOwnerFeedbackModerationService({
+  scope: projectionScope,
+  authorize: async (query) => decideAuthorization(query),
+  operations: createPostgresOperationsPersistence(projectionDatabase.database),
+  content: createPostgresProjectInteractionFacts(projectionScope),
+  repository: createPostgresModerationRepository(),
+  clock: createSystemClock(),
+  ids: createSystemIdGenerator(),
+});
 
 type Login = { readonly userId: string; readonly token: string; readonly sessionId: string };
 let owner: Login;
@@ -153,9 +165,12 @@ async function inspect(feedbackId: StableId<"Feedback">, server = 0): Promise<Re
 }
 
 async function publicItems(projectId: StableId<"Project">) {
-  return projectionOperations.transactions.run((tx) => moderationRepository.approved({
-    portfolioId: portfolioId as StableId<"Portfolio">, projectId, locale: "en", limit: 25,
-  }, tx));
+  const result = await moderation.getApprovedFeedback({
+    scope: { kind: "portfolio", portfolioId: projectionScope.portfolioId },
+    portfolioId: projectionScope.portfolioId, projectId, locale: "en", correlationId: "moderation-http-projection",
+  });
+  if (!result.ok) throw new Error("PHASE9_MODERATION_PUBLIC_PROJECTION_FAILED");
+  return result.value;
 }
 
 suite("Phase 9 #306 production-built Owner Feedback Moderation HTTP acceptance", () => {
@@ -247,7 +262,7 @@ suite("Phase 9 #306 production-built Owner Feedback Moderation HTTP acceptance",
     ] });
     const privateFacts = await admin.query("select count(*)::int as rows, max(aggregate_version)::text as version from interaction.feedback where feedback_id=$1", [approvedId]);
     expect(privateFacts.rows[0]).toMatchObject({ rows: 1, version: "3" });
-    const decisions = await admin.query("select decision from interaction.moderation_decisions where feedback_id=$1 order by aggregate_version", [approvedId]);
+    const decisions = await admin.query("select decision from interaction.moderation_decisions where feedback_id=$1 order by sequence", [approvedId]);
     expect(decisions.rows.map((row) => row.decision)).toEqual(["approved", "suppressed"]);
     const durableEvents = await admin.query("select payload::text as payload from operations.outbox_events where aggregate_id=$1", [approvedId]);
     expect(durableEvents.rows).toHaveLength(3);
