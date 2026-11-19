@@ -90,11 +90,11 @@ describe.runIf(baseUrls.length === 2 && Boolean(adminUrl) && Boolean(runtimeUrl)
       expect(JSON.stringify(receipt)).not.toContain(privateName);
       expect(JSON.stringify(receipt)).not.toContain(privateParagraph);
       const rows = await admin.query(
-        "select feedback_id::text,project_id::text,locale,author_name,paragraph,moderation_state,aggregate_version,submitted_at from interaction.feedback where project_id=$1",
+        "select feedback_id::text,project_id::text,locale,author_name,paragraph,moderation_state,aggregate_version::text as aggregate_version,submitted_at from interaction.feedback where project_id=$1",
         [projectId],
       );
       expect(rows.rows).toHaveLength(1);
-      expect(rows.rows[0]).toMatchObject({ feedback_id: receipt.feedbackId, project_id: projectId, locale: "en", author_name: privateName, paragraph: privateParagraph, moderation_state: "pending", aggregate_version: 1 });
+      expect(rows.rows[0]).toMatchObject({ feedback_id: receipt.feedbackId, project_id: projectId, locale: "en", author_name: privateName, paragraph: privateParagraph, moderation_state: "pending", aggregate_version: "1" });
       expect(rows.rows[0].submitted_at).toBeTruthy();
       expect((await admin.query("select count(*)::int as count from measurement.consents")).rows[0].count).toBe(0);
       const event = await admin.query("select payload::text as payload from operations.outbox_events where aggregate_id=$1", [receipt.feedbackId]);
