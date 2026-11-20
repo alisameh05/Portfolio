@@ -3,7 +3,7 @@ import { sql, type Kysely } from "kysely";
 import type { DB } from "../../../shared/adapters/postgres/database.generated.js";
 import type { PublicRateLimitCheck } from "../ports/public-rate-limit.js";
 
-export type PublicRateLimitOperation = "putProjectReaction" | "putProjectRating";
+export type PublicRateLimitOperation = "putProjectReaction" | "putProjectRating" | "postPublicEvent";
 
 /** Shared fixed-window policy: 30 requests per operation, trusted client and minute. */
 export function createPostgresPublicRateLimit(input: {

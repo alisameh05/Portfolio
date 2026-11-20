@@ -47,6 +47,8 @@
     "phase9:focus:feedback-http": "npm run phase7:focus:feedback && node scripts/phase9-owner-configuration-http-integration.mjs --ticket-305",
     "prephase9:focus:moderation-http": "npm run validation:ready",
     "phase9:focus:moderation-http": "node scripts/phase9-owner-configuration-http-integration.mjs --ticket-306",
+    "prephase9:focus:measurement-http": "npm run validation:ready",
+    "phase9:focus:measurement-http": "npm run phase7:focus:events && node scripts/phase9-owner-configuration-http-integration.mjs --ticket-307",
     "prephase9:focus:content-authoring-http": "npm run validation:ready",
     "phase9:focus:content-authoring-http": "node scripts/phase9-owner-configuration-http-integration.mjs --ticket-295",
     "prephase9:focus:project-status-http": "npm run validation:ready",

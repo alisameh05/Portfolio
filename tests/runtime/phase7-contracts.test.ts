@@ -21,7 +21,7 @@ const actions = [
  { action: "related-project-opened", sourceProjectId: id, targetProjectId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7e94" },
  { action: "testimonial-engaged", projectId: id, testimonialId: id },
 ];
-function request(body: unknown) { return new Request("https://example.com/api/v1/events", { method: "POST", headers: { "Idempotency-Key": "contracts-188", cookie: "sw_analytics_consent=PRIVATE_TOKEN_SENTINEL" }, body: JSON.stringify(body) }); }
+function request(body: unknown) { return new Request("https://example.com/api/v1/events", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": "contracts-188", cookie: "sw_analytics_consent=PRIVATE_TOKEN_SENTINEL" }, body: JSON.stringify(body) }); }
 describe("Phase 7 contracts #188", () => {
  it.each(actions)("T09/T10 preserves $action with complete context, scope, and idempotency", async action => {
   const fake = createPublicEventTestFake({ type: "success" });

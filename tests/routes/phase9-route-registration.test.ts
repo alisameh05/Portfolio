@@ -69,7 +69,7 @@ describe("Phase 9 guarded route registration (#293)", () => {
       "assignOwnerProjectTaxonomyValue",
       "changeOwnerProjectPublicSlug", "changeOwnerProjectStatus", "correctOwnerProjectCandidateSlug",
       "createOwnerContent", "createOwnerMediaUploadIntent", "createOwnerProjectStatusValue", "createOwnerTaxonomyValue", "getCurrentCv", "getOwnerContentAggregate", "getOwnerContentHistory", "getOwnerCvPortfolio", "getOwnerFeedbackModeration", "getOwnerMediaAggregate", "getOwnerProjectAggregate", "getOwnerTaxonomyAggregate",
-      "hideOwnerContent", "listOwnerProjectStatusValues", "mergeOwnerTaxonomyValue", "postProjectFeedback", "previewOwnerContentRevision", "publishOwnerContentLanguage",
+      "hideOwnerContent", "listOwnerProjectStatusValues", "mergeOwnerTaxonomyValue", "postProjectFeedback", "postPublicEvent", "previewOwnerContentRevision", "publishOwnerContentLanguage",
       "putProjectRating", "putProjectReaction", "recordOwnerMediaProcessing", "registerOwnerCvVersion", "rejectOwnerFeedback", "rejectOwnerMediaAsset", "relateOwnerProjects", "renameOwnerProjectStatusValue", "renameOwnerTaxonomyValue", "restoreOwnerContent", "retireOwnerProjectStatusValue", "retireOwnerTaxonomyValue", "reviewOwnerContentRevision", "saveOwnerContentRevision",
       "setOwnerProjectFeatured", "suppressOwnerFeedback",
       "updateOwnerContactChannels", "updateOwnerGlobalProjectCta", "updateOwnerProfileConfiguration",
@@ -111,7 +111,7 @@ describe("Phase 9 guarded route registration (#293)", () => {
       expect.objectContaining({ method: "PUT", path: "/api/v1/projects/{projectId}/rating", operationId: "putProjectRating",
         file: "src/app/api/v1/projects/[projectId]/rating/route.ts" }),
     ]));
-    expect(report.pending).toHaveLength(7);
+    expect(report.pending).toHaveLength(6);
     expect(report.registered.filter((entry: { operationId: string }) =>
       ["getOwnerProjectAggregate", "changeOwnerProjectStatus", "setOwnerProjectFeatured", "changeOwnerProjectPublicSlug",
         "correctOwnerProjectCandidateSlug", "relateOwnerProjects"].includes(entry.operationId)))

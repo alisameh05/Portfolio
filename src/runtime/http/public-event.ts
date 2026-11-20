@@ -1,5 +1,12 @@
 import type { PortfolioRequestScope } from "@shared/application";
-import { getConsentApplicationService, getMeasurementEventIngestionService } from "../../bootstrap/composition-root.js";
+import { isIP } from "node:net";
+import {
+  getConsentApplicationService,
+  getMeasurementEventIngestionService,
+  getRuntimeEnvironmentSnapshot,
+  initializeDatabaseRuntime,
+  isDatabaseRuntimeInitialized,
+} from "../../bootstrap/composition-root.js";
 /**
  * public-event.ts — Phase 2 #28 consented Public event adapter.
  *
@@ -39,6 +46,8 @@ import type {
 } from "../../modules/measurement/index.js";
 import type { OperationsObservationPort } from "../../modules/portability-operations/index.js";
 import { emitOperationsSignal } from "../../modules/portability-operations/index.js";
+import type { PublicRateLimitCheck } from "../../modules/identity-access/index.js";
+import { readBoundedJson } from "./read-bounded-json.js";
 import type {
   IdempotencyKey,
   StableId,
@@ -55,9 +64,12 @@ const acceptedActions = new Set([
   "testimonial-engaged", "contact-channel-opened", "external-project-link-opened", "global-project-cta-opened",
 ]);
 
+let initialization: ReturnType<typeof initializeDatabaseRuntime> | undefined;
+
 export interface PublicEventAdapterDeps {
   readonly consent?: Pick<ConsentApplicationService, "verifyEvidence">;
   readonly scope?: PortfolioRequestScope;
+  readonly rateLimit?: PublicRateLimitCheck;
   service?: Pick<MeasurementService, "ingestEvent">;
   logger?: Logger;
   operationsObservations?: Pick<OperationsObservationPort, "recordSignal">;
@@ -109,13 +121,12 @@ async function handlePostPublicEventUnobserved(
       return transportProblem("Missing or invalid Idempotency-Key header.", traceId, instance);
     }
 
-    let rawBody: unknown;
-    try {
-      rawBody = await request.json();
-    } catch {
+    const parsedBody = await readBoundedJson(request);
+    if (!parsedBody.ok) {
       logger?.warn("request.rejected", { traceId, status: 400 });
-      return transportProblem("Malformed JSON body.", traceId, instance);
+      return transportProblem("Malformed or oversized JSON body.", traceId, instance);
     }
+    const rawBody = parsedBody.value;
 
     if (rawBody === null || rawBody === undefined) {
       logger?.warn("request.rejected", { traceId, status: 400 });
@@ -133,6 +144,21 @@ async function handlePostPublicEventUnobserved(
     }
 
     const runtime = getMeasurementEventIngestionService();
+    const rateLimit = deps.rateLimit ?? runtime?.rateLimit;
+    if (rateLimit !== undefined) {
+      try {
+        const forwardedFor = request.headers.get("x-vercel-forwarded-for")?.trim();
+        if (!forwardedFor || forwardedFor.includes(",") || isIP(forwardedFor) === 0) throw new Error("EVENT_RATE_LIMIT_SUBJECT_UNAVAILABLE");
+        const verdict = await rateLimit.check(forwardedFor);
+        if (!verdict.allowed) {
+          const retryAfterSeconds = Number.isSafeInteger(verdict.retryAfterSeconds) && (verdict.retryAfterSeconds ?? 0) > 0
+            ? verdict.retryAfterSeconds as number : 60;
+          return rejectionToProblem({ kind: "rate_limited", code: "PUBLIC_EVENT_RATE_LIMITED", retryAfterSeconds }, traceId, instance);
+        }
+      } catch {
+        return rejectionToProblem({ kind: "temporarily_unavailable", code: "PUBLIC_EVENT_RATE_LIMIT_UNAVAILABLE" }, traceId, instance);
+      }
+    }
     const scope = deps.scope ?? runtime?.scope ?? { kind: "unconfigured" as const };
     const consent = deps.consent ?? getConsentApplicationService();
     const token = analyticsConsentToken(request);
@@ -146,6 +172,10 @@ async function handlePostPublicEventUnobserved(
         kind: "event-intake", outcome: verified.error.kind === "temporarily_unavailable" ? "unavailable" : "rejected",
       });
       return rejectionToProblem(verified.error, traceId, instance);
+    }
+    if (rateLimit === undefined && deps.service === undefined) {
+      await emitOperationsSignal(logger, deps.operationsObservations, { kind: "event-intake", outcome: "unavailable" });
+      return rejectionToProblem({ kind: "temporarily_unavailable", code: "PUBLIC_EVENT_RATE_LIMIT_UNAVAILABLE" }, traceId, instance);
     }
     const service = deps.service ?? runtime?.service;
     if (!service) {
@@ -228,4 +258,20 @@ export async function handlePostPublicEvent(
       kind: "http-request", route: "public-event", statusClass, durationMs,
     });
   }
+}
+
+/** Initialize the application runtime when event intake is the first request. */
+export async function dispatchPostPublicEventHttp(request: Request): Promise<Response> {
+  if (!isDatabaseRuntimeInitialized()) {
+    initialization ??= initializeDatabaseRuntime(getRuntimeEnvironmentSnapshot(), "application");
+    const current = initialization;
+    try {
+      await current;
+    } catch {
+      if (initialization === current) initialization = undefined;
+      const { traceId } = createCorrelation(request.headers.get("x-request-id") ?? request.headers.get("x-correlation-id"));
+      return rejectionToProblem({ kind: "temporarily_unavailable", code: "MEASUREMENT_UNAVAILABLE" }, traceId, requestInstance(request));
+    }
+  }
+  return handlePostPublicEvent(request, {});
 }
